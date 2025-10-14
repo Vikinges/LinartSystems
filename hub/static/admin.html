@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Admin — Services</title></head>
+<body>
+  <h1>Services</h1>
+  <div id="list"></div>
+  <h3>Add service</h3>
+  <form id="add">
+    <label>Name: <input name="name"></label><br>
+    <label>Display name: <input name="displayName"></label><br>
+    <label>Description: <input name="description"></label><br>
+    <label>Target URL: <input name="target"></label><br>
+    <label>Prefix: <input name="prefix" value="/service"></label><br>
+    <button type="submit">Add</button>
+  </form>
+  <script>
+    async function load(){
+      const r = await fetch('/admin/services');
+      const j = await r.json();
+      const el = document.getElementById('list');
+      el.innerHTML = '';
+      j.forEach(s=>{
+        const d = document.createElement('div');
+        d.innerHTML = `<strong>${s.displayName||s.name}</strong> (${s.name}) — ${s.description||''} &rarr; ${s.target} (${s.prefix}) `;
+        const btn = document.createElement('button'); btn.textContent='Delete';
+        btn.onclick = async ()=>{ await fetch('/admin/services/'+encodeURIComponent(s.name),{method:'DELETE'}); load(); };
+        d.appendChild(btn);
+        el.appendChild(d);
+      })
+    }
+    document.getElementById('add').onsubmit = async (e)=>{
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      await fetch('/admin/services',{method:'POST',body:JSON.stringify(Object.fromEntries(fd)),headers:{'Content-Type':'application/json'}});
+      load();
+    }
+    load();
+  </script>
+</body>
+</html>
