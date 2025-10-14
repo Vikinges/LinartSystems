@@ -14,17 +14,7 @@
       </header>
 
       <main>
-        <div class="services">
-          <a class="service" href="/service1/" title="Service 1">
-            <img src="/static/logo1.svg" alt="Service 1 logo">
-            <div>Service 1 — Demo app</div>
-          </a>
-
-          <a class="service" href="/service2/" title="Service 2">
-            <img src="/static/logo2.svg" alt="Service 2 logo">
-            <div>Service 2 — Another demo</div>
-          </a>
-        </div>
+        <div id="services" class="services">Loading…</div>
         <div style="margin-top:20px">
           <a href="/status">Status page</a>
         </div>
@@ -34,5 +24,33 @@
         <small>Hosted in Docker. Hub proxies to the microservices by name.</small>
       </footer>
     </div>
+
+    <script>
+      async function load(){
+        try{
+          const r = await fetch('/api/status');
+          const j = await r.json();
+          const container = document.getElementById('services');
+          container.innerHTML = '';
+          j.services.forEach(s => {
+            const a = document.createElement('a');
+            a.className = 'service';
+            a.href = (s.prefix || ('/'+s.name));
+            a.title = s.displayName || s.name;
+            const img = document.createElement('img');
+            img.src = '/static/logo1.svg';
+            img.alt = s.name + ' logo';
+            const div = document.createElement('div');
+            div.textContent = (s.displayName || s.name) + ' — ' + (s.description || '');
+            a.appendChild(img);
+            a.appendChild(div);
+            container.appendChild(a);
+          });
+        }catch(e){
+          document.getElementById('services').textContent = 'Error loading services: '+e;
+        }
+      }
+      load();
+    </script>
   </body>
   </html>

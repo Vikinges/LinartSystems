@@ -58,7 +58,7 @@ app.get('/status', (req, res) => {
 // Simple pages
 // Aggregated status API that queries each service health endpoint
 app.get('/api/status', async (req, res) => {
-  const services = loadServices().map(s => ({ name: s.name, displayName: s.displayName, description: s.description, url: s.target + '/health' }));
+  const services = loadServices().map(s => ({ name: s.name, displayName: s.displayName, description: s.description, prefix: s.prefix, url: s.target + '/health' }));
 
   const results = await Promise.all(services.map(async s => {
     try {
