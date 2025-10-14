@@ -1,0 +1,11 @@
+﻿services:
+  pdf-service:
+    build: .
+    ports:
+      - "3232:3000"
+    environment:
+      TEMPLATE_PATH: /app/public/form-template.pdf
+      HOST_URL: http://localhost:3232
+    volumes:
+      - ./public/form-template.pdf:/app/public/form-template.pdf:ro
+      - ./out:/app/out

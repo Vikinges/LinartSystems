@@ -1,0 +1,25 @@
+{
+  "name": "pdf_linart_form",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "extract-fields": "node extract-fields.js",
+    "build-docker": "docker build -t pm-check .",
+    "test": "bash ./test-start.sh"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Turnkey PDF AcroForm filling service for preventative maintenance checklists.",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.2",
+    "helmet": "^8.1.0",
+    "multer": "^2.0.2",
+    "pdf-lib": "^1.17.1"
+  }
+}

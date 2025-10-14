@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>Linart Systems Hub</title>
+    <link rel="stylesheet" href="/static/styles.css">
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Linart Systems</h1>
+        <p class="lead">Central hub running inside a container. Click logos to open services.</p>
+      </header>
+
+      <main>
+        <div class="services">
+          <a class="service" href="/service1/" title="Service 1">
+            <img src="/static/logo1.svg" alt="Service 1 logo">
+            <div>Service 1 — Demo app</div>
+          </a>
+
+          <a class="service" href="/service2/" title="Service 2">
+            <img src="/static/logo2.svg" alt="Service 2 logo">
+            <div>Service 2 — Another demo</div>
+          </a>
+        </div>
+        <div style="margin-top:20px">
+          <a href="/status">Status page</a>
+        </div>
+      </main>
+
+      <footer>
+        <small>Hosted in Docker. Hub proxies to the microservices by name.</small>
+      </footer>
+    </div>
+  </body>
+  </html>

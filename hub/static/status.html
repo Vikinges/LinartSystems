@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Status — Linart Hub</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+      body{font-family:Segoe UI,Arial,sans-serif;padding:24px;background:#f7fafc;color:#0b1220}
+      .card{background:#fff;padding:16px;border-radius:8px;box-shadow:0 6px 18px rgba(12,24,48,.06);max-width:900px}
+      .row{display:flex;align-items:center;justify-content:space-between}
+      .service{display:flex;gap:12px;align-items:center;padding:10px;border-bottom:1px solid #eef4fb}
+      .dot{width:14px;height:14px;border-radius:50%;display:inline-block}
+      .dot.ok{background:#16a34a}
+      .dot.fail{background:#ef4444}
+      .meta{color:#6b7280;font-size:13px}
+      button{padding:8px 12px;border-radius:6px;border:1px solid #dbeafe;background:#eff6ff;color:#0b1220;cursor:pointer}
+      details{margin-left:30px}
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="row">
+        <h1 style="margin:0">Service status</h1>
+        <div>
+          <button id="refresh">Refresh</button>
+          <label style="margin-left:8px" title="Auto refresh">Auto <input id="auto" type="checkbox" checked></label>
+        </div>
+      </div>
+
+      <p class="meta">Aggregated status from services — last update: <span id="last">—</span></p>
+
+      <div id="list">Loading…</div>
+    </div>
+
+    <script>
+      const out = document.getElementById('list');
+      const last = document.getElementById('last');
+      const refreshBtn = document.getElementById('refresh');
+      const auto = document.getElementById('auto');
+
+      async function render(){
+        try{
+          const r = await fetch('/api/status');
+          if(!r.ok) throw new Error('Status '+r.status);
+          const j = await r.json();
+          last.textContent = new Date(j.hub.now).toLocaleString();
+          out.innerHTML = '';
+          j.services.forEach(s => {
+            const div = document.createElement('div');
+            div.className = 'service';
+            const dot = document.createElement('span');
+            dot.className = 'dot '+(s.ok? 'ok':'fail');
+            const title = document.createElement('div');
+            title.innerHTML = `<strong>${s.name}</strong> <div class="meta">${s.ok? 'OK':'FAILED'}</div>`;
+            div.appendChild(dot);
+            div.appendChild(title);
+            out.appendChild(div);
+
+            const details = document.createElement('details');
+            const summary = document.createElement('summary');
+            summary.textContent = 'Details';
+            details.appendChild(summary);
+            const pre = document.createElement('pre');
+            pre.style.background = '#f1f5f9';
+            pre.style.padding = '8px';
+            pre.style.borderRadius = '6px';
+            pre.textContent = JSON.stringify(s, null, 2);
+            details.appendChild(pre);
+            out.appendChild(details);
+          });
+        }catch(e){
+          out.innerHTML = '<div style="color:#ef4444">Error: '+String(e)+'</div>';
+        }
+      }
+
+      refreshBtn.addEventListener('click', render);
+      let timer = null;
+      auto.addEventListener('change', ()=>{
+        if(auto.checked){ startAuto(); } else { clearInterval(timer); }
+      });
+
+      function startAuto(){
+        if(timer) clearInterval(timer);
+        timer = setInterval(render, 5000);
+      }
+
+      // initial
+      render();
+      startAuto();
+    </script>
+  </body>
+</html>

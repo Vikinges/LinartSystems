@@ -1,0 +1,1564 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preventative Maintenance Checklist</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f5fb;
+        color: #1c1c1e;
+      }
+      body {
+        margin: 0;
+        padding: 1.5rem;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      header {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+      }
+      header p {
+        margin: 0;
+        color: #4a4a4a;
+        line-height: 1.4;
+      }
+      .card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        color: #1f2a5b;
+      }
+      .grid.two-col {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-weight: 600;
+      }
+      .field > span {
+        color: #2f2f37;
+      }
+      input[type="text"],
+      input[type="date"],
+      input[type="datetime-local"],
+      textarea {
+        font: inherit;
+        padding: 0.75rem;
+        border: 1px solid #d8d8e5;
+        border-radius: 10px;
+        background: #fafafe;
+      }
+      textarea {
+        resize: vertical;
+        min-height: 120px;
+      }
+      input[type="checkbox"] {
+        width: 26px;
+        height: 26px;
+        accent-color: #2563eb;
+      }
+      .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        font-weight: 600;
+      }
+      .checklist-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .checklist-table th,
+      .checklist-table td {
+        border: 1px solid #d8d8e5;
+        padding: 0.75rem;
+        vertical-align: middle;
+        background: white;
+      }
+      .checklist-table th {
+        background: #eef1fb;
+        text-align: left;
+        font-size: 0.95rem;
+      }
+      .checklist-table td input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+      }
+      .checklist-table td textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+        resize: vertical;
+        min-height: 2.75rem;
+        line-height: 1.35;
+        font: inherit;
+      }
+      .check-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+      }
+      .check-wrapper input {
+        width: 26px;
+        height: 26px;
+      }
+      .parts-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .parts-table th,
+      .parts-table td {
+        border: 1px solid #d8d8e5;
+        padding: 0.6rem;
+        background: white;
+      }
+      .parts-table th {
+        background: #eef1fb;
+        font-size: 0.9rem;
+      }
+      .parts-table td input,
+      .parts-table td textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+        background: #fafafe;
+      }
+      .parts-table td textarea {
+        resize: vertical;
+        min-height: 2.75rem;
+        font: inherit;
+      }
+      .parts-table .is-hidden-row {
+        display: none;
+      }
+      .parts-table-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .parts-table-actions .button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 0.65rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .parts-table-actions .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .parts-table-hint {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+      .photos-card {
+        display: grid;
+        gap: 1rem;
+      }
+      .photo-slot {
+        border: 1px dashed #a0a3c2;
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        background: #fafbff;
+      }
+      .photo-slot span {
+        font-weight: 600;
+      }
+      .photo-slot small {
+        color: #6b7280;
+      }
+      .upload-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.25rem;
+        border-radius: 999px;
+        background: #2563eb;
+        color: #ffffff;
+        font-weight: 600;
+        cursor: pointer;
+        width: fit-content;
+      }
+      .upload-button input {
+        display: none;
+      }
+      .photo-preview {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+        border: 1px solid #d8ddf0;
+        background: rgba(59, 130, 246, 0.05);
+      }
+      .photo-preview[data-state="empty"] {
+        color: #6b7280;
+        font-style: italic;
+        border-style: dashed;
+      }
+      .photo-preview-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.75rem;
+      }
+      .photo-preview-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        background: #ffffff;
+        border: 1px solid #e0e3f5;
+        border-radius: 10px;
+        padding: 0.5rem;
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.08);
+      }
+      .photo-preview-item img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #f3f4f6;
+      }
+      .photo-preview-item span {
+        font-size: 0.8rem;
+        word-break: break-word;
+      }
+      .signature-info {
+        margin-bottom: 0.5rem;
+      }
+      .signature-row {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .signature-pad {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .signature-pad__label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        color: #2f2f37;
+      }
+      .signature-clear {
+        appearance: none;
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .signature-canvas-wrapper {
+        border: 1px solid #d8d8e5;
+        border-radius: 12px;
+        padding: 0.5rem;
+        background: white;
+      }
+      .signature-pad canvas {
+        width: 100%;
+        height: 180px;
+        touch-action: none;
+        background: white;
+        border-radius: 8px;
+      }
+      .footer-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      button[type="submit"] {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 1rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+      }
+      button[type="submit"]:hover:not(.is-disabled) {
+        background: #1d4ed8;
+      }
+      button[type="submit"].is-disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      button[type="submit"].is-success {
+        background: #16a34a;
+      }
+      button[type="submit"].is-error {
+        background: #dc2626;
+      }
+      .upload-progress {
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+      .upload-progress.is-visible {
+        display: flex;
+      }
+      .upload-progress-bar {
+        position: relative;
+        height: 8px;
+        border-radius: 999px;
+        background: #e0e7ff;
+        overflow: hidden;
+      }
+      .upload-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: var(--progress, 0%);
+        height: 100%;
+        background: linear-gradient(90deg, #2563eb, #7c3aed);
+      }
+      .upload-progress-label {
+        font-size: 0.9rem;
+        color: #1f2937;
+      }
+      .upload-files-summary {
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: #374151;
+      }
+      .upload-files-summary strong {
+        font-weight: 600;
+      }
+      .debug-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .debug-controls .checkbox {
+        margin: 0;
+      }
+      .debug-hint {
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+      .debug-panel {
+        display: none;
+        margin-top: 0.75rem;
+        padding: 1rem;
+        background: #f3f4ff;
+        border-radius: 12px;
+        border: 1px solid #c7d2fe;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .debug-panel.is-visible {
+        display: block;
+      }
+      .debug-panel pre {
+        margin: 0;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      #status {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        color: #3d3d5c;
+        white-space: pre-wrap;
+      }
+      .missing {
+        color: #b91c1c;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      @media (max-width: 680px) {
+        .checklist-table td {
+          padding: 0.6rem;
+        }
+        .checklist-table td textarea {
+          min-height: 2.2rem;
+        }
+        .signature-pad canvas {
+          height: 150px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Preventative Maintenance Checklist</h1>
+        <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
+      </header>
+      <form id="pm-form" enctype="multipart/form-data">
+        <section class="card">
+          <h2>Site information</h2>
+          <div class="grid two-col">
+        <label class="field" for="end-customer-name">
+          <span>End customer name</span>
+          <input type="text" id="end-customer-name" name="end_customer_name" value="Mercedes-Benz AG" placeholder="End customer name" data-suggest-field="end_customer_name" list="suggest-end-customer-name" autocomplete="off" />
+          <datalist id="suggest-end-customer-name" data-suggest-list="end_customer_name"></datalist>
+        </label>
+        <label class="field" for="site-location">
+          <span>Site location</span>
+          <input type="text" id="site-location" name="site_location" value="Flughafen Berlin Brandenburg, Melli-Beese Ring 1" placeholder="Site location" data-suggest-field="site_location" list="suggest-site-location" autocomplete="off" />
+          <datalist id="suggest-site-location" data-suggest-list="site_location"></datalist>
+        </label>
+        <label class="field" for="led-display-model">
+          <span>LED display model</span>
+          <input type="text" id="led-display-model" name="led_display_model" value="FE 038i2 Highres / Stripes Lowres" placeholder="LED display model" />
+        </label>
+        <label class="field" for="batch-number">
+          <span>Batch number</span>
+          <input type="text" id="batch-number" name="batch_number" value="2024-06-24-B" placeholder="Batch number" />
+        </label>
+        <label class="field" for="date-of-service">
+          <span>Date of service</span>
+          <input type="date" id="date-of-service" name="date_of_service" value="2024-06-24" placeholder="Date of service" />
+        </label>
+        <label class="field" for="service-company-name">
+          <span>Service company name</span>
+          <input type="text" id="service-company-name" name="service_company_name" value="Sharp / NEC LED Solution Center" placeholder="Service company name" data-suggest-field="service_company_name" list="suggest-service-company-name" autocomplete="off" />
+          <datalist id="suggest-service-company-name" data-suggest-list="service_company_name"></datalist>
+        </label>
+          </div>
+        </section>
+      <section class="card">
+        <h2>LED display checks</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Check for any visible issues. Resolve as necessary.</td>
+              <td><label class="check-wrapper" for="led-complete-1"><input type="checkbox" id="led-complete-1" name="led_complete_1" checked /></label></td>
+              <td><textarea name="led_notes_1" data-auto-resize rows="1" placeholder="Add notes">Cleaned ventilation grilles.</textarea></td>
+            </tr>
+            <tr>
+              <td>Apply test pattern on full red, green, blue and white. Identify faults.</td>
+              <td><label class="check-wrapper" for="led-complete-2"><input type="checkbox" id="led-complete-2" name="led_complete_2" checked /></label></td>
+              <td><textarea name="led_notes_2" data-auto-resize rows="1" placeholder="Add notes">Pattern test passed on all colors.</textarea></td>
+            </tr>
+            <tr>
+              <td>Replace any pixel cards with dead or non-functioning pixels.</td>
+              <td><label class="check-wrapper" for="led-complete-3"><input type="checkbox" id="led-complete-3" name="led_complete_3" checked /></label></td>
+              <td><textarea name="led_notes_3" data-auto-resize rows="1" placeholder="Add notes">Replaced one Pixel card cabinet B2.</textarea></td>
+            </tr>
+            <tr>
+              <td>Check power and data cables between cabinets for secure connections.</td>
+              <td><label class="check-wrapper" for="led-complete-4"><input type="checkbox" id="led-complete-4" name="led_complete_4" /></label></td>
+              <td><textarea name="led_notes_4" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Inspect for damage and replace any damaged or broken cables.</td>
+              <td><label class="check-wrapper" for="led-complete-5"><input type="checkbox" id="led-complete-5" name="led_complete_5" /></label></td>
+              <td><textarea name="led_notes_5" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check monitoring feature for issues. Resolve as necessary.</td>
+              <td><label class="check-wrapper" for="led-complete-6"><input type="checkbox" id="led-complete-6" name="led_complete_6" /></label></td>
+              <td><textarea name="led_notes_6" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check brightness levels in configurator and note levels down.</td>
+              <td><label class="check-wrapper" for="led-complete-7"><input type="checkbox" id="led-complete-7" name="led_complete_7" /></label></td>
+              <td><textarea name="led_notes_7" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2>Control equipment</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Check controllers are connected and cables seated correctly.</td>
+              <td><label class="check-wrapper" for="control-complete-1"><input type="checkbox" id="control-complete-1" name="control_complete_1" checked /></label></td>
+              <td><textarea name="control_notes_1" data-auto-resize rows="1" placeholder="Add notes">Controllers reseated and firmware checked.</textarea></td>
+            </tr>
+            <tr>
+              <td>Check controller redundancy; resolve issues where necessary.</td>
+              <td><label class="check-wrapper" for="control-complete-2"><input type="checkbox" id="control-complete-2" name="control_complete_2" /></label></td>
+              <td><textarea name="control_notes_2" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check brightness levels on controllers and note levels.</td>
+              <td><label class="check-wrapper" for="control-complete-3"><input type="checkbox" id="control-complete-3" name="control_complete_3" checked /></label></td>
+              <td><textarea name="control_notes_3" data-auto-resize rows="1" placeholder="Add notes">Brightness aligned with preset 450 cd/m2.</textarea></td>
+            </tr>
+            <tr>
+              <td>Check fans on controllers are working.</td>
+              <td><label class="check-wrapper" for="control-complete-4"><input type="checkbox" id="control-complete-4" name="control_complete_4" /></label></td>
+              <td><textarea name="control_notes_4" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Carefully wipe clean controllers.</td>
+              <td><label class="check-wrapper" for="control-complete-5"><input type="checkbox" id="control-complete-5" name="control_complete_5" /></label></td>
+              <td><textarea name="control_notes_5" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2>Spare parts</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Replace pixel cards in display with spare cards (ensure zero failures).</td>
+              <td><label class="check-wrapper" for="spares-complete-1"><input type="checkbox" id="spares-complete-1" name="spares_complete_1" checked /></label></td>
+              <td><textarea name="spares_notes_1" data-auto-resize rows="1" placeholder="Add notes">Swapped in spare pixel card from inventory.</textarea></td>
+            </tr>
+            <tr>
+              <td>Complete inventory log of spare parts.</td>
+              <td><label class="check-wrapper" for="spares-complete-2"><input type="checkbox" id="spares-complete-2" name="spares_complete_2" /></label></td>
+              <td><textarea name="spares_notes_2" data-auto-resize rows="1" placeholder="Add notes">Inventory log updated for remaining spares.</textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+        <section class="card">
+          <h2>Additional notes</h2>
+        <label class="field" for="general-notes">
+          <span>Overall notes</span>
+          <textarea id="general-notes" name="general_notes" rows="8" placeholder="Record any observations or follow-up actions" data-auto-resize>Updated monitoring agent and logged minor seam adjustment.
+Please schedule follow-up for cabinet C4 fan swap.</textarea>
+        </label>
+        </section>
+        <section class="card photos-card">
+          <h2>Photos</h2>
+          <div class="photo-slot" data-photo-slot="photo_before">
+            <span>Photos before maintenance</span>
+            <p>Select up to 20 images that show the equipment before work started.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_before" accept="image/*" multiple data-photo-input="photo_before" />
+              Upload before photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_before" data-photo-mode="multi" data-photo-label="Before photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photo_after">
+            <span>Photos after maintenance</span>
+            <p>Select up to 20 images that show the completed work.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_after" accept="image/*" multiple data-photo-input="photo_after" />
+              Upload after photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_after" data-photo-mode="multi" data-photo-label="After photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photos">
+            <span>Supporting photos (optional)</span>
+            <p>Attach up to 20 additional images that document this visit.</p>
+            <label class="upload-button">
+              <input type="file" name="photos" accept="image/*" multiple data-photo-input="photos" />
+              Upload supporting photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photos" data-photo-mode="multi" data-photo-label="Supporting photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+        </section>
+      <section class="card">
+        <h2>Parts record</h2>
+        <table class="parts-table" data-parts-table>
+          <thead>
+            <tr>
+              <th>Part removed (description)</th>
+              <th>Part number</th>
+              <th>Serial number (removed)</th>
+              <th>Part used in display</th>
+              <th>Serial number (used)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="parts-row" data-row-index="1">
+              <td><input type="text" name="parts_removed_desc_1" value="Pixel card cabinet B2" /></td>
+              <td><input type="text" name="parts_removed_part_1" value="FE038-PCARD" /></td>
+              <td><input type="text" name="parts_removed_serial_1" value="SN-34782" /></td>
+              <td><input type="text" name="parts_used_part_1" value="FE038-PCARD" /></td>
+              <td><input type="text" name="parts_used_serial_1" value="SN-99012" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="2">
+              <td><input type="text" name="parts_removed_desc_2" /></td>
+              <td><input type="text" name="parts_removed_part_2" /></td>
+              <td><input type="text" name="parts_removed_serial_2" /></td>
+              <td><input type="text" name="parts_used_part_2" /></td>
+              <td><input type="text" name="parts_used_serial_2" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="3">
+              <td><input type="text" name="parts_removed_desc_3" /></td>
+              <td><input type="text" name="parts_removed_part_3" /></td>
+              <td><input type="text" name="parts_removed_serial_3" /></td>
+              <td><input type="text" name="parts_used_part_3" /></td>
+              <td><input type="text" name="parts_used_serial_3" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="4">
+              <td><input type="text" name="parts_removed_desc_4" /></td>
+              <td><input type="text" name="parts_removed_part_4" /></td>
+              <td><input type="text" name="parts_removed_serial_4" /></td>
+              <td><input type="text" name="parts_used_part_4" /></td>
+              <td><input type="text" name="parts_used_serial_4" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="5">
+              <td><input type="text" name="parts_removed_desc_5" /></td>
+              <td><input type="text" name="parts_removed_part_5" /></td>
+              <td><input type="text" name="parts_removed_serial_5" /></td>
+              <td><input type="text" name="parts_used_part_5" /></td>
+              <td><input type="text" name="parts_used_serial_5" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="6">
+              <td><input type="text" name="parts_removed_desc_6" /></td>
+              <td><input type="text" name="parts_removed_part_6" /></td>
+              <td><input type="text" name="parts_removed_serial_6" /></td>
+              <td><input type="text" name="parts_used_part_6" /></td>
+              <td><input type="text" name="parts_used_serial_6" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="7">
+              <td><input type="text" name="parts_removed_desc_7" /></td>
+              <td><input type="text" name="parts_removed_part_7" /></td>
+              <td><input type="text" name="parts_removed_serial_7" /></td>
+              <td><input type="text" name="parts_used_part_7" /></td>
+              <td><input type="text" name="parts_used_serial_7" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="8">
+              <td><input type="text" name="parts_removed_desc_8" /></td>
+              <td><input type="text" name="parts_removed_part_8" /></td>
+              <td><input type="text" name="parts_removed_serial_8" /></td>
+              <td><input type="text" name="parts_used_part_8" /></td>
+              <td><input type="text" name="parts_used_serial_8" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="9">
+              <td><input type="text" name="parts_removed_desc_9" /></td>
+              <td><input type="text" name="parts_removed_part_9" /></td>
+              <td><input type="text" name="parts_removed_serial_9" /></td>
+              <td><input type="text" name="parts_used_part_9" /></td>
+              <td><input type="text" name="parts_used_serial_9" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="10">
+              <td><input type="text" name="parts_removed_desc_10" /></td>
+              <td><input type="text" name="parts_removed_part_10" /></td>
+              <td><input type="text" name="parts_removed_serial_10" /></td>
+              <td><input type="text" name="parts_used_part_10" /></td>
+              <td><input type="text" name="parts_used_serial_10" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="11">
+              <td><input type="text" name="parts_removed_desc_11" /></td>
+              <td><input type="text" name="parts_removed_part_11" /></td>
+              <td><input type="text" name="parts_removed_serial_11" /></td>
+              <td><input type="text" name="parts_used_part_11" /></td>
+              <td><input type="text" name="parts_used_serial_11" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="12">
+              <td><input type="text" name="parts_removed_desc_12" /></td>
+              <td><input type="text" name="parts_removed_part_12" /></td>
+              <td><input type="text" name="parts_removed_serial_12" /></td>
+              <td><input type="text" name="parts_used_part_12" /></td>
+              <td><input type="text" name="parts_used_serial_12" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="13">
+              <td><input type="text" name="parts_removed_desc_13" /></td>
+              <td><input type="text" name="parts_removed_part_13" /></td>
+              <td><input type="text" name="parts_removed_serial_13" /></td>
+              <td><input type="text" name="parts_used_part_13" /></td>
+              <td><input type="text" name="parts_used_serial_13" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="14">
+              <td><input type="text" name="parts_removed_desc_14" /></td>
+              <td><input type="text" name="parts_removed_part_14" /></td>
+              <td><input type="text" name="parts_removed_serial_14" /></td>
+              <td><input type="text" name="parts_used_part_14" /></td>
+              <td><input type="text" name="parts_used_serial_14" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="15">
+              <td><input type="text" name="parts_removed_desc_15" /></td>
+              <td><input type="text" name="parts_removed_part_15" /></td>
+              <td><input type="text" name="parts_removed_serial_15" /></td>
+              <td><input type="text" name="parts_used_part_15" /></td>
+              <td><input type="text" name="parts_used_serial_15" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="parts-table-actions">
+          <button type="button" class="button" data-action="parts-add-row">+ Add another part</button>
+          <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <p class="parts-table-hint">Maximum of 15 rows.</p>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Sign off checklist</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LED equipment maintained and preventative work completed.</td>
+              <td><label class="check-wrapper" for="signoff-complete-1"><input type="checkbox" id="signoff-complete-1" name="signoff_complete_1" checked /></label></td>
+              <td><textarea name="signoff_notes_1" data-auto-resize rows="1" placeholder="Add notes">All visual checks complete; system stable.</textarea></td>
+            </tr>
+            <tr>
+              <td>Outstanding actions noted for customer follow-up.</td>
+              <td><label class="check-wrapper" for="signoff-complete-2"><input type="checkbox" id="signoff-complete-2" name="signoff_complete_2" /></label></td>
+              <td><textarea name="signoff_notes_2" data-auto-resize rows="1" placeholder="Add notes">Customer to monitor cabinet C4 fan speed.</textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+        <section class="card">
+          <h2>Signatures</h2>
+          <div class="grid two-col signature-info">
+                    <label class="field" for="engineer-company">
+          <span>On-site engineer company</span>
+          <input type="text" id="engineer-company" name="engineer_company" value="LSC Sharp NEC" placeholder="On-site engineer company" data-suggest-field="engineer_company" list="suggest-engineer-company" autocomplete="off" />
+          <datalist id="suggest-engineer-company" data-suggest-list="engineer_company"></datalist>
+        </label>
+                    <label class="field" for="engineer-datetime">
+          <span>Engineer date &amp; time</span>
+          <input type="datetime-local" id="engineer-datetime" name="engineer_datetime" value="2024-06-24T10:30" placeholder="Engineer date &amp; time" />
+        </label>
+                    <label class="field" for="engineer-name">
+          <span>Engineer name</span>
+          <input type="text" id="engineer-name" name="engineer_name" value="Ivan Technician" placeholder="Engineer name" data-suggest-field="engineer_name" list="suggest-engineer-name" autocomplete="off" />
+          <datalist id="suggest-engineer-name" data-suggest-list="engineer_name"></datalist>
+        </label>
+                    <label class="field" for="customer-company">
+          <span>Customer company</span>
+          <input type="text" id="customer-company" name="customer_company" value="Mercedes-Benz AG" placeholder="Customer company" data-suggest-field="customer_company" list="suggest-customer-company" autocomplete="off" />
+          <datalist id="suggest-customer-company" data-suggest-list="customer_company"></datalist>
+        </label>
+                    <label class="field" for="customer-datetime">
+          <span>Customer date &amp; time</span>
+          <input type="datetime-local" id="customer-datetime" name="customer_datetime" value="2024-06-24T11:15" placeholder="Customer date &amp; time" />
+        </label>
+                    <label class="field" for="customer-name">
+          <span>Customer name</span>
+          <input type="text" id="customer-name" name="customer_name" value="Anna Schneider" placeholder="Customer name" data-suggest-field="customer_name" list="suggest-customer-name" autocomplete="off" />
+          <datalist id="suggest-customer-name" data-suggest-list="customer_name"></datalist>
+        </label>
+          </div>
+          <div class="signature-row">
+                    <div class="signature-pad" data-field="engineer_signature" data-sample="Ivan Technician">
+          <div class="signature-pad__label">
+            <span>Engineer signature</span>
+            <button type="button" class="signature-clear">Clear</button>
+          </div>
+          <div class="signature-canvas-wrapper">
+            <canvas aria-label="Engineer signature signature area"></canvas>
+          </div>
+          <input type="hidden" name="engineer_signature" value="" />
+        </div>
+                    <div class="signature-pad" data-field="customer_signature" data-sample="Anna Schneider">
+          <div class="signature-pad__label">
+            <span>Customer signature</span>
+            <button type="button" class="signature-clear">Clear</button>
+          </div>
+          <div class="signature-canvas-wrapper">
+            <canvas aria-label="Customer signature signature area"></canvas>
+          </div>
+          <input type="hidden" name="customer_signature" value="" />
+        </div>
+          </div>
+        </section>
+        <div class="footer-actions">
+          <button type="submit">Submit checklist</button>
+          <div class="upload-progress" data-upload-progress>
+            <div class="upload-progress-bar" data-upload-progress-bar></div>
+            <span class="upload-progress-label" data-upload-progress-label>Preparing upload...</span>
+          </div>
+          <div class="upload-files-summary" data-upload-files></div>
+          <div class="debug-controls">
+            <label class="checkbox">
+              <input type="checkbox" data-debug-toggle />
+              <span>Enable debug feedback</span>
+            </label>
+            <span class="debug-hint">Toggle to capture request details for troubleshooting.</span>
+          </div>
+          <div class="debug-panel" data-debug-panel>
+            <pre data-debug-log>Debug output will appear here once enabled.</pre>
+          </div>
+          <pre id="status"></pre>
+        </div>
+      </form>
+    </div>
+    <script>
+      (function () {
+        const formEl = document.getElementById('pm-form');
+        if (!formEl) return;
+
+        const statusEl = document.getElementById('status');
+        const submitButton = formEl.querySelector('button[type="submit"]');
+        const uploadProgressEl = document.querySelector('[data-upload-progress]');
+        const uploadProgressBarEl = document.querySelector('[data-upload-progress-bar]');
+        const uploadProgressLabelEl = document.querySelector('[data-upload-progress-label]');
+        const uploadFilesSummaryEl = document.querySelector('[data-upload-files]');
+        const debugToggleEl = document.querySelector('[data-debug-toggle]');
+        const debugPanelEl = document.querySelector('[data-debug-panel]');
+        const debugLogEl = document.querySelector('[data-debug-log]');
+        const DEBUG_KEY = 'pm-form-debug-enabled';
+
+        const selectedFiles = new Map();
+        const previewUrls = new Map();
+        const debugState = { enabled: false, timeline: [] };
+
+        function formatBytes(bytes) {
+          if (!Number.isFinite(bytes) || bytes <= 0) {
+            return '0 B';
+          }
+          const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+          let value = bytes;
+          let index = 0;
+          while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index += 1;
+          }
+          const decimals = value < 10 && index > 0 ? 1 : 0;
+          return value.toFixed(decimals) + ' ' + units[index];
+        }
+
+        function setProgress(percent, label) {
+          if (uploadProgressBarEl) {
+            const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+            uploadProgressBarEl.style.setProperty('--progress', clamped + '%');
+          }
+          if (uploadProgressLabelEl && label !== undefined) {
+            uploadProgressLabelEl.textContent = label;
+          }
+        }
+
+        function showProgress(totalBytes) {
+          if (uploadProgressEl) {
+            uploadProgressEl.classList.add('is-visible');
+          }
+          const label = totalBytes
+            ? 'Preparing upload (' + formatBytes(totalBytes) + ')'
+            : 'Preparing upload...';
+          setProgress(0, label);
+        }
+
+        function hideProgress() {
+          if (uploadProgressEl) {
+            uploadProgressEl.classList.remove('is-visible');
+          }
+          setProgress(0, '');
+        }
+
+        function emitDebug() {
+          if (!debugState.enabled || !debugLogEl) return;
+          debugLogEl.textContent = JSON.stringify(debugState.timeline, null, 2);
+        }
+
+        function recordDebug(eventName, data) {
+          if (!debugState.enabled) return;
+          debugState.timeline.push(
+            Object.assign({ event: eventName, at: new Date().toISOString() }, data || {})
+          );
+          if (debugState.timeline.length > 120) {
+            debugState.timeline.shift();
+          }
+          emitDebug();
+        }
+
+        function applyDebugState(enabled) {
+          debugState.enabled = !!enabled;
+          if (debugToggleEl) {
+            debugToggleEl.checked = debugState.enabled;
+          }
+          if (debugPanelEl) {
+            if (debugState.enabled) {
+              debugPanelEl.classList.add('is-visible');
+            } else {
+              debugPanelEl.classList.remove('is-visible');
+            }
+          }
+          if (!debugState.enabled && debugLogEl) {
+            debugLogEl.textContent = 'Debug output will appear here once enabled.';
+          } else if (debugState.enabled) {
+            emitDebug();
+          }
+          try {
+            window.localStorage.setItem(DEBUG_KEY, debugState.enabled ? '1' : '0');
+          } catch (err) {
+            // ignore storage failures
+          }
+        }
+
+        function getPhotoLabel(fieldName) {
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          if (!container) return fieldName;
+          return container.dataset.photoLabel || fieldName;
+        }
+
+        function updateFilesSummary() {
+          if (!uploadFilesSummaryEl) return;
+          uploadFilesSummaryEl.innerHTML = '';
+          let hasEntries = false;
+          selectedFiles.forEach((files, fieldName) => {
+            if (!files || !files.length) {
+              return;
+            }
+            hasEntries = true;
+            const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+            const item = document.createElement('div');
+            const label = getPhotoLabel(fieldName);
+            const countText = files.length === 1 ? '1 file' : files.length + ' files';
+            item.innerHTML =
+              '<strong>' +
+              label +
+              ':</strong> ' +
+              countText +
+              ' (' +
+              formatBytes(totalBytes) +
+              ')';
+            uploadFilesSummaryEl.appendChild(item);
+          });
+          if (!hasEntries) {
+            const emptyRow = document.createElement('div');
+            emptyRow.textContent = 'No photos selected yet.';
+            uploadFilesSummaryEl.appendChild(emptyRow);
+          }
+        }
+
+        function revokePreviewUrls(fieldName) {
+          const urls = previewUrls.get(fieldName);
+          if (urls) {
+            urls.forEach((url) => URL.revokeObjectURL(url));
+          }
+          previewUrls.delete(fieldName);
+        }
+
+        function renderPreview(fieldName, files, mode) {
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          if (!container) return;
+          revokePreviewUrls(fieldName);
+          container.innerHTML = '';
+          if (!files || !files.length) {
+            container.dataset.state = 'empty';
+            const span = document.createElement('span');
+            span.textContent = mode === 'multi' ? 'No files selected yet.' : 'No file selected yet.';
+            container.appendChild(span);
+            return;
+          }
+          container.dataset.state = 'filled';
+          const urls = [];
+          if (mode === 'multi') {
+            const list = document.createElement('div');
+            list.className = 'photo-preview-list';
+            files.forEach((file) => {
+              const item = document.createElement('div');
+              item.className = 'photo-preview-item';
+              const img = document.createElement('img');
+              const url = URL.createObjectURL(file);
+              urls.push(url);
+              img.src = url;
+              img.alt = file.name;
+              img.onerror = () => {
+                URL.revokeObjectURL(url);
+                const reader = new FileReader();
+                reader.onload = () => {
+                  img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+              };
+              const caption = document.createElement('span');
+              caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+              item.appendChild(img);
+              item.appendChild(caption);
+              list.appendChild(item);
+            });
+            container.appendChild(list);
+          } else {
+            const file = files[0];
+            const item = document.createElement('div');
+            item.className = 'photo-preview-item';
+            const img = document.createElement('img');
+            const url = URL.createObjectURL(file);
+            urls.push(url);
+            img.src = url;
+            img.alt = file.name;
+            img.onerror = () => {
+              URL.revokeObjectURL(url);
+              const reader = new FileReader();
+              reader.onload = () => {
+                img.src = reader.result;
+              };
+              reader.readAsDataURL(file);
+            };
+            const caption = document.createElement('span');
+            caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+            item.appendChild(img);
+            item.appendChild(caption);
+            container.appendChild(item);
+          }
+          previewUrls.set(fieldName, urls);
+        }
+
+        function handleFileSelection(fieldName, fileList, mode) {
+          const files = fileList ? Array.from(fileList) : [];
+          selectedFiles.set(fieldName, files);
+          renderPreview(fieldName, files, mode);
+          updateFilesSummary();
+          recordDebug('files-updated', {
+            field: fieldName,
+            count: files.length,
+            totalBytes: files.reduce((sum, file) => sum + (file.size || 0), 0),
+            names: files.map((file) => file.name),
+          });
+        }
+
+        function setupPartsTable() {
+          const table = document.querySelector('[data-parts-table]');
+          if (!table) return;
+          const rows = Array.from(table.querySelectorAll('.parts-row'));
+          const addButton = document.querySelector('[data-action="parts-add-row"]');
+          const removeButton = document.querySelector('[data-action="parts-remove-row"]');
+          const hiddenClass = 'is-hidden-row';
+
+          const enableRow = (row) => {
+            row.classList.remove(hiddenClass);
+            row.querySelectorAll('input, textarea').forEach((input) => {
+              input.disabled = false;
+            });
+          };
+
+          const disableRow = (row, clear = false) => {
+            row.classList.add(hiddenClass);
+            row.querySelectorAll('input, textarea').forEach((input) => {
+              if (clear) input.value = '';
+              input.disabled = true;
+            });
+          };
+
+          const refresh = () => {
+            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+            if (addButton) {
+              addButton.disabled = visibleRows.length >= rows.length;
+            }
+            if (removeButton) {
+              removeButton.disabled = visibleRows.length <= 1;
+            }
+          };
+
+          rows.forEach((row, index) => {
+            if (index === 0) {
+              enableRow(row);
+            } else if (
+              Array.from(row.querySelectorAll('input, textarea')).some((input) => input.value.trim().length)
+            ) {
+              enableRow(row);
+            } else {
+              disableRow(row, true);
+            }
+          });
+
+          refresh();
+
+          if (addButton) {
+            addButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const nextHidden = rows.find((row) => row.classList.contains(hiddenClass));
+              if (!nextHidden) return;
+              enableRow(nextHidden);
+              const firstInput = nextHidden.querySelector('input, textarea');
+              if (firstInput) firstInput.focus();
+              refresh();
+            });
+          }
+
+          if (removeButton) {
+            removeButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+              if (visibleRows.length <= 1) return;
+              const lastVisible = visibleRows[visibleRows.length - 1];
+              disableRow(lastVisible, true);
+              refresh();
+            });
+          }
+        }
+
+        function setupPhotoUploads() {
+          document.querySelectorAll('[data-photo-preview]').forEach((container) => {
+            const fieldName = container.dataset.photoPreview;
+            if (!fieldName) return;
+            const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+            if (!input) return;
+            const mode = container.dataset.photoMode || (input.multiple ? 'multi' : 'single');
+            handleFileSelection(fieldName, input.files, mode);
+            input.addEventListener('change', () => handleFileSelection(fieldName, input.files, mode));
+          });
+        }
+
+        function setupAutoResizeTextareas() {
+          const textareas = document.querySelectorAll('textarea[data-auto-resize]');
+          if (!textareas.length) return;
+          const resize = (textarea) => {
+            textarea.style.height = 'auto';
+            const newHeight = Math.max(textarea.scrollHeight, 44);
+            textarea.style.height = newHeight + 'px';
+          };
+          textareas.forEach((textarea) => {
+            textarea.style.overflow = 'hidden';
+            resize(textarea);
+            textarea.addEventListener('input', () => resize(textarea));
+            textarea.addEventListener('change', () => resize(textarea));
+          });
+        }
+
+        function setupSignaturePads() {
+          const ratio = window.devicePixelRatio || 1;
+
+          document.querySelectorAll('.signature-pad').forEach((pad) => {
+            const canvas = pad.querySelector('canvas');
+            const hiddenInput = pad.querySelector('input[type="hidden"]');
+            const clearButton = pad.querySelector('.signature-clear');
+            const sampleText = pad.dataset.sample || '';
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            let sampleActive = false;
+            let canvasWidth = 0;
+            let canvasHeight = 0;
+
+            canvas.style.touchAction = 'none';
+
+            const setPenDefaults = () => {
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(ratio, ratio);
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.lineWidth = 2.5;
+              ctx.strokeStyle = '#1f2937';
+              ctx.fillStyle = '#1f2937';
+            };
+
+            const syncHiddenValue = () => {
+              try {
+                hiddenInput.value = canvas.toDataURL('image/png');
+              } catch (err) {
+                hiddenInput.value = '';
+              }
+            };
+
+            const drawFromDataUrl = (dataUrl) => {
+              if (!dataUrl || !dataUrl.startsWith('data:image/')) return;
+              const img = new Image();
+              img.onload = () => {
+                setPenDefaults();
+                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+              };
+              img.src = dataUrl;
+            };
+
+            const renderSample = () => {
+              if (!sampleText) return;
+              setPenDefaults();
+              ctx.font = '28px "Segoe Script", cursive';
+              ctx.fillText(sampleText, 24, canvasHeight / 2 + 10);
+              sampleActive = true;
+              syncHiddenValue();
+            };
+
+            const resizeCanvas = () => {
+              const wrapper = pad.querySelector('.signature-canvas-wrapper');
+              canvasWidth = wrapper.clientWidth || 340;
+              canvasHeight = wrapper.clientHeight || 160;
+              canvas.width = canvasWidth * ratio;
+              canvas.height = canvasHeight * ratio;
+              canvas.style.width = canvasWidth + 'px';
+              canvas.style.height = canvasHeight + 'px';
+              setPenDefaults();
+              if (sampleActive) {
+                renderSample();
+                return;
+              }
+              if (hiddenInput.value) {
+                drawFromDataUrl(hiddenInput.value);
+              } else if (sampleText) {
+                renderSample();
+              }
+            };
+
+            resizeCanvas();
+            window.addEventListener('resize', () => {
+              const previousValue = hiddenInput.value;
+              const wasSample = sampleActive;
+              resizeCanvas();
+              if (previousValue && !wasSample) {
+                drawFromDataUrl(previousValue);
+              } else if (wasSample) {
+                renderSample();
+              }
+            });
+
+            const getPoint = (event) => {
+              const rect = canvas.getBoundingClientRect();
+              return {
+                x: (event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0) - rect.left,
+                y: (event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0) - rect.top,
+              };
+            };
+
+            canvas.addEventListener('pointerdown', (event) => {
+              event.preventDefault();
+              canvas.setPointerCapture(event.pointerId);
+              if (sampleActive) {
+                setPenDefaults();
+                hiddenInput.value = '';
+                sampleActive = false;
+              }
+              drawing = true;
+              const { x, y } = getPoint(event);
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+            });
+
+            canvas.addEventListener('pointermove', (event) => {
+              if (!drawing) return;
+              event.preventDefault();
+              const { x, y } = getPoint(event);
+              ctx.lineTo(x, y);
+              ctx.stroke();
+            });
+
+            const finishStroke = (event) => {
+              if (!drawing) return;
+              event.preventDefault();
+              try {
+                canvas.releasePointerCapture(event.pointerId);
+              } catch (err) {
+                // ignore
+              }
+              drawing = false;
+              ctx.closePath();
+              sampleActive = false;
+              syncHiddenValue();
+            };
+
+            canvas.addEventListener('pointerup', finishStroke);
+            canvas.addEventListener('pointerleave', finishStroke);
+            canvas.addEventListener('pointercancel', finishStroke);
+
+            clearButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              drawing = false;
+              sampleActive = false;
+              hiddenInput.value = '';
+              setPenDefaults();
+            });
+            syncHiddenValue();
+          });
+        }
+
+        function setupAutoSuggestions() {
+          const inputs = document.querySelectorAll('input[data-suggest-field]');
+          if (!inputs.length || typeof fetch !== 'function') return;
+
+          inputs.forEach((input) => {
+            const fieldName = input.dataset.suggestField;
+            if (!fieldName) return;
+            const listId = input.getAttribute('list');
+            if (!listId) return;
+            const dataList = document.getElementById(listId);
+            if (!dataList) return;
+
+            let lastQuery = '';
+            let pendingController = null;
+
+            const applySuggestions = (values) => {
+              dataList.innerHTML = '';
+              if (!Array.isArray(values) || !values.length) {
+                return;
+              }
+              values.forEach((value) => {
+                const option = document.createElement('option');
+                option.value = value;
+                dataList.appendChild(option);
+              });
+            };
+
+            const requestSuggestions = (rawValue) => {
+              const query = (rawValue || '').trim();
+              if (query.length < 3) {
+                lastQuery = '';
+                applySuggestions([]);
+                if (pendingController && typeof pendingController.abort === 'function') {
+                  pendingController.abort();
+                }
+                pendingController = null;
+                return;
+              }
+              if (query === lastQuery) {
+                return;
+              }
+              lastQuery = query;
+              if (pendingController && typeof pendingController.abort === 'function') {
+                pendingController.abort();
+              }
+              pendingController =
+                typeof AbortController === 'function' ? new AbortController() : null;
+              const params =
+                '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
+              const init = pendingController ? { signal: pendingController.signal } : undefined;
+              fetch('./suggest' + params, init)
+                .then((response) => (response.ok ? response.json() : null))
+                .then((payload) => {
+                  if (!payload || !Array.isArray(payload.suggestions)) {
+                    applySuggestions([]);
+                    return;
+                  }
+                  applySuggestions(payload.suggestions);
+                })
+                .catch((err) => {
+                  if (err && err.name === 'AbortError') {
+                    return;
+                  }
+                  console.warn('Suggestion lookup failed', err);
+                });
+            };
+
+            input.addEventListener('input', () => requestSuggestions(input.value));
+            input.addEventListener('focus', () => requestSuggestions(input.value));
+          });
+        }
+
+        if (debugToggleEl) {
+          let stored = null;
+          try {
+            stored = window.localStorage.getItem(DEBUG_KEY);
+          } catch (err) {
+            stored = null;
+          }
+          applyDebugState(stored === '1');
+          debugToggleEl.addEventListener('change', () => {
+            applyDebugState(debugToggleEl.checked);
+          });
+        } else {
+          applyDebugState(false);
+        }
+
+        setupAutoResizeTextareas();
+        setupPartsTable();
+        setupPhotoUploads();
+        setupSignaturePads();
+        setupAutoSuggestions();
+        updateFilesSummary();
+
+        formEl.addEventListener('submit', (event) => {
+          event.preventDefault();
+          if (statusEl) {
+            statusEl.textContent = 'Submitting...';
+          }
+          submitButton.classList.remove('is-success', 'is-error');
+          submitButton.classList.add('is-disabled');
+          submitButton.disabled = true;
+
+          const formData = new FormData(formEl);
+          if (debugState.enabled) {
+            formData.set('debug_mode', 'true');
+          } else {
+            formData.delete('debug_mode');
+          }
+
+          const totalBytes = Array.from(formData.values()).reduce((sum, value) => {
+            if (value instanceof File) {
+              return sum + (value.size || 0);
+            }
+            return sum;
+          }, 0);
+
+          showProgress(totalBytes);
+          debugState.timeline = [];
+          recordDebug('submit-start', {
+            totalFields: Array.from(formData.keys()).length,
+            totalUploadBytes: totalBytes,
+          });
+
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', './submit');
+
+          xhr.upload.onprogress = (event) => {
+            if (!event) return;
+            if (event.lengthComputable) {
+              const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+              setProgress(
+                percent,
+                'Uploading ' +
+                  percent +
+                  '% (' +
+                  formatBytes(event.loaded) +
+                  ' of ' +
+                  formatBytes(event.total) +
+                  ')'
+              );
+              recordDebug('upload-progress', {
+                lengthComputable: true,
+                loaded: event.loaded,
+                total: event.total,
+                percent,
+              });
+            } else {
+              setProgress(15, 'Uploading...');
+              recordDebug('upload-progress', {
+                lengthComputable: false,
+                loaded: event.loaded || 0,
+              });
+            }
+          };
+
+          const resetSubmitState = () => {
+            submitButton.disabled = false;
+            submitButton.classList.remove('is-disabled');
+          };
+
+          xhr.onerror = () => {
+            recordDebug('submit-error', { type: 'network' });
+            submitButton.classList.add('is-error');
+            if (statusEl) {
+              statusEl.textContent = 'Network error during submission.';
+            }
+            hideProgress();
+            resetSubmitState();
+          };
+
+          xhr.ontimeout = () => {
+            recordDebug('submit-error', { type: 'timeout' });
+            submitButton.classList.add('is-error');
+            if (statusEl) {
+              statusEl.textContent = 'Submission timed out.';
+            }
+            hideProgress();
+            resetSubmitState();
+          };
+
+          xhr.onload = () => {
+            let payload = null;
+            let parseError = null;
+            if (xhr.responseText) {
+              try {
+                payload = JSON.parse(xhr.responseText);
+              } catch (err) {
+                parseError = err.message;
+              }
+            }
+            recordDebug('submit-complete', {
+              status: xhr.status,
+              payload,
+              parseError,
+            });
+
+            const downloadTarget =
+              payload && typeof (payload.path || payload.url) === 'string'
+                ? payload.path || payload.url
+                : null;
+            const success =
+              xhr.status >= 200 &&
+              xhr.status < 300 &&
+              payload &&
+              payload.ok &&
+              typeof downloadTarget === 'string';
+
+            if (success) {
+              submitButton.classList.add('is-success');
+              if (statusEl) {
+                statusEl.textContent = 'Download starting...';
+              }
+              setProgress(100, 'Upload complete');
+              setTimeout(() => {
+                hideProgress();
+                window.location.href = downloadTarget;
+              }, 200);
+            } else {
+              submitButton.classList.add('is-error');
+              const message =
+                (payload && (payload.error || payload.message)) ||
+                'Submission failed (status ' + xhr.status + ')';
+              if (statusEl) {
+                statusEl.textContent = message;
+              }
+              hideProgress();
+            }
+
+            resetSubmitState();
+          };
+
+          xhr.send(formData);
+        });
+      })();
+    </script>
+  </body>
+</html>

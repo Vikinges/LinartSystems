@@ -1,0 +1,9 @@
+body{font-family:Inter,Segoe UI,Arial,sans-serif;background:#f6f8fb;color:#0b1220}
+.container{max-width:940px;margin:48px auto;padding:24px;background:white;border-radius:10px;box-shadow:0 6px 24px rgba(12,24,48,.08)}
+header h1{margin:0 0 6px 0}
+.lead{color:#415165;margin-top:6px}
+.services{display:flex;gap:18px;margin-top:24px}
+.service{display:flex;flex-direction:column;align-items:center;padding:18px;border-radius:8px;text-decoration:none;color:inherit;background:#f3f6fb;border:1px solid #e6eef8;width:220px}
+.service img{width:96px;height:96px}
+.service div{margin-top:12px;font-weight:600}
+footer{margin-top:24px;color:#6b7785}
