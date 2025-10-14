@@ -51,7 +51,8 @@
             const dot = document.createElement('span');
             dot.className = 'dot '+(s.ok? 'ok':'fail');
             const title = document.createElement('div');
-            title.innerHTML = `<strong>${s.name}</strong> <div class="meta">${s.ok? 'OK':'FAILED'}</div>`;
+            const label = s.displayName || s.name;
+            title.innerHTML = `<strong>${label}</strong> <div class="meta">${s.description||''} — ${s.ok? 'OK':'FAILED'}</div>`;
             div.appendChild(dot);
             div.appendChild(title);
             out.appendChild(div);
