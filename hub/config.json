@@ -1,4 +1,12 @@
 {
   "siteLogo": "/static/logo1.svg",
-  "siteTitle": "Linart Systems"
+  "siteTitle": "Linart Systems",
+  "introTitle": "Welcome to my server!",
+  "introBody": "I am Vladimir. If you have any questions or need help, feel free to reach out on WhatsApp.",
+  "contactWhatsapp": "+491754000261",
+  "heroVideo": "",
+  "heroVideoBlur": 8,
+  "heroOverlayColor": "#05060b",
+  "heroOverlayOpacity": 0.85
 }
+

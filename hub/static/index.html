@@ -7,52 +7,154 @@
     <link rel="stylesheet" href="/static/styles.css">
   </head>
   <body>
-    <div class="container">
-      <header>
-        <div class="brand">
-          <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
-          <div>
-            <h1 id="brandTitle">Linart Systems</h1>
-            <p class="lead">Central hub running inside a container. Click logos to open services.</p>
+    <div class="hero">
+      <div class="hero-bg">
+        <video id="heroVideo" autoplay muted loop playsinline class="is-hidden"></video>
+      </div>
+      <div class="container hero-content">
+        <header>
+          <div class="brand">
+            <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
+            <div>
+              <h1 id="brandTitle">Linart Systems</h1>
+              <p class="lead">Central hub running inside a container. Access every service from one place.</p>
+            </div>
           </div>
-        </div>
-        <div class="header-actions">
-          <a class="link-button" href="/admin">Admin</a>
-          <a class="link-button secondary" href="/status">Status</a>
-        </div>
-      </header>
+          <div class="header-actions">
+            <a class="link-button" href="/admin">Admin</a>
+            <a class="link-button secondary" href="/status">Status</a>
+          </div>
+        </header>
 
+        <div class="intro-card" id="introCard">
+          <h2 id="introTitle">Welcome to my server!</h2>
+          <p id="introBody">I am Vladimir. If you have any questions, feel free to reach out.</p>
+          <a id="whatsappLink" class="contact-link" href="#" target="_blank" rel="noopener">
+            <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+              <path d="M16.04 3C9.38 3 4 8.28 4 14.8c0 3.71 1.74 7.04 4.47 9.33L7.3 29 12 27.49a12.4 12.4 0 0 0 4.04.64c6.66 0 12.04-5.29 12.04-11.81S22.7 3 16.04 3Zm0 21.44c-1.25 0-2.49-.33-3.58-.95l-.26-.15-2.13.64.67-2.14-.17-.22A8.63 8.63 0 0 1 7.4 14.8c0-4.57 3.87-8.3 8.64-8.3 4.77 0 8.64 3.73 8.64 8.3s-3.87 8.3-8.64 8.3Zm4.72-6.19c-.26-.13-1.57-.75-1.81-.83-.24-.09-.41-.13-.58.13-.17.26-.65.83-.79 1-.15.17-.29.2-.55.07-.26-.13-1.1-.4-2.09-1.29-.77-.69-1.29-1.55-1.45-1.81-.15-.26-.02-.4.11-.53.12-.12.26-.32.38-.48.13-.16.17-.26.26-.43.09-.17.04-.32-.02-.45-.05-.13-.58-1.39-.8-1.9-.21-.5-.42-.43-.58-.43-.15 0-.32-.03-.5-.03-.17 0-.46.07-.7.32-.24.26-.92.9-.92 2.19 0 1.29.95 2.55 1.08 2.73.13.17 1.82 2.88 4.46 3.92.62.24 1.11.38 1.49.49.62.2 1.19.17 1.64.1.5-.07 1.57-.64 1.79-1.26.22-.62.22-1.16.15-1.26-.07-.1-.24-.17-.5-.3Z"/>
+            </svg>
+            <span id="whatsappText">Contact via WhatsApp</span>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div class="container">
       <main>
+        <h2 style="color:#e2e8f0;margin:16px 0 12px;">Available services</h2>
         <div id="services" class="services">Loading...</div>
       </main>
 
       <footer>
-        <small>Hosted in Docker. Hub proxies to the microservices by name.</small>
+        <small>Hosted at linart.club. Copying or redistribution without permission is prohibited.</small>
       </footer>
     </div>
 
     <script>
-      async function load(){
-        try{
+      const brandLogoEl = document.getElementById('brandLogo');
+      const brandTitleEl = document.getElementById('brandTitle');
+      const introTitleEl = document.getElementById('introTitle');
+      const introBodyEl = document.getElementById('introBody');
+      const whatsappLinkEl = document.getElementById('whatsappLink');
+      const whatsappTextEl = document.getElementById('whatsappText');
+      const heroVideoEl = document.getElementById('heroVideo');
+      const servicesContainer = document.getElementById('services');
+
+      function normaliseWhatsapp(number) {
+        if (!number) return null;
+        const digits = number.replace(/[^\d+]/g, '');
+        if (!digits) return null;
+        if (digits.startsWith('+')) return 'https://wa.me/' + digits.replace(/\+/g, '');
+        if (digits.startsWith('00')) return 'https://wa.me/' + digits.slice(2);
+        return 'https://wa.me/' + digits.replace(/^[0]+/, '');
+      }
+
+      function formatWhatsappLabel(number) {
+        if (!number) return 'Contact via WhatsApp';
+        return 'Contact via WhatsApp (' + number + ')';
+      }
+
+      function hexToRgb(hex) {
+        if (typeof hex !== 'string') return null;
+        const normalized = hex.trim();
+        const match = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+        if (!match) return null;
+        let value = match[1];
+        if (value.length === 3) {
+          value = value.split('').map(function (ch) { return ch + ch; }).join('');
+        }
+        const intVal = parseInt(value, 16);
+        return [(intVal >> 16) & 255, (intVal >> 8) & 255, intVal & 255];
+      }
+
+      async function load() {
+        try {
           const response = await fetch('/api/status');
           const data = await response.json();
 
           const fallbackLogo = (data.hub && data.hub.siteLogo) || '/static/logo1.svg';
           const title = (data.hub && data.hub.siteTitle) || 'Linart Systems';
-          document.getElementById('brandLogo').src = fallbackLogo;
-          document.getElementById('brandTitle').textContent = title;
+          brandLogoEl.src = fallbackLogo;
+          brandTitleEl.textContent = title;
 
-          const container = document.getElementById('services');
-          container.innerHTML = '';
-          if (!data.services || !data.services.length) {
-            container.textContent = 'No services are registered yet.';
-            return;
+          const introTitle = (data.hub && data.hub.introTitle) || 'Welcome to my server!';
+          const introBody = (data.hub && data.hub.introBody) || 'Feel free to explore the available services.';
+          introTitleEl.textContent = introTitle;
+          introBodyEl.innerHTML = introBody.replace(/\n/g, '<br>');
+
+          const whatsappNumber = data.hub && data.hub.contactWhatsapp;
+          const linkTarget = normaliseWhatsapp(whatsappNumber);
+          if (linkTarget) {
+            whatsappLinkEl.href = linkTarget;
+            whatsappLinkEl.style.display = 'inline-flex';
+            whatsappTextEl.textContent = formatWhatsappLabel(whatsappNumber);
+          } else {
+            whatsappLinkEl.style.display = 'none';
           }
 
-          data.services.forEach(service => {
+          const overlayColor = (data.hub && data.hub.heroOverlayColor) || '#05060b';
+          const overlayOpacityRaw = Number(data.hub && data.hub.heroOverlayOpacity);
+          const overlayOpacity = Number.isFinite(overlayOpacityRaw)
+            ? Math.max(0, Math.min(1, overlayOpacityRaw))
+            : 0.85;
+          const rgb = hexToRgb(overlayColor) || [5, 6, 11];
+          const or = rgb[0];
+          const og = rgb[1];
+          const ob = rgb[2];
+          const topAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.65));
+          const midAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.9));
+          const bottomAlpha = Math.max(0, Math.min(1, overlayOpacity));
+          document.documentElement.style.setProperty('--hero-overlay-top', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + topAlpha + ')');
+          document.documentElement.style.setProperty('--hero-overlay-mid', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + midAlpha + ')');
+          document.documentElement.style.setProperty('--hero-overlay-bottom', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + bottomAlpha + ')');
+
+          const heroVideo = data.hub && data.hub.heroVideo;
+          const heroVideoBlur = Number(data.hub && data.hub.heroVideoBlur);
+          const blurValue = Number.isFinite(heroVideoBlur) ? Math.max(0, Math.min(40, heroVideoBlur)) : 8;
+          document.documentElement.style.setProperty('--hero-blur', blurValue + 'px');
+          if (heroVideo) {
+            heroVideoEl.classList.remove('is-hidden');
+            heroVideoEl.src = heroVideo;
+            heroVideoEl.load();
+          } else {
+            heroVideoEl.classList.add('is-hidden');
+            heroVideoEl.removeAttribute('src');
+            heroVideoEl.load();
+          }
+
+          servicesContainer.innerHTML = '';
+          if (!data.services || !data.services.length) {
+            servicesContainer.textContent = 'No services are registered yet.';
+            servicesContainer.style.color = '#94a3b8';
+            return;
+          }
+          servicesContainer.style.color = 'inherit';
+
+          data.services.forEach(function (service) {
             const link = document.createElement('a');
             link.className = 'service';
-            link.href = service.prefix || ('/' + service.name);
+            const prefix = service.prefix || ('/' + service.name.replace(/^\//, ''));
+            link.href = prefix.endsWith('/') ? prefix : prefix + '/';
             link.title = service.displayName || service.name;
             if (service.ok === false) {
               link.classList.add('service--down');
@@ -83,13 +185,15 @@
             text.appendChild(status);
 
             link.appendChild(text);
-            container.appendChild(link);
+            servicesContainer.appendChild(link);
           });
-        }catch(e){
-          document.getElementById('services').textContent = 'Error loading services: ' + e;
+        } catch (error) {
+          servicesContainer.textContent = 'Error loading services: ' + error;
+          servicesContainer.style.color = '#f87171';
         }
       }
+
       load();
     </script>
   </body>
-  </html>
+</html>

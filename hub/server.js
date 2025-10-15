@@ -7,11 +7,10 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const fs = require('fs');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD || 'admin';
-
 app.use(cookieParser());
 app.use(session({ secret: process.env.SESSION_SECRET || 'changeme', resave: false, saveUninitialized: false }));
 app.use(express.json());
@@ -19,11 +18,20 @@ app.use(express.urlencoded({ extended: true }));
 
 const SERVICES_FILE = path.join(__dirname, 'services.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
+const ADMIN_STORE_FILE = path.join(__dirname, 'admin.json');
 const UPLOAD_DIR = path.join(__dirname, 'static', 'uploads');
 const DEFAULT_CONFIG = {
   siteLogo: '/static/logo1.svg',
   siteTitle: 'Linart Systems',
+  introTitle: 'Welcome to my server!',
+  introBody: 'I am Vladimir. If you have any questions or need help, feel free to reach out on WhatsApp.',
+  contactWhatsapp: '+491754000261',
+  heroVideo: '',
+  heroVideoBlur: 8,
+  heroOverlayColor: '#05060b',
+  heroOverlayOpacity: 0.85,
 };
+const DEFAULT_ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD || 'admin';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
@@ -69,17 +77,62 @@ function saveServices(list){
 function loadConfig(){
   try{
     const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    return { ...DEFAULT_CONFIG, ...(data || {}) };
-  }catch(err){
-    return { ...DEFAULT_CONFIG };
+  const merged = { ...DEFAULT_CONFIG, ...(data || {}) };
+  merged.heroVideoBlur = Number.isFinite(Number(merged.heroVideoBlur))
+    ? Math.max(0, Math.min(40, Number(merged.heroVideoBlur)))
+    : DEFAULT_CONFIG.heroVideoBlur;
+  merged.heroOverlayOpacity = Number.isFinite(Number(merged.heroOverlayOpacity))
+    ? Math.max(0, Math.min(1, Number(merged.heroOverlayOpacity)))
+    : DEFAULT_CONFIG.heroOverlayOpacity;
+  if (typeof merged.heroOverlayColor !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(merged.heroOverlayColor.trim())) {
+    merged.heroOverlayColor = DEFAULT_CONFIG.heroOverlayColor;
+  } else {
+    merged.heroOverlayColor = merged.heroOverlayColor.trim();
   }
+  return merged;
+}catch(err){
+  return { ...DEFAULT_CONFIG };
+}
 }
 
 function saveConfig(next){
   const merged = { ...DEFAULT_CONFIG, ...(next || {}) };
+  merged.heroVideoBlur = Number.isFinite(Number(merged.heroVideoBlur))
+    ? Math.max(0, Math.min(40, Number(merged.heroVideoBlur)))
+    : DEFAULT_CONFIG.heroVideoBlur;
+  merged.heroOverlayOpacity = Number.isFinite(Number(merged.heroOverlayOpacity))
+    ? Math.max(0, Math.min(1, Number(merged.heroOverlayOpacity)))
+    : DEFAULT_CONFIG.heroOverlayOpacity;
+  if (typeof merged.heroOverlayColor !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(merged.heroOverlayColor.trim())) {
+    merged.heroOverlayColor = DEFAULT_CONFIG.heroOverlayColor;
+  } else {
+    merged.heroOverlayColor = merged.heroOverlayColor.trim();
+  }
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));
   return merged;
 }
+
+function loadAdminCredentials() {
+  try {
+    const data = JSON.parse(fs.readFileSync(ADMIN_STORE_FILE, 'utf8'));
+    if (data && data.passwordHash) {
+      return data;
+    }
+  } catch (err) {
+    // ignore, will create defaults
+  }
+  const passwordHash = bcrypt.hashSync(DEFAULT_ADMIN_PASSWORD, 10);
+  const credentials = { passwordHash };
+  fs.writeFileSync(ADMIN_STORE_FILE, JSON.stringify(credentials, null, 2));
+  return credentials;
+}
+
+function saveAdminCredentials(credentials) {
+  fs.writeFileSync(ADMIN_STORE_FILE, JSON.stringify(credentials, null, 2));
+  adminCredentials = credentials;
+}
+
+let adminCredentials = loadAdminCredentials();
 
 const allowedImageTypes = new Map([
   ['image/png', '.png'],
@@ -90,18 +143,36 @@ const allowedImageTypes = new Map([
   ['image/webp', '.webp'],
 ]);
 
-const allowedExtensions = new Set(['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp']);
+const allowedVideoTypes = new Map([
+  ['video/mp4', '.mp4'],
+  ['video/webm', '.webm'],
+  ['video/ogg', '.ogv'],
+]);
+
+const allowedExtensions = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.svg',
+  '.gif',
+  '.webp',
+  '.mp4',
+  '.webm',
+  '.ogv',
+]);
 
 function buildStoredFilename(originalName, mimetype) {
   const rawExt = path.extname(originalName || '').toLowerCase();
+  const extFromMime =
+    allowedImageTypes.get(mimetype) || allowedVideoTypes.get(mimetype);
   const ext =
-    allowedImageTypes.get(mimetype) ||
+    extFromMime ||
     (allowedExtensions.has(rawExt) ? rawExt : '.png');
   const base = path
     .basename(originalName || 'logo', rawExt)
     .replace(/[^a-z0-9_-]+/gi, '')
     .toLowerCase()
-    .slice(0, 40) || 'logo';
+    .slice(0, 40) || (ext && ext.startsWith('.mp') ? 'video' : 'file');
   return `${Date.now()}-${base}${ext}`;
 }
 
@@ -110,15 +181,15 @@ const upload = multer({
     destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
     filename: (_req, file, cb) => cb(null, buildStoredFilename(file.originalname, file.mimetype)),
   }),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (allowedImageTypes.has(file.mimetype)) {
+    if (allowedImageTypes.has(file.mimetype) || allowedVideoTypes.has(file.mimetype)) {
       return cb(null, true);
     }
     if (file.originalname && allowedExtensions.has(path.extname(file.originalname).toLowerCase())) {
       return cb(null, true);
     }
-    const err = new Error('Unsupported file type. Allowed: png, jpg, svg, gif, webp.');
+    const err = new Error('Unsupported file type. Allowed: png, jpg, svg, gif, webp, mp4, webm, ogv.');
     err.code = 'UNSUPPORTED_FILE_TYPE';
     return cb(err);
   },
@@ -192,6 +263,13 @@ app.get('/api/status', async (req, res) => {
       now: new Date().toISOString(),
       siteLogo: config.siteLogo,
       siteTitle: config.siteTitle,
+      introTitle: config.introTitle,
+      introBody: config.introBody,
+      contactWhatsapp: config.contactWhatsapp,
+      heroVideo: config.heroVideo,
+      heroVideoBlur: config.heroVideoBlur,
+      heroOverlayColor: config.heroOverlayColor,
+      heroOverlayOpacity: config.heroOverlayOpacity,
     },
   });
 });
@@ -202,11 +280,19 @@ app.get('/admin', (req, res) => {
   return res.sendFile(path.join(__dirname, 'static', 'admin-login.html'));
 });
 
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
   const pass = req.body && req.body.password;
-  if (pass === ADMIN_PASSWORD) {
-    req.session.authenticated = true;
-    return res.redirect('/admin');
+  if (typeof pass !== 'string' || !pass.length) {
+    return res.status(403).send('Forbidden');
+  }
+  try {
+    const ok = await bcrypt.compare(pass, adminCredentials.passwordHash);
+    if (ok) {
+      req.session.authenticated = true;
+      return res.redirect('/admin');
+    }
+  } catch (err) {
+    console.warn('[hub] Failed to compare admin password', err);
   }
   return res.status(403).send('Forbidden');
 });
@@ -298,6 +384,39 @@ app.delete('/admin/services/:name', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+app.post('/admin/password', requireAuth, async (req, res) => {
+  const body = req.body || {};
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ ok: false, error: 'missing_fields' });
+  }
+
+  try {
+    const matches = await bcrypt.compare(currentPassword, adminCredentials.passwordHash);
+    if (!matches) {
+      return res.status(400).json({ ok: false, error: 'invalid_current_password' });
+    }
+  } catch (err) {
+    console.error('[hub] Password compare failed', err);
+    return res.status(500).json({ ok: false, error: 'compare_failed' });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ ok: false, error: 'weak_password' });
+  }
+
+  try {
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    saveAdminCredentials({ passwordHash });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[hub] Failed to update password', err);
+    res.status(500).json({ ok: false, error: 'update_failed' });
+  }
+});
+
 app.get('/admin/config', requireAuth, (req, res) => {
   res.json(loadConfig());
 });
@@ -317,6 +436,49 @@ app.post('/admin/config', requireAuth, (req, res) => {
     next.siteTitle = value || DEFAULT_CONFIG.siteTitle;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'introTitle')) {
+    const value = typeof body.introTitle === 'string' ? body.introTitle.trim() : '';
+    next.introTitle = value || DEFAULT_CONFIG.introTitle;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'introBody')) {
+    const value =
+      typeof body.introBody === 'string' ? body.introBody.trim() : '';
+    next.introBody = value || DEFAULT_CONFIG.introBody;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'contactWhatsapp')) {
+    const value =
+      typeof body.contactWhatsapp === 'string' ? body.contactWhatsapp.trim() : '';
+    next.contactWhatsapp = value || DEFAULT_CONFIG.contactWhatsapp;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'heroVideo')) {
+    const value = typeof body.heroVideo === 'string' ? body.heroVideo.trim() : '';
+    next.heroVideo = value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'heroVideoBlur')) {
+    const parsed = Number(body.heroVideoBlur);
+    if (Number.isFinite(parsed)) {
+      next.heroVideoBlur = Math.max(0, Math.min(40, parsed));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'heroOverlayColor')) {
+    const value = typeof body.heroOverlayColor === 'string' ? body.heroOverlayColor.trim() : '';
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) {
+      next.heroOverlayColor = value;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'heroOverlayOpacity')) {
+    const parsedOpacity = Number(body.heroOverlayOpacity);
+    if (Number.isFinite(parsedOpacity)) {
+      next.heroOverlayOpacity = Math.max(0, Math.min(1, parsedOpacity));
+    }
+  }
+
   const saved = saveConfig(next);
   res.json({ ok: true, config: saved });
 });
@@ -334,6 +496,8 @@ app.post('/admin/upload-logo', requireAuth, (req, res, next) => {
 });
 
 // Reverse-proxy routes: expose services under /service1/ and /service2/
+app.get('/service1', (req, res) => res.redirect(301, '/service1/'));
+app.get('/service2', (req, res) => res.redirect(301, '/service2/'));
 app.use('/service1', createProxyMiddleware({
   target: 'http://service1:3000',
   changeOrigin: true,

@@ -8,18 +8,25 @@
     body { margin: 0; padding: 32px; }
     .layout { max-width: 960px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 20px 40px rgba(12, 24, 48, 0.08); }
     header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-    header h1 { margin: 0; font-size: 1.75rem; }
+    header h1 { margin: 0; font-size: 1.8rem; }
     header a { color: #2563eb; text-decoration: none; font-weight: 600; }
     section { margin-bottom: 32px; }
     section:last-of-type { margin-bottom: 0; }
     h2 { margin: 0 0 12px; font-size: 1.35rem; }
-    h3 { margin-top: 0; font-size: 1.1rem; }
-    .branding-card { display: flex; gap: 18px; align-items: center; background: #f3f6fb; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; }
+    h3 { margin-top: 0; font-size: 1.12rem; }
+    .branding-card,
+    .hero-card { display: flex; gap: 18px; align-items: flex-start; background: #f3f6fb; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; }
     .branding-card img { width: 96px; height: 96px; object-fit: contain; border-radius: 10px; background: #fff; border: 1px solid #dbe2ee; }
-    .branding-card .controls { display: flex; flex-direction: column; gap: 8px; }
-    label.inline { display: flex; flex-direction: column; font-size: 0.9rem; gap: 4px; }
-    label.inline input[type="text"] { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
-    button, label.button { padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px; }
+    .branding-card .controls,
+    .hero-controls { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    label.inline { display: flex; flex-direction: column; font-size: 0.9rem; gap: 6px; }
+    label.inline input[type="text"],
+    label.inline input[type="url"],
+    label.inline input[type="password"],
+    label.inline textarea { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; background: #fff; }
+    label.inline textarea { min-height: 110px; resize: vertical; }
+    button,
+    label.button { padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px; }
     label.button { position: relative; overflow: hidden; }
     label.button input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
     button.secondary { background: #f3f6fb; color: #1b263b; border: 1px solid #dbe2ee; }
@@ -35,10 +42,22 @@
     form#add input[type="text"], form#add input[type="url"] { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
     .form-actions { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
     .hint { font-size: 0.8rem; color: #697588; }
-    @media (max-width: 640px) {
+    .hero-preview { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .hero-preview video { width: 100%; border-radius: 12px; border: 1px solid #dbe2ee; background: #000; }
+    .hero-preview video.is-hidden { display: none; }
+    .hero-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
+    .hero-slider { display: flex; align-items: center; gap: 12px; }
+    .hero-slider input[type="range"] { width: 180px; }
+    .badge-small { padding: 2px 8px; border-radius: 999px; background: #e0e7ff; color: #1d4ed8; font-size: 0.75rem; font-weight: 600; }
+    .card-form { background: #f3f6fb; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .card-form .full { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; }
+    .card-form button { align-self: flex-start; }
+    .status-success { color: #166534; }
+    .status-error { color: #b91c1c; }
+    @media (max-width: 760px) {
       body { padding: 16px; }
-      .branding-card { flex-direction: column; align-items: flex-start; }
-      .service-card { flex-direction: column; align-items: flex-start; }
+      .branding-card, .hero-card { flex-direction: column; }
+      .hero-preview { width: 100%; }
     }
   </style>
 </head>
@@ -46,7 +65,7 @@
   <div class="layout">
     <header>
       <h1>Admin panel</h1>
-      <a href="/">← Back to hub</a>
+      <a class="link-back" href="/">&larr; Back to hub</a>
     </header>
 
     <section>
@@ -64,6 +83,55 @@
             <button type="button" id="saveBranding">Save changes</button>
           </div>
           <div class="hint">Accepted formats: PNG, JPG, SVG, GIF, WEBP. Max 5&nbsp;MB.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Welcome hero</h2>
+      <div class="hero-card">
+        <div class="hero-preview">
+          <span class="badge-small">Background video</span>
+          <video id="heroVideoPreview" controls muted loop playsinline></video>
+          <div class="hint">If no video is uploaded, a static gradient is shown.</div>
+        </div>
+        <div class="hero-controls">
+          <label class="inline">
+            Intro title
+            <input type="text" id="introTitleInput" placeholder="Welcome to my server!">
+          </label>
+          <label class="inline">
+            Intro message
+            <textarea id="introBodyInput" placeholder="Tell visitors who you are and what this hub does."></textarea>
+          </label>
+        <label class="inline">
+          WhatsApp number
+          <input type="text" id="whatsappInput" placeholder="+49123456789">
+        </label>
+        <label class="inline">
+          Overlay color
+          <input type="color" id="heroOverlayColorInput" value="#05060b">
+        </label>
+        <div class="hero-slider">
+          <label class="inline" style="flex:1;">
+            Overlay opacity
+            <input type="range" id="heroOverlayOpacityInput" min="0" max="100" step="1" value="85">
+          </label>
+          <strong id="heroOverlayOpacityValue">85%</strong>
+        </div>
+        <div class="hero-slider">
+          <label class="inline" style="flex:1;">
+            Video blur
+            <input type="range" id="heroBlurInput" min="0" max="40" step="1">
+          </label>
+            <strong id="heroBlurValue">0</strong>
+          </div>
+          <div class="hero-buttons">
+            <label class="button">Upload hero video<input type="file" id="heroVideoFile" accept="video/mp4,video/webm,video/ogg"></label>
+            <button type="button" class="secondary" id="heroVideoRemove">Remove video</button>
+            <button type="button" id="saveHero">Save hero</button>
+          </div>
+          <div class="hint">Recommended: MP4/WebM up to ~50&nbsp;MB. Video plays muted, loops, and is blurred using the value above.</div>
         </div>
       </div>
     </section>
@@ -110,38 +178,117 @@
         </div>
       </form>
     </section>
+
+    <section>
+      <h2>Security</h2>
+      <form id="passwordForm" class="card-form">
+        <label class="inline">
+          Current password
+          <input type="password" id="currentPasswordInput" required>
+        </label>
+        <label class="inline">
+          New password
+          <input type="password" id="newPasswordInput" minlength="6" required>
+        </label>
+        <label class="inline">
+          Confirm password
+          <input type="password" id="confirmPasswordInput" minlength="6" required>
+        </label>
+        <div class="full">
+          <button type="submit">Change password</button>
+          <span class="hint">Minimum 6 characters. Session will stay active after change.</span>
+          <span id="passwordStatus"></span>
+        </div>
+      </form>
+    </section>
   </div>
 
   <script>
     const state = {
-      config: { siteLogo: '/static/logo1.svg', siteTitle: 'Linart Systems' },
+      config: {
+        siteLogo: '/static/logo1.svg',
+        siteTitle: 'Linart Systems',
+        introTitle: ',
+        introBody: ',
+        contactWhatsapp: ',
+        heroVideo: ',
+        heroVideoBlur: 8,
+        heroOverlayColor: '#05060b',
+        heroOverlayOpacity: 0.85,
+      },
       services: []
     };
 
     function handleError(error) {
       console.error(error);
-      alert(error.message || 'Unexpected error');
+      alert(error.message || ''Unexpected error');
     }
 
     async function fetchJson(url, options) {
       const response = await fetch(url, options);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || (data && data.ok === false)) {
-        throw new Error((data && data.error) || response.statusText || 'Request failed');
+        throw new Error((data && data.error) || response.statusText || ''Request failed');
       }
       return data;
     }
 
-    async function uploadLogo(file) {
+    async function uploadAsset(file) {
       const form = new FormData();
       form.append('logo', file);
       const data = await fetchJson('/admin/upload-logo', { method: 'POST', body: form });
       return data.path;
     }
 
+    const siteLogoPreview = document.getElementById('siteLogoPreview');
+    const siteTitleInput = document.getElementById('siteTitleInput');
+    const heroVideoPreview = document.getElementById('heroVideoPreview');
+    const heroVideoFile = document.getElementById('heroVideoFile');
+    const heroVideoRemove = document.getElementById('heroVideoRemove');
+    const introTitleInput = document.getElementById('introTitleInput');
+    const introBodyInput = document.getElementById('introBodyInput');
+    const whatsappInput = document.getElementById('whatsappInput');
+    const heroOverlayColorInput = document.getElementById('heroOverlayColorInput');
+    const heroOverlayOpacityInput = document.getElementById('heroOverlayOpacityInput');
+    const heroOverlayOpacityValue = document.getElementById('heroOverlayOpacityValue');
+    const heroBlurInput = document.getElementById('heroBlurInput');
+    const heroBlurValue = document.getElementById('heroBlurValue');
+    const servicesList = document.getElementById('servicesList');
+    heroBlurInput.value = 8;
+    heroBlurValue.textContent = '8';
+    const passwordStatus = document.getElementById('passwordStatus');
+
     function renderBranding() {
-      document.getElementById('siteLogoPreview').src = state.config.siteLogo;
-      document.getElementById('siteTitleInput').value = state.config.siteTitle || '';
+      siteLogoPreview.src = state.config.siteLogo || ''/static/logo1.svg';
+      siteTitleInput.value = state.config.siteTitle || '';
+    }
+
+            function renderHero() {
+      introTitleInput.value = state.config.introTitle || '';
+      introBodyInput.value = state.config.introBody || '';
+      whatsappInput.value = state.config.contactWhatsapp || '';
+
+      heroOverlayColorInput.value = state.config.heroOverlayColor || '#05060b';
+      const overlayOpacity = Number.isFinite(Number(state.config.heroOverlayOpacity))
+        ? Math.max(0, Math.min(1, Number(state.config.heroOverlayOpacity)))
+        : 0.85;
+      heroOverlayOpacityInput.value = Math.round(overlayOpacity * 100);
+      heroOverlayOpacityValue.textContent = heroOverlayOpacityInput.value + '%';
+
+      heroBlurInput.value = Number.isFinite(Number(state.config.heroVideoBlur))
+        ? Number(state.config.heroVideoBlur)
+        : 8;
+      heroBlurValue.textContent = heroBlurInput.value;
+
+      if (state.config.heroVideo) {
+        heroVideoPreview.src = state.config.heroVideo;
+        heroVideoPreview.classList.remove('is-hidden');
+        heroVideoPreview.load();
+      } else {
+        heroVideoPreview.removeAttribute('src');
+        heroVideoPreview.classList.add('is-hidden');
+        heroVideoPreview.load();
+      }
     }
 
     function buildMeta(label, value) {
@@ -152,13 +299,12 @@
     }
 
     function renderServices() {
-      const list = document.getElementById('servicesList');
-      list.innerHTML = '';
+      servicesList.innerHTML = ';
       if (!state.services.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
         empty.textContent = 'No services registered yet.';
-        list.appendChild(empty);
+        servicesList.appendChild(empty);
         return;
       }
 
@@ -167,7 +313,7 @@
         card.className = 'service-card';
 
         const logo = document.createElement('img');
-        logo.src = service.logo || state.config.siteLogo || '/static/logo1.svg';
+        logo.src = service.logo || state.config.siteLogo || ''/static/logo1.svg';
         logo.alt = `${service.displayName || service.name} logo`;
         card.appendChild(logo);
 
@@ -196,7 +342,7 @@
         fileInput.addEventListener('change', async (event) => {
           if (!event.target.files?.length) return;
           try {
-            const path = await uploadLogo(event.target.files[0]);
+            const path = await uploadAsset(event.target.files[0]);
             await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
@@ -206,7 +352,7 @@
           } catch (error) {
             handleError(error);
           } finally {
-            event.target.value = '';
+            event.target.value = ';
           }
         });
         actions.appendChild(uploadLabel);
@@ -220,7 +366,7 @@
             await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ logo: '' })
+              body: JSON.stringify({ logo: ' })
             });
             await loadAll();
           } catch (error) {
@@ -245,7 +391,7 @@
         actions.appendChild(deleteBtn);
 
         card.appendChild(actions);
-        list.appendChild(card);
+        servicesList.appendChild(card);
       });
     }
 
@@ -258,6 +404,7 @@
         state.services = services;
         state.config = config;
         renderBranding();
+        renderHero();
         renderServices();
       } catch (error) {
         handleError(error);
@@ -266,7 +413,7 @@
 
     document.getElementById('saveBranding').addEventListener('click', async () => {
       try {
-        const siteTitle = document.getElementById('siteTitleInput').value.trim();
+        const siteTitle = siteTitleInput.value.trim();
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -284,7 +431,7 @@
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ siteLogo: '' })
+          body: JSON.stringify({ siteLogo: ' })
         });
         await loadAll();
       } catch (error) {
@@ -295,7 +442,7 @@
     document.getElementById('siteLogoFile').addEventListener('change', async (event) => {
       if (!event.target.files?.length) return;
       try {
-        const path = await uploadLogo(event.target.files[0]);
+        const path = await uploadAsset(event.target.files[0]);
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -305,7 +452,67 @@
       } catch (error) {
         handleError(error);
       } finally {
-        event.target.value = '';
+        event.target.value = ';
+      }
+    });
+
+    heroOverlayOpacityInput.addEventListener('input', () => {
+      heroOverlayOpacityValue.textContent = heroOverlayOpacityInput.value + '%';
+    });
+
+    heroBlurInput.addEventListener('input', () => {
+      heroBlurValue.textContent = heroBlurInput.value;
+    });
+
+    document.getElementById('saveHero').addEventListener('click', async () => {
+      try {
+        const payload = {
+          introTitle: introTitleInput.value.trim(),
+          introBody: introBodyInput.value.trim(),
+          contactWhatsapp: whatsappInput.value.trim(),
+          heroVideoBlur: Number(heroBlurInput.value)
+        };
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      }
+    });
+
+    heroVideoFile.addEventListener('change', async (event) => {
+      if (!event.target.files?.length) return;
+      const file = event.target.files[0];
+      try {
+        const path = await uploadAsset(file);
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ heroVideo: path })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      } finally {
+        event.target.value = ';
+      }
+    });
+
+    heroVideoRemove.addEventListener('click', async () => {
+      if (!state.config.heroVideo) return;
+      if (!confirm('Remove the current hero video?')) return;
+      try {
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ heroVideo: ' })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
       }
     });
 
@@ -325,7 +532,7 @@
       const fileInput = document.getElementById('addLogoFile');
       try {
         if (fileInput.files?.length) {
-          payload.logo = await uploadLogo(fileInput.files[0]);
+          payload.logo = await uploadAsset(fileInput.files[0]);
         }
 
         Object.keys(payload).forEach((key) => {
@@ -345,10 +552,40 @@
         });
 
         form.reset();
-        if (fileInput) fileInput.value = '';
+        if (fileInput) fileInput.value = ';
         await loadAll();
       } catch (error) {
         handleError(error);
+      }
+    });
+
+    document.getElementById('passwordForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      passwordStatus.textContent = ';
+      passwordStatus.className = ';
+
+      const currentPassword = document.getElementById('currentPasswordInput').value;
+      const newPassword = document.getElementById('newPasswordInput').value;
+      const confirmPassword = document.getElementById('confirmPasswordInput').value;
+
+      if (newPassword !== confirmPassword) {
+        passwordStatus.textContent = 'Passwords do not match.';
+        passwordStatus.className = 'status-error';
+        return;
+      }
+
+      try {
+        await fetchJson('/admin/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword })
+        });
+        passwordStatus.textContent = 'Password updated.';
+        passwordStatus.className = 'status-success';
+        event.target.reset();
+      } catch (error) {
+        passwordStatus.textContent = error.message || ''Failed to update password.';
+        passwordStatus.className = 'status-error';
       }
     });
 
@@ -356,3 +593,6 @@
   </script>
 </body>
 </html>
+
+
+
