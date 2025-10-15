@@ -20,6 +20,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
+const SERVICE_NAME = process.env.SERVICE_NAME || 'service1';
 const PUBLIC_TEMPLATE_PATH = path.join(PUBLIC_DIR, 'form-template.pdf');
 const LEGACY_TEMPLATE_PATHS = [
   '/mnt/data/SNDS-LED-Preventative-Maintenance-Checklist BER Blanko.pdf',
@@ -2191,6 +2192,29 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const selectedFiles = new Map();
         const previewUrls = new Map();
         const debugState = { enabled: false, timeline: [] };
+        const basePath = window.location.pathname.endsWith('/')
+          ? window.location.pathname
+          : window.location.pathname + '/';
+
+        function withBase(path) {
+          if (!path || typeof path !== 'string') {
+            return basePath;
+          }
+          const trimmed = path.trim();
+          if (!trimmed) {
+            return basePath;
+          }
+          if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith('//')) {
+            return trimmed;
+          }
+          if (trimmed.startsWith('/')) {
+            return trimmed;
+          }
+          if (trimmed.startsWith('./')) {
+            return basePath + trimmed.slice(2);
+          }
+          return basePath + trimmed;
+        }
 
         function formatBytes(bytes) {
           if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -2691,7 +2715,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               const params =
                 '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
               const init = pendingController ? { signal: pendingController.signal } : undefined;
-              fetch('./suggest' + params, init)
+              fetch(withBase('suggest' + params), init)
                 .then((response) => (response.ok ? response.json() : null))
                 .then((payload) => {
                   if (!payload || !Array.isArray(payload.suggestions)) {
@@ -2766,7 +2790,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
 
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', './submit');
+          xhr.open('POST', withBase('submit'));
 
           xhr.upload.onprogress = (event) => {
             if (!event) return;
@@ -2838,10 +2862,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               parseError,
             });
 
-            const downloadTarget =
-              payload && typeof (payload.path || payload.url) === 'string'
-                ? payload.path || payload.url
-                : null;
+            let rawDownload = null;
+            if (payload && typeof payload.path === 'string') {
+              rawDownload = payload.path;
+            } else if (payload && typeof payload.url === 'string') {
+              try {
+                const absolute = new URL(payload.url, window.location.origin);
+                rawDownload = absolute.pathname + absolute.search + absolute.hash;
+              } catch (err) {
+                rawDownload = payload.url;
+              }
+            }
+            const downloadTarget = rawDownload ? withBase(rawDownload) : null;
             const success =
               xhr.status >= 200 &&
               xhr.status < 300 &&
@@ -3081,6 +3113,23 @@ function detectSubmitterName(body) {
 
   return 'Unknown';
 }
+
+app.get('/health', (req, res) => {
+  const uptimeSeconds = Math.round(process.uptime() * 100) / 100;
+  const templateAvailable = fs.existsSync(templatePath);
+  const status = templateAvailable ? 'ok' : 'fail';
+
+  const payload = {
+    status,
+    service: SERVICE_NAME,
+    uptime: uptimeSeconds,
+    now: new Date().toISOString(),
+    templatePath,
+    templateAvailable,
+  };
+
+  return res.status(templateAvailable ? 200 : 503).json(payload);
+});
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));

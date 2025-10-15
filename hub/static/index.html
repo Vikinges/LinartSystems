@@ -9,15 +9,21 @@
   <body>
     <div class="container">
       <header>
-        <h1>Linart Systems</h1>
-        <p class="lead">Central hub running inside a container. Click logos to open services.</p>
+        <div class="brand">
+          <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
+          <div>
+            <h1 id="brandTitle">Linart Systems</h1>
+            <p class="lead">Central hub running inside a container. Click logos to open services.</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a class="link-button" href="/admin">Admin</a>
+          <a class="link-button secondary" href="/status">Status</a>
+        </div>
       </header>
 
       <main>
-        <div id="services" class="services">Loading…</div>
-        <div style="margin-top:20px">
-          <a href="/status">Status page</a>
-        </div>
+        <div id="services" class="services">Loading...</div>
       </main>
 
       <footer>
@@ -28,26 +34,59 @@
     <script>
       async function load(){
         try{
-          const r = await fetch('/api/status');
-          const j = await r.json();
+          const response = await fetch('/api/status');
+          const data = await response.json();
+
+          const fallbackLogo = (data.hub && data.hub.siteLogo) || '/static/logo1.svg';
+          const title = (data.hub && data.hub.siteTitle) || 'Linart Systems';
+          document.getElementById('brandLogo').src = fallbackLogo;
+          document.getElementById('brandTitle').textContent = title;
+
           const container = document.getElementById('services');
           container.innerHTML = '';
-          j.services.forEach(s => {
-            const a = document.createElement('a');
-            a.className = 'service';
-            a.href = (s.prefix || ('/'+s.name));
-            a.title = s.displayName || s.name;
+          if (!data.services || !data.services.length) {
+            container.textContent = 'No services are registered yet.';
+            return;
+          }
+
+          data.services.forEach(service => {
+            const link = document.createElement('a');
+            link.className = 'service';
+            link.href = service.prefix || ('/' + service.name);
+            link.title = service.displayName || service.name;
+            if (service.ok === false) {
+              link.classList.add('service--down');
+            }
+
             const img = document.createElement('img');
-            img.src = '/static/logo1.svg';
-            img.alt = s.name + ' logo';
-            const div = document.createElement('div');
-            div.textContent = (s.displayName || s.name) + ' — ' + (s.description || '');
-            a.appendChild(img);
-            a.appendChild(div);
-            container.appendChild(a);
+            img.src = service.logo || fallbackLogo;
+            img.alt = (service.displayName || service.name) + ' logo';
+            link.appendChild(img);
+
+            const text = document.createElement('div');
+            text.className = 'service-text';
+
+            const name = document.createElement('strong');
+            name.textContent = service.displayName || service.name;
+            text.appendChild(name);
+
+            if (service.description) {
+              const description = document.createElement('span');
+              description.className = 'meta';
+              description.textContent = service.description;
+              text.appendChild(description);
+            }
+
+            const status = document.createElement('span');
+            status.className = 'badge ' + (service.ok ? 'badge--ok' : 'badge--fail');
+            status.textContent = service.ok ? 'Online' : 'Offline';
+            text.appendChild(status);
+
+            link.appendChild(text);
+            container.appendChild(link);
           });
         }catch(e){
-          document.getElementById('services').textContent = 'Error loading services: '+e;
+          document.getElementById('services').textContent = 'Error loading services: ' + e;
         }
       }
       load();

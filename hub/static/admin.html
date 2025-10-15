@@ -1,40 +1,358 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>Admin — Services</title></head>
+<head>
+  <meta charset="utf-8">
+  <title>Admin — Linart Hub</title>
+  <style>
+    :root { font-family: Inter, Segoe UI, Arial, sans-serif; color: #0b1220; background: #f6f8fb; }
+    body { margin: 0; padding: 32px; }
+    .layout { max-width: 960px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 28px; box-shadow: 0 20px 40px rgba(12, 24, 48, 0.08); }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+    header h1 { margin: 0; font-size: 1.75rem; }
+    header a { color: #2563eb; text-decoration: none; font-weight: 600; }
+    section { margin-bottom: 32px; }
+    section:last-of-type { margin-bottom: 0; }
+    h2 { margin: 0 0 12px; font-size: 1.35rem; }
+    h3 { margin-top: 0; font-size: 1.1rem; }
+    .branding-card { display: flex; gap: 18px; align-items: center; background: #f3f6fb; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; }
+    .branding-card img { width: 96px; height: 96px; object-fit: contain; border-radius: 10px; background: #fff; border: 1px solid #dbe2ee; }
+    .branding-card .controls { display: flex; flex-direction: column; gap: 8px; }
+    label.inline { display: flex; flex-direction: column; font-size: 0.9rem; gap: 4px; }
+    label.inline input[type="text"] { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
+    button, label.button { padding: 8px 14px; border-radius: 8px; border: none; cursor: pointer; background: #2563eb; color: #fff; font-weight: 600; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px; }
+    label.button { position: relative; overflow: hidden; }
+    label.button input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    button.secondary { background: #f3f6fb; color: #1b263b; border: 1px solid #dbe2ee; }
+    .services-grid { display: flex; flex-direction: column; gap: 16px; }
+    .service-card { display: flex; gap: 16px; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; background: #fafcff; align-items: center; }
+    .service-card img { width: 72px; height: 72px; object-fit: contain; border: 1px solid #dbe2ee; border-radius: 8px; background: #fff; }
+    .service-card .info { flex: 1; }
+    .service-card .info strong { font-size: 1.05rem; display: block; margin-bottom: 2px; }
+    .meta { color: #556370; font-size: 0.85rem; line-height: 1.4; }
+    .service-card .actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    form#add { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    form#add label { display: flex; flex-direction: column; gap: 6px; font-size: 0.9rem; }
+    form#add input[type="text"], form#add input[type="url"] { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
+    .form-actions { grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .hint { font-size: 0.8rem; color: #697588; }
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      .branding-card { flex-direction: column; align-items: flex-start; }
+      .service-card { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
 <body>
-  <h1>Services</h1>
-  <div id="list"></div>
-  <h3>Add service</h3>
-  <form id="add">
-    <label>Name: <input name="name"></label><br>
-    <label>Display name: <input name="displayName"></label><br>
-    <label>Description: <input name="description"></label><br>
-    <label>Target URL: <input name="target"></label><br>
-    <label>Prefix: <input name="prefix" value="/service"></label><br>
-    <button type="submit">Add</button>
-  </form>
+  <div class="layout">
+    <header>
+      <h1>Admin panel</h1>
+      <a href="/">← Back to hub</a>
+    </header>
+
+    <section>
+      <h2>Site branding</h2>
+      <div class="branding-card">
+        <img id="siteLogoPreview" src="/static/logo1.svg" alt="Site logo">
+        <div class="controls">
+          <label class="inline">
+            Site title
+            <input type="text" id="siteTitleInput" placeholder="Linart Systems">
+          </label>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <label class="button">Upload logo<input type="file" id="siteLogoFile" accept="image/*"></label>
+            <button type="button" class="secondary" id="siteLogoReset">Reset to default</button>
+            <button type="button" id="saveBranding">Save changes</button>
+          </div>
+          <div class="hint">Accepted formats: PNG, JPG, SVG, GIF, WEBP. Max 5&nbsp;MB.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Services</h2>
+      <div id="servicesList" class="services-grid"></div>
+    </section>
+
+    <section>
+      <h3>Add service</h3>
+      <form id="add">
+        <label>
+          Name (ID)
+          <input name="name" type="text" placeholder="service3" required>
+        </label>
+        <label>
+          Display name
+          <input name="displayName" type="text" placeholder="My new service">
+        </label>
+        <label>
+          Description
+          <input name="description" type="text" placeholder="What this service does">
+        </label>
+        <label>
+          Target URL
+          <input name="target" type="url" placeholder="http://service3:3002" required>
+        </label>
+        <label>
+          Prefix
+          <input name="prefix" type="text" placeholder="/service3">
+        </label>
+        <label>
+          Logo URL
+          <input name="logo" type="text" placeholder="/static/uploads/service3.png">
+        </label>
+        <label class="button">
+          Upload logo
+          <input type="file" id="addLogoFile" accept="image/*">
+        </label>
+        <div class="form-actions">
+          <button type="submit">Add service</button>
+          <span class="hint">Upload file to autofill logo URL or paste an existing path.</span>
+        </div>
+      </form>
+    </section>
+  </div>
+
   <script>
-    async function load(){
-      const r = await fetch('/admin/services');
-      const j = await r.json();
-      const el = document.getElementById('list');
-      el.innerHTML = '';
-      j.forEach(s=>{
-        const d = document.createElement('div');
-        d.innerHTML = `<strong>${s.displayName||s.name}</strong> (${s.name}) — ${s.description||''} &rarr; ${s.target} (${s.prefix}) `;
-        const btn = document.createElement('button'); btn.textContent='Delete';
-        btn.onclick = async ()=>{ await fetch('/admin/services/'+encodeURIComponent(s.name),{method:'DELETE'}); load(); };
-        d.appendChild(btn);
-        el.appendChild(d);
-      })
+    const state = {
+      config: { siteLogo: '/static/logo1.svg', siteTitle: 'Linart Systems' },
+      services: []
+    };
+
+    function handleError(error) {
+      console.error(error);
+      alert(error.message || 'Unexpected error');
     }
-    document.getElementById('add').onsubmit = async (e)=>{
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      await fetch('/admin/services',{method:'POST',body:JSON.stringify(Object.fromEntries(fd)),headers:{'Content-Type':'application/json'}});
-      load();
+
+    async function fetchJson(url, options) {
+      const response = await fetch(url, options);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || (data && data.ok === false)) {
+        throw new Error((data && data.error) || response.statusText || 'Request failed');
+      }
+      return data;
     }
-    load();
+
+    async function uploadLogo(file) {
+      const form = new FormData();
+      form.append('logo', file);
+      const data = await fetchJson('/admin/upload-logo', { method: 'POST', body: form });
+      return data.path;
+    }
+
+    function renderBranding() {
+      document.getElementById('siteLogoPreview').src = state.config.siteLogo;
+      document.getElementById('siteTitleInput').value = state.config.siteTitle || '';
+    }
+
+    function buildMeta(label, value) {
+      const el = document.createElement('div');
+      el.className = 'meta';
+      el.textContent = `${label}: ${value}`;
+      return el;
+    }
+
+    function renderServices() {
+      const list = document.getElementById('servicesList');
+      list.innerHTML = '';
+      if (!state.services.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No services registered yet.';
+        list.appendChild(empty);
+        return;
+      }
+
+      state.services.forEach((service) => {
+        const card = document.createElement('div');
+        card.className = 'service-card';
+
+        const logo = document.createElement('img');
+        logo.src = service.logo || state.config.siteLogo || '/static/logo1.svg';
+        logo.alt = `${service.displayName || service.name} logo`;
+        card.appendChild(logo);
+
+        const info = document.createElement('div');
+        info.className = 'info';
+        const title = document.createElement('strong');
+        title.textContent = `${service.displayName || service.name} (${service.name})`;
+        info.appendChild(title);
+        if (service.description) {
+          info.appendChild(buildMeta('Description', service.description));
+        }
+        info.appendChild(buildMeta('Target', service.target));
+        info.appendChild(buildMeta('Prefix', service.prefix));
+        card.appendChild(info);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const uploadLabel = document.createElement('label');
+        uploadLabel.className = 'button';
+        uploadLabel.textContent = 'Upload logo';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        uploadLabel.appendChild(fileInput);
+        fileInput.addEventListener('change', async (event) => {
+          if (!event.target.files?.length) return;
+          try {
+            const path = await uploadLogo(event.target.files[0]);
+            await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ logo: path })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          } finally {
+            event.target.value = '';
+          }
+        });
+        actions.appendChild(uploadLabel);
+
+        const clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.className = 'secondary';
+        clearBtn.textContent = 'Remove logo';
+        clearBtn.addEventListener('click', async () => {
+          try {
+            await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ logo: '' })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(clearBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'secondary';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', async () => {
+          if (!confirm(`Delete service "${service.name}"?`)) return;
+          try {
+            await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, { method: 'DELETE' });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(actions);
+        list.appendChild(card);
+      });
+    }
+
+    async function loadAll() {
+      try {
+        const [services, config] = await Promise.all([
+          fetchJson('/admin/services'),
+          fetchJson('/admin/config')
+        ]);
+        state.services = services;
+        state.config = config;
+        renderBranding();
+        renderServices();
+      } catch (error) {
+        handleError(error);
+      }
+    }
+
+    document.getElementById('saveBranding').addEventListener('click', async () => {
+      try {
+        const siteTitle = document.getElementById('siteTitleInput').value.trim();
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteTitle })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      }
+    });
+
+    document.getElementById('siteLogoReset').addEventListener('click', async () => {
+      if (!confirm('Reset site logo to default?')) return;
+      try {
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteLogo: '' })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      }
+    });
+
+    document.getElementById('siteLogoFile').addEventListener('change', async (event) => {
+      if (!event.target.files?.length) return;
+      try {
+        const path = await uploadLogo(event.target.files[0]);
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ siteLogo: path })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      } finally {
+        event.target.value = '';
+      }
+    });
+
+    document.getElementById('add').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const form = event.target;
+      const fd = new FormData(form);
+      const payload = {
+        name: fd.get('name'),
+        displayName: fd.get('displayName'),
+        description: fd.get('description'),
+        target: fd.get('target'),
+        prefix: fd.get('prefix'),
+        logo: fd.get('logo')
+      };
+
+      const fileInput = document.getElementById('addLogoFile');
+      try {
+        if (fileInput.files?.length) {
+          payload.logo = await uploadLogo(fileInput.files[0]);
+        }
+
+        Object.keys(payload).forEach((key) => {
+          if (typeof payload[key] === 'string') {
+            const trimmed = payload[key].trim();
+            payload[key] = trimmed || undefined;
+          }
+          if (payload[key] === undefined) {
+            delete payload[key];
+          }
+        });
+
+        await fetchJson('/admin/services', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        form.reset();
+        if (fileInput) fileInput.value = '';
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      }
+    });
+
+    loadAll();
   </script>
 </body>
 </html>

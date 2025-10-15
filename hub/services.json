@@ -1,4 +1,18 @@
 [
-  { "name": "service1", "target": "http://service1:3000", "prefix": "/service1", "displayName": "PDF generator for Sharp", "description": "Generates filled PDFs for Sharp devices" },
-  { "name": "service2", "target": "http://service2:3001", "prefix": "/service2", "displayName": "Demo service 2", "description": "Another example service" }
+  {
+    "name": "service1",
+    "target": "http://service1:3000",
+    "prefix": "/service1",
+    "displayName": "PDF generator for Sharp",
+    "description": "Generates filled PDFs for Sharp devices",
+    "logo": "/static/logo1.svg"
+  },
+  {
+    "name": "service2",
+    "target": "http://service2:3001",
+    "prefix": "/service2",
+    "displayName": "Demo service 2",
+    "description": "Another example service",
+    "logo": "/static/logo2.svg"
+  }
 ]

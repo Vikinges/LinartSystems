@@ -874,6 +874,29 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const selectedFiles = new Map();
         const previewUrls = new Map();
         const debugState = { enabled: false, timeline: [] };
+        const basePath = window.location.pathname.endsWith('/')
+          ? window.location.pathname
+          : window.location.pathname + '/';
+
+        function withBase(path) {
+          if (!path || typeof path !== 'string') {
+            return basePath;
+          }
+          const trimmed = path.trim();
+          if (!trimmed) {
+            return basePath;
+          }
+          if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith('//')) {
+            return trimmed;
+          }
+          if (trimmed.startsWith('/')) {
+            return trimmed;
+          }
+          if (trimmed.startsWith('./')) {
+            return basePath + trimmed.slice(2);
+          }
+          return basePath + trimmed;
+        }
 
         function formatBytes(bytes) {
           if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -1374,7 +1397,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
               const params =
                 '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
               const init = pendingController ? { signal: pendingController.signal } : undefined;
-              fetch('./suggest' + params, init)
+              fetch(withBase('suggest' + params), init)
                 .then((response) => (response.ok ? response.json() : null))
                 .then((payload) => {
                   if (!payload || !Array.isArray(payload.suggestions)) {
@@ -1449,7 +1472,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           });
 
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', './submit');
+          xhr.open('POST', withBase('submit'));
 
           xhr.upload.onprogress = (event) => {
             if (!event) return;
@@ -1521,10 +1544,18 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
               parseError,
             });
 
-            const downloadTarget =
-              payload && typeof (payload.path || payload.url) === 'string'
-                ? payload.path || payload.url
-                : null;
+            let rawDownload = null;
+            if (payload && typeof payload.path === 'string') {
+              rawDownload = payload.path;
+            } else if (payload && typeof payload.url === 'string') {
+              try {
+                const absolute = new URL(payload.url, window.location.origin);
+                rawDownload = absolute.pathname + absolute.search + absolute.hash;
+              } catch (err) {
+                rawDownload = payload.url;
+              }
+            }
+            const downloadTarget = rawDownload ? withBase(rawDownload) : null;
             const success =
               xhr.status >= 200 &&
               xhr.status < 300 &&
