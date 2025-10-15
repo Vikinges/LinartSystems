@@ -22,13 +22,11 @@ services:
   hub:
     build: ./hub
     container_name: linart_hub
-    ports:
-      - "8080:8080"
     depends_on:
       - service1
       - service2
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/ || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -47,8 +45,6 @@ services:
   service1:
     build: ./service1
     container_name: linart_service1
-    ports:
-      - "3002:3000"
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/health || exit 1"]
@@ -59,8 +55,6 @@ services:
   service2:
     build: ./service2
     container_name: linart_service2
-    ports:
-      - "3003:3001"
     restart: always
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/health || exit 1"]
