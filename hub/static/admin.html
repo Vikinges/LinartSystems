@@ -208,10 +208,10 @@
       config: {
         siteLogo: '/static/logo1.svg',
         siteTitle: 'Linart Systems',
-        introTitle: ',
-        introBody: ',
-        contactWhatsapp: ',
-        heroVideo: ',
+        introTitle: '',
+        introBody: '',
+        contactWhatsapp: '',
+        heroVideo: '',
         heroVideoBlur: 8,
         heroOverlayColor: '#05060b',
         heroOverlayOpacity: 0.85,
@@ -221,14 +221,14 @@
 
     function handleError(error) {
       console.error(error);
-      alert(error.message || ''Unexpected error');
+      alert(error.message || 'Unexpected error');
     }
 
     async function fetchJson(url, options) {
       const response = await fetch(url, options);
       const data = await response.json().catch(() => ({}));
       if (!response.ok || (data && data.ok === false)) {
-        throw new Error((data && data.error) || response.statusText || ''Request failed');
+        throw new Error((data && data.error) || response.statusText || 'Request failed');
       }
       return data;
     }
@@ -254,16 +254,17 @@
     const heroBlurInput = document.getElementById('heroBlurInput');
     const heroBlurValue = document.getElementById('heroBlurValue');
     const servicesList = document.getElementById('servicesList');
-    heroBlurInput.value = 8;
-    heroBlurValue.textContent = '8';
     const passwordStatus = document.getElementById('passwordStatus');
 
+    heroBlurInput.value = 8;
+    heroBlurValue.textContent = '8';
+
     function renderBranding() {
-      siteLogoPreview.src = state.config.siteLogo || ''/static/logo1.svg';
+      siteLogoPreview.src = state.config.siteLogo || '/static/logo1.svg';
       siteTitleInput.value = state.config.siteTitle || '';
     }
 
-            function renderHero() {
+    function renderHero() {
       introTitleInput.value = state.config.introTitle || '';
       introBodyInput.value = state.config.introBody || '';
       whatsappInput.value = state.config.contactWhatsapp || '';
@@ -299,7 +300,7 @@
     }
 
     function renderServices() {
-      servicesList.innerHTML = ';
+      servicesList.innerHTML = '';
       if (!state.services.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
@@ -313,7 +314,7 @@
         card.className = 'service-card';
 
         const logo = document.createElement('img');
-        logo.src = service.logo || state.config.siteLogo || ''/static/logo1.svg';
+        logo.src = service.logo || state.config.siteLogo || '/static/logo1.svg';
         logo.alt = `${service.displayName || service.name} logo`;
         card.appendChild(logo);
 
@@ -352,7 +353,7 @@
           } catch (error) {
             handleError(error);
           } finally {
-            event.target.value = ';
+            event.target.value = '';
           }
         });
         actions.appendChild(uploadLabel);
@@ -366,7 +367,7 @@
             await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ logo: ' })
+              body: JSON.stringify({ logo: '' })
             });
             await loadAll();
           } catch (error) {
@@ -431,7 +432,7 @@
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ siteLogo: ' })
+          body: JSON.stringify({ siteLogo: '' })
         });
         await loadAll();
       } catch (error) {
@@ -452,7 +453,7 @@
       } catch (error) {
         handleError(error);
       } finally {
-        event.target.value = ';
+        event.target.value = '';
       }
     });
 
@@ -470,6 +471,8 @@
           introTitle: introTitleInput.value.trim(),
           introBody: introBodyInput.value.trim(),
           contactWhatsapp: whatsappInput.value.trim(),
+          heroOverlayColor: heroOverlayColorInput.value,
+          heroOverlayOpacity: Number(heroOverlayOpacityInput.value) / 100,
           heroVideoBlur: Number(heroBlurInput.value)
         };
         await fetchJson('/admin/config', {
@@ -497,7 +500,7 @@
       } catch (error) {
         handleError(error);
       } finally {
-        event.target.value = ';
+        event.target.value = '';
       }
     });
 
@@ -508,7 +511,7 @@
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ heroVideo: ' })
+          body: JSON.stringify({ heroVideo: '' })
         });
         await loadAll();
       } catch (error) {
@@ -552,7 +555,7 @@
         });
 
         form.reset();
-        if (fileInput) fileInput.value = ';
+        if (fileInput) fileInput.value = '';
         await loadAll();
       } catch (error) {
         handleError(error);
@@ -561,8 +564,8 @@
 
     document.getElementById('passwordForm').addEventListener('submit', async (event) => {
       event.preventDefault();
-      passwordStatus.textContent = ';
-      passwordStatus.className = ';
+      passwordStatus.textContent = '';
+      passwordStatus.className = '';
 
       const currentPassword = document.getElementById('currentPasswordInput').value;
       const newPassword = document.getElementById('newPasswordInput').value;
@@ -584,7 +587,7 @@
         passwordStatus.className = 'status-success';
         event.target.reset();
       } catch (error) {
-        passwordStatus.textContent = error.message || ''Failed to update password.';
+        passwordStatus.textContent = error.message || 'Failed to update password.';
         passwordStatus.className = 'status-error';
       }
     });
