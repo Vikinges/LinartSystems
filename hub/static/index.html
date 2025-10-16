@@ -15,26 +15,33 @@
         <header>
           <div class="brand">
             <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
-            <div>
+            <div class="brand-copy">
               <h1 id="brandTitle">Linart Systems</h1>
-              <p class="lead">Central hub running inside a container. Access every service from one place.</p>
+              <p class="lead" id="brandTagline">Central hub running inside a container. Access every service from one place.</p>
             </div>
           </div>
           <div class="header-actions">
-            <a class="link-button" href="/admin">Admin</a>
+            <button type="button" class="link-button" id="openAdminModal">Admin</button>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
 
         <div class="intro-card" id="introCard">
-          <h2 id="introTitle">Welcome to my server!</h2>
-          <p id="introBody">I am Vladimir. If you have any questions, feel free to reach out.</p>
-          <a id="whatsappLink" class="contact-link" href="#" target="_blank" rel="noopener">
-            <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
-              <path d="M16.04 3C9.38 3 4 8.28 4 14.8c0 3.71 1.74 7.04 4.47 9.33L7.3 29 12 27.49a12.4 12.4 0 0 0 4.04.64c6.66 0 12.04-5.29 12.04-11.81S22.7 3 16.04 3Zm0 21.44c-1.25 0-2.49-.33-3.58-.95l-.26-.15-2.13.64.67-2.14-.17-.22A8.63 8.63 0 0 1 7.4 14.8c0-4.57 3.87-8.3 8.64-8.3 4.77 0 8.64 3.73 8.64 8.3s-3.87 8.3-8.64 8.3Zm4.72-6.19c-.26-.13-1.57-.75-1.81-.83-.24-.09-.41-.13-.58.13-.17.26-.65.83-.79 1-.15.17-.29.2-.55.07-.26-.13-1.1-.4-2.09-1.29-.77-.69-1.29-1.55-1.45-1.81-.15-.26-.02-.4.11-.53.12-.12.26-.32.38-.48.13-.16.17-.26.26-.43.09-.17.04-.32-.02-.45-.05-.13-.58-1.39-.8-1.9-.21-.5-.42-.43-.58-.43-.15 0-.32-.03-.5-.03-.17 0-.46.07-.7.32-.24.26-.92.9-.92 2.19 0 1.29.95 2.55 1.08 2.73.13.17 1.82 2.88 4.46 3.92.62.24 1.11.38 1.49.49.62.2 1.19.17 1.64.1.5-.07 1.57-.64 1.79-1.26.22-.62.22-1.16.15-1.26-.07-.1-.24-.17-.5-.3Z"/>
-            </svg>
-            <span id="whatsappText">Contact via WhatsApp</span>
-          </a>
+          <div class="intro-content">
+            <div class="intro-text">
+              <h2 id="introTitle">Welcome to my server!</h2>
+              <p id="introBody">I am Vladimir. If you have any questions, feel free to reach out.</p>
+              <a id="whatsappLink" class="contact-link" href="#" target="_blank" rel="noopener">
+                <svg viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">
+                  <path d="M16.04 3C9.38 3 4 8.28 4 14.8c0 3.71 1.74 7.04 4.47 9.33L7.3 29 12 27.49a12.4 12.4 0 0 0 4.04.64c6.66 0 12.04-5.29 12.04-11.81S22.7 3 16.04 3Zm0 21.44c-1.25 0-2.49-.33-3.58-.95l-.26-.15-2.13.64.67-2.14-.17-.22A8.63 8.63 0 0 1 7.4 14.8c0-4.57 3.87-8.3 8.64-8.3 4.77 0 8.64 3.73 8.64 8.3s-3.87 8.3-8.64 8.3Zm4.72-6.19c-.26-.13-1.57-.75-1.81-.83-.24-.09-.41-.13-.58.13-.17.26-.65.83-.79 1-.15.17-.29.2-.55.07-.26-.13-1.1-.4-2.09-1.29-.77-.69-1.29-1.55-1.45-1.81-.15-.26-.02-.4.11-.53.12-.12.26-.32.38-.48.13-.16.17-.26.26-.43.09-.17.04-.32-.02-.45-.05-.13-.58-1.39-.8-1.9-.21-.5-.42-.43-.58-.43-.15 0-.32-.03-.5-.03-.17 0-.46.07-.7.32-.24.26-.92.9-.92 2.19 0 1.29.95 2.55 1.08 2.73.13.17 1.82 2.88 4.46 3.92.62.24 1.11.38 1.49.49.62.2 1.19.17 1.64.1.5-.07 1.57-.64 1.79-1.26.22-.62.22-1.16.15-1.26-.07-.1-.24-.17-.5-.3Z"/>
+                </svg>
+                <span id="whatsappText">Contact via WhatsApp</span>
+              </a>
+            </div>
+            <div class="intro-media is-hidden" id="introMedia">
+              <img id="introImage" alt="Welcome illustration">
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -46,154 +53,414 @@
       </main>
 
       <footer>
+        <div id="footerSocial" class="footer-social"></div>
         <small>Hosted at linart.club. Copying or redistribution without permission is prohibited.</small>
       </footer>
     </div>
 
-    <script>
-      const brandLogoEl = document.getElementById('brandLogo');
-      const brandTitleEl = document.getElementById('brandTitle');
-      const introTitleEl = document.getElementById('introTitle');
-      const introBodyEl = document.getElementById('introBody');
-      const whatsappLinkEl = document.getElementById('whatsappLink');
-      const whatsappTextEl = document.getElementById('whatsappText');
-      const heroVideoEl = document.getElementById('heroVideo');
-      const servicesContainer = document.getElementById('services');
+    <div id="adminModal" class="modal" aria-hidden="true" inert>
+      <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
+        <button type="button" class="modal-close" id="closeAdminModal" aria-label="Close">�</button>
+        <div class="modal__header">
+          <h3 id="adminModalTitle">Admin Login</h3>
+          <p>Enter your admin password to continue.</p>
+        </div>
+        <form id="adminLoginForm" class="modal__form">
+          <label class="inline" style="gap:8px;">
+            Password
+            <input type="password" id="adminPasswordInput" autocomplete="current-password" required>
+          </label>
+          <div class="modal__error" id="adminLoginError"></div>
+          <div class="modal__actions">
+            <button type="button" class="link-button secondary" id="cancelAdminModal">Cancel</button>
+            <button type="submit" class="link-button">Log in</button>
+          </div>
+        </form>
+      </div>
+    </div>    
+    
+<script>
+  const openAdminModalBtn = document.getElementById('openAdminModal');
+  const adminModalEl = document.getElementById('adminModal');
+  const adminPasswordInput = document.getElementById('adminPasswordInput');
+  const adminLoginForm = document.getElementById('adminLoginForm');
+  const adminLoginErrorEl = document.getElementById('adminLoginError');
+  const closeAdminModalBtn = document.getElementById('closeAdminModal');
+  const cancelAdminModalBtn = document.getElementById('cancelAdminModal');
+  const brandLogoEl = document.getElementById('brandLogo');
+  const brandTitleEl = document.getElementById('brandTitle');
+  const brandTaglineEl = document.getElementById('brandTagline');
+  const introTitleEl = document.getElementById('introTitle');
+  const introBodyEl = document.getElementById('introBody');
+  const introMediaEl = document.getElementById('introMedia');
+  const introImageEl = document.getElementById('introImage');
+  const whatsappLinkEl = document.getElementById('whatsappLink');
+  const whatsappTextEl = document.getElementById('whatsappText');
+  const heroVideoEl = document.getElementById('heroVideo');
+  const servicesContainer = document.getElementById('services');
+  const footerSocialEl = document.getElementById('footerSocial');
 
-      function normaliseWhatsapp(number) {
-        if (!number) return null;
-        const digits = number.replace(/[^\d+]/g, '');
-        if (!digits) return null;
-        if (digits.startsWith('+')) return 'https://wa.me/' + digits.replace(/\+/g, '');
-        if (digits.startsWith('00')) return 'https://wa.me/' + digits.slice(2);
-        return 'https://wa.me/' + digits.replace(/^[0]+/, '');
+  function openAdminModal() {
+    if (!adminModalEl) return;
+    adminModalEl.classList.add('is-open');
+    adminModalEl.removeAttribute('inert');
+    adminModalEl.setAttribute('aria-hidden', 'false');
+    if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+    if (adminPasswordInput) {
+      adminPasswordInput.value = '';
+      setTimeout(() => adminPasswordInput.focus(), 0);
+    }
+  }
+
+  function closeAdminModal() {
+    if (!adminModalEl) return;
+    adminModalEl.classList.remove('is-open');
+    adminModalEl.setAttribute('aria-hidden', 'true');
+    adminModalEl.setAttribute('inert', '');
+    if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+    if (adminPasswordInput) adminPasswordInput.value = '';
+    if (openAdminModalBtn) openAdminModalBtn.focus();
+  }
+
+  if (openAdminModalBtn && adminModalEl) {
+    openAdminModalBtn.addEventListener('click', () => {
+      openAdminModal();
+    });
+  }
+
+  if (closeAdminModalBtn) {
+    closeAdminModalBtn.addEventListener('click', () => {
+      closeAdminModal();
+    });
+  }
+
+  if (cancelAdminModalBtn) {
+    cancelAdminModalBtn.addEventListener('click', () => {
+      closeAdminModal();
+    });
+  }
+
+  if (adminModalEl) {
+    adminModalEl.addEventListener('click', (event) => {
+      if (event.target === adminModalEl) {
+        closeAdminModal();
       }
+    });
+  }
 
-      function formatWhatsappLabel(number) {
-        if (!number) return 'Contact via WhatsApp';
-        return 'Contact via WhatsApp (' + number + ')';
+  window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && adminModalEl && adminModalEl.classList.contains('is-open')) {
+      closeAdminModal();
+    }
+  });
+
+  if (adminLoginForm) {
+    adminLoginForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (!adminPasswordInput) return;
+      const password = adminPasswordInput.value;
+      if (!password) {
+        if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Enter the password.';
+        adminPasswordInput.focus();
+        return;
       }
-
-      function hexToRgb(hex) {
-        if (typeof hex !== 'string') return null;
-        const normalized = hex.trim();
-        const match = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-        if (!match) return null;
-        let value = match[1];
-        if (value.length === 3) {
-          value = value.split('').map(function (ch) { return ch + ch; }).join('');
+      if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+      const body = new URLSearchParams();
+      body.set('password', password);
+      try {
+        const response = await fetch('/admin/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: body.toString(),
+          credentials: 'same-origin'
+        });
+        if (response.type === 'opaqueredirect' || response.status === 0 || response.redirected) {
+          window.location.href = '/admin';
+          return;
         }
-        const intVal = parseInt(value, 16);
-        return [(intVal >> 16) & 255, (intVal >> 8) & 255, intVal & 255];
+        if (response.ok) {
+          window.location.href = '/admin';
+          return;
+        }
+        if (response.status === 403) {
+          if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Incorrect password.';
+          adminPasswordInput.focus();
+          adminPasswordInput.select();
+          return;
+        }
+        if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Login failed. Please try again.';
+      } catch (error) {
+        if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Connection error. Please try again.';
+      }
+    });
+  }
+
+  function normaliseWhatsapp(number) {
+    if (!number) return null;
+    const digits = number.replace(/[^\d+]/g, '');
+    if (!digits) return null;
+    if (digits.startsWith('+')) return 'https://wa.me/' + digits.replace(/\+/g, '');
+    if (digits.startsWith('00')) return 'https://wa.me/' + digits.slice(2);
+    return 'https://wa.me/' + digits.replace(/^[0]+/, '');
+  }
+
+  function formatWhatsappLabel(number) {
+    if (!number) return 'Contact via WhatsApp';
+    return 'Contact via WhatsApp (' + number + ')';
+  }
+
+  function hexToRgb(hex) {
+    if (typeof hex !== 'string') return null;
+    const normalized = hex.trim();
+    const match = normalized.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+    if (!match) return null;
+    let value = match[1];
+    if (value.length === 3) {
+      value = value.split('').map((ch) => ch + ch).join('');
+    }
+    const intVal = parseInt(value, 16);
+    return [(intVal >> 16) & 255, (intVal >> 8) & 255, intVal & 255];
+  }
+
+  function clamp(value, min, max) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return min;
+    if (number < min) return min;
+    if (number > max) return max;
+    return number;
+  }
+
+  function rgbaFromHex(hex, opacity) {
+    const rgb = hexToRgb(hex);
+    if (!rgb) return null;
+    return 'rgba(' + rgb[0] + ', ' + rgb[1] + ', ' + rgb[2] + ', ' + opacity + ')';
+  }
+
+  function relativeLuminance(r, g, b) {
+    const channel = (val) => {
+      const normalized = val / 255;
+      return normalized <= 0.03928
+        ? normalized / 12.92
+        : Math.pow((normalized + 0.055) / 1.055, 2.4);
+    };
+    const rr = channel(r);
+    const gg = channel(g);
+    const bb = channel(b);
+    return 0.2126 * rr + 0.7152 * gg + 0.0722 * bb;
+  }
+
+  function pickTextColors(rgb, threshold) {
+    const lum = relativeLuminance(rgb[0], rgb[1], rgb[2]);
+    if (lum > threshold) {
+      return {
+        strong: '#0b1220',
+        muted: 'rgba(15, 23, 42, 0.72)',
+        serviceStrong: '#0b1220',
+        serviceMuted: '#475569'
+      };
+    }
+    return {
+      strong: '#f8fafc',
+      muted: 'rgba(226, 232, 240, 0.9)',
+      serviceStrong: '#f8fafc',
+      serviceMuted: 'rgba(226, 232, 240, 0.85)'
+    };
+  }
+
+  async function load() {
+    try {
+      const response = await fetch('/api/status');
+      const data = await response.json();
+
+      const fallbackLogo = (data.hub && data.hub.siteLogo) || '/static/logo1.svg';
+      const title = (data.hub && data.hub.siteTitle) || 'Linart Systems';
+      brandLogoEl.src = fallbackLogo;
+      brandTitleEl.textContent = title;
+
+      if (brandTaglineEl) {
+        const tagline = (data.hub && data.hub.brandTagline) || 'Central hub running inside a container. Access every service from one place.';
+        brandTaglineEl.textContent = tagline;
       }
 
-      async function load() {
-        try {
-          const response = await fetch('/api/status');
-          const data = await response.json();
+      const introTitle = (data.hub && data.hub.introTitle) || 'Welcome to my server!';
+      const introBody = (data.hub && data.hub.introBody) || 'Feel free to explore the available services.';
+      introTitleEl.textContent = introTitle;
+      introBodyEl.innerHTML = introBody.replace(/\n/g, '<br>');
 
-          const fallbackLogo = (data.hub && data.hub.siteLogo) || '/static/logo1.svg';
-          const title = (data.hub && data.hub.siteTitle) || 'Linart Systems';
-          brandLogoEl.src = fallbackLogo;
-          brandTitleEl.textContent = title;
+      const whatsappNumber = data.hub && data.hub.contactWhatsapp;
+      const linkTarget = normaliseWhatsapp(whatsappNumber);
+      if (linkTarget) {
+        whatsappLinkEl.href = linkTarget;
+        whatsappLinkEl.style.display = 'inline-flex';
+        whatsappTextEl.textContent = formatWhatsappLabel(whatsappNumber);
+      } else {
+        whatsappLinkEl.style.display = 'none';
+      }
 
-          const introTitle = (data.hub && data.hub.introTitle) || 'Welcome to my server!';
-          const introBody = (data.hub && data.hub.introBody) || 'Feel free to explore the available services.';
-          introTitleEl.textContent = introTitle;
-          introBodyEl.innerHTML = introBody.replace(/\n/g, '<br>');
+      const overlayColor = (data.hub && data.hub.heroOverlayColor) || '#05060b';
+      const overlayOpacityRaw = Number(data.hub && data.hub.heroOverlayOpacity);
+      const overlayOpacity = Number.isFinite(overlayOpacityRaw) ? clamp(overlayOpacityRaw, 0, 1) : 0.85;
+      const overlayRgb = hexToRgb(overlayColor) || [5, 6, 11];
+      const topAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.9));
+      const midAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.45));
+      const bottomAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.12));
+      document.documentElement.style.setProperty('--hero-overlay-top', 'rgba(' + overlayRgb[0] + ', ' + overlayRgb[1] + ', ' + overlayRgb[2] + ', ' + topAlpha + ')');
+      document.documentElement.style.setProperty('--hero-overlay-mid', 'rgba(' + overlayRgb[0] + ', ' + overlayRgb[1] + ', ' + overlayRgb[2] + ', ' + midAlpha + ')');
+      document.documentElement.style.setProperty('--hero-overlay-bottom', 'rgba(' + overlayRgb[0] + ', ' + overlayRgb[1] + ', ' + overlayRgb[2] + ', ' + bottomAlpha + ')');
 
-          const whatsappNumber = data.hub && data.hub.contactWhatsapp;
-          const linkTarget = normaliseWhatsapp(whatsappNumber);
-          if (linkTarget) {
-            whatsappLinkEl.href = linkTarget;
-            whatsappLinkEl.style.display = 'inline-flex';
-            whatsappTextEl.textContent = formatWhatsappLabel(whatsappNumber);
-          } else {
-            whatsappLinkEl.style.display = 'none';
-          }
+      const pageBackgroundColorValue = (data.hub && data.hub.pageBackgroundColor) || '#05060b';
+      const pageBackgroundOpacityRaw = Number(data.hub && data.hub.pageBackgroundOpacity);
+      const pageBackgroundOpacity = Number.isFinite(pageBackgroundOpacityRaw) ? clamp(pageBackgroundOpacityRaw, 0, 1) : 1;
+      const pageBackgroundRgba = rgbaFromHex(pageBackgroundColorValue, pageBackgroundOpacity) || pageBackgroundColorValue;
+      document.documentElement.style.setProperty('--page-background', pageBackgroundRgba);
 
-          const overlayColor = (data.hub && data.hub.heroOverlayColor) || '#05060b';
-          const overlayOpacityRaw = Number(data.hub && data.hub.heroOverlayOpacity);
-          const overlayOpacity = Number.isFinite(overlayOpacityRaw)
-            ? Math.max(0, Math.min(1, overlayOpacityRaw))
-            : 0.85;
-          const rgb = hexToRgb(overlayColor) || [5, 6, 11];
-          const or = rgb[0];
-          const og = rgb[1];
-          const ob = rgb[2];
-          const topAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.65));
-          const midAlpha = Math.max(0, Math.min(1, overlayOpacity * 0.9));
-          const bottomAlpha = Math.max(0, Math.min(1, overlayOpacity));
-          document.documentElement.style.setProperty('--hero-overlay-top', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + topAlpha + ')');
-          document.documentElement.style.setProperty('--hero-overlay-mid', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + midAlpha + ')');
-          document.documentElement.style.setProperty('--hero-overlay-bottom', 'rgba(' + or + ', ' + og + ', ' + ob + ', ' + bottomAlpha + ')');
+      const surfaceColor = (data.hub && data.hub.surfaceColor) || '#0c1820';
+      const surfaceOpacityRaw = Number(data.hub && data.hub.surfaceOpacity);
+      const surfaceOpacity = Number.isFinite(surfaceOpacityRaw) ? clamp(surfaceOpacityRaw, 0, 1) : 0.72;
+      const surfaceRgb = hexToRgb(surfaceColor) || [12, 18, 32];
+      const surfaceRgba = 'rgba(' + surfaceRgb[0] + ', ' + surfaceRgb[1] + ', ' + surfaceRgb[2] + ', ' + surfaceOpacity + ')';
+      document.documentElement.style.setProperty('--surface-background', surfaceRgba);
+      const surfaceBorderOpacity = Math.min(1, surfaceOpacity + 0.35);
+      const surfaceBorder = 'rgba(' + surfaceRgb[0] + ', ' + surfaceRgb[1] + ', ' + surfaceRgb[2] + ', ' + surfaceBorderOpacity + ')';
+      document.documentElement.style.setProperty('--surface-border', surfaceBorder);
+      const serviceBackgroundOpacity = Math.min(0.95, surfaceOpacity + 0.18);
+      const serviceBackground = 'rgba(' + surfaceRgb[0] + ', ' + surfaceRgb[1] + ', ' + surfaceRgb[2] + ', ' + serviceBackgroundOpacity + ')';
+      document.documentElement.style.setProperty('--service-card-background', serviceBackground);
+      const serviceBorderOpacity = Math.min(1, serviceBackgroundOpacity + 0.12);
+      const serviceBorder = 'rgba(' + surfaceRgb[0] + ', ' + surfaceRgb[1] + ', ' + surfaceRgb[2] + ', ' + serviceBorderOpacity + ')';
+      document.documentElement.style.setProperty('--service-card-border', serviceBorder);
+      const textPalette = pickTextColors(surfaceRgb, 0.55);
+      document.documentElement.style.setProperty('--surface-text-strong', textPalette.strong);
+      document.documentElement.style.setProperty('--surface-text-muted', textPalette.muted);
+      document.documentElement.style.setProperty('--service-text-strong', textPalette.serviceStrong);
+      document.documentElement.style.setProperty('--service-text-muted', textPalette.serviceMuted);
 
-          const heroVideo = data.hub && data.hub.heroVideo;
-          const heroVideoBlur = Number(data.hub && data.hub.heroVideoBlur);
-          const blurValue = Number.isFinite(heroVideoBlur) ? Math.max(0, Math.min(40, heroVideoBlur)) : 8;
-          document.documentElement.style.setProperty('--hero-blur', blurValue + 'px');
-          if (heroVideo) {
-            heroVideoEl.classList.remove('is-hidden');
-            heroVideoEl.src = heroVideo;
-            heroVideoEl.load();
-          } else {
-            heroVideoEl.classList.add('is-hidden');
-            heroVideoEl.removeAttribute('src');
-            heroVideoEl.load();
-          }
+      const heroVideo = data.hub && data.hub.heroVideo;
+      const heroVideoBlur = Number(data.hub && data.hub.heroVideoBlur);
+      const blurValue = Number.isFinite(heroVideoBlur) ? clamp(heroVideoBlur, 0, 40) : 8;
+      document.documentElement.style.setProperty('--hero-blur', blurValue + 'px');
+      if (heroVideo) {
+        heroVideoEl.classList.remove('is-hidden');
+        heroVideoEl.src = heroVideo;
+        heroVideoEl.load();
+      } else {
+        heroVideoEl.classList.add('is-hidden');
+        heroVideoEl.removeAttribute('src');
+        heroVideoEl.load();
+      }
 
-          servicesContainer.innerHTML = '';
-          if (!data.services || !data.services.length) {
-            servicesContainer.textContent = 'No services are registered yet.';
-            servicesContainer.style.color = '#94a3b8';
-            return;
-          }
-          servicesContainer.style.color = 'inherit';
+      const welcomeImage = data.hub && data.hub.welcomeImage;
+      if (introMediaEl && introImageEl) {
+        if (welcomeImage) {
+          introImageEl.src = welcomeImage;
+          introMediaEl.classList.remove('is-hidden');
+        } else {
+          introImageEl.removeAttribute('src');
+          introMediaEl.classList.add('is-hidden');
+        }
+      }
 
-          data.services.forEach(function (service) {
-            const link = document.createElement('a');
-            link.className = 'service';
-            const prefix = service.prefix || ('/' + service.name.replace(/^\//, ''));
-            link.href = prefix.endsWith('/') ? prefix : prefix + '/';
-            link.title = service.displayName || service.name;
-            if (service.ok === false) {
-              link.classList.add('service--down');
+      const socialLinks = Array.isArray(data.hub && data.hub.socialLinks) ? data.hub.socialLinks : [];
+      if (footerSocialEl) {
+        footerSocialEl.innerHTML = '';
+        if (socialLinks.length) {
+          footerSocialEl.style.display = 'flex';
+          socialLinks.forEach((link) => {
+            if (!link || typeof link !== 'object') return;
+            const label = typeof link.label === 'string' ? link.label.trim() : '';
+            const url = typeof link.url === 'string' ? link.url.trim() : '';
+            if (!label || !url) return;
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.target = '_blank';
+            anchor.rel = 'noopener';
+            anchor.title = label;
+            anchor.setAttribute('aria-label', label);
+            if (link.icon && typeof link.icon === 'string' && link.icon.trim()) {
+              const img = document.createElement('img');
+              img.src = link.icon.trim();
+              img.alt = label + ' icon';
+              anchor.appendChild(img);
+            } else {
+              anchor.textContent = label.charAt(0).toUpperCase();
             }
-
-            const img = document.createElement('img');
-            img.src = service.logo || fallbackLogo;
-            img.alt = (service.displayName || service.name) + ' logo';
-            link.appendChild(img);
-
-            const text = document.createElement('div');
-            text.className = 'service-text';
-
-            const name = document.createElement('strong');
-            name.textContent = service.displayName || service.name;
-            text.appendChild(name);
-
-            if (service.description) {
-              const description = document.createElement('span');
-              description.className = 'meta';
-              description.textContent = service.description;
-              text.appendChild(description);
-            }
-
-            const status = document.createElement('span');
-            status.className = 'badge ' + (service.ok ? 'badge--ok' : 'badge--fail');
-            status.textContent = service.ok ? 'Online' : 'Offline';
-            text.appendChild(status);
-
-            link.appendChild(text);
-            servicesContainer.appendChild(link);
+            footerSocialEl.appendChild(anchor);
           });
-        } catch (error) {
-          servicesContainer.textContent = 'Error loading services: ' + error;
-          servicesContainer.style.color = '#f87171';
+        } else {
+          footerSocialEl.style.display = 'none';
         }
       }
 
-      load();
-    </script>
+      servicesContainer.innerHTML = '';
+      if (!data.services || !data.services.length) {
+        servicesContainer.textContent = 'No services are registered yet.';
+        servicesContainer.style.color = '#94a3b8';
+        return;
+      }
+      servicesContainer.style.color = 'inherit';
+
+      data.services.forEach((service) => {
+        const link = document.createElement('a');
+        link.className = 'service';
+        const prefix = service.prefix || ('/' + service.name.replace(/^\//, ''));
+        link.href = prefix.endsWith('/') ? prefix : prefix + '/';
+        link.title = service.displayName || service.name;
+        if (service.ok === false) {
+          link.classList.add('service--down');
+        }
+
+        const img = document.createElement('img');
+        img.src = service.logo || fallbackLogo;
+        img.alt = (service.displayName || service.name) + ' logo';
+        link.appendChild(img);
+
+        const text = document.createElement('div');
+        text.className = 'service-text';
+
+        const name = document.createElement('strong');
+        name.textContent = service.displayName || service.name;
+        text.appendChild(name);
+
+        if (service.description) {
+          const description = document.createElement('span');
+          description.className = 'meta';
+          description.textContent = service.description;
+          text.appendChild(description);
+        }
+
+        const status = document.createElement('span');
+        status.className = 'badge ' + (service.ok ? 'badge--ok' : 'badge--fail');
+        status.textContent = service.ok ? 'Online' : 'Offline';
+        text.appendChild(status);
+
+        link.appendChild(text);
+        servicesContainer.appendChild(link);
+      });
+    } catch (error) {
+      servicesContainer.textContent = 'Error loading services: ' + error;
+      servicesContainer.style.color = '#f87171';
+    }
+  }
+
+  load();
+</script>
+
+
   </body>
 </html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

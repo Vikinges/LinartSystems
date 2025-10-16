@@ -19,6 +19,9 @@
     .branding-card img { width: 96px; height: 96px; object-fit: contain; border-radius: 10px; background: #fff; border: 1px solid #dbe2ee; }
     .branding-card .controls,
     .hero-controls { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+    .theme-controls { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); padding: 12px; border-radius: 10px; background: #fff; border: 1px solid #dbe2ee; }
+    .theme-slider { display: flex; align-items: center; gap: 12px; }
+    .theme-slider input[type="range"] { width: 180px; }
     label.inline { display: flex; flex-direction: column; font-size: 0.9rem; gap: 6px; }
     label.inline input[type="text"],
     label.inline input[type="url"],
@@ -45,6 +48,12 @@
     .hero-preview { width: 240px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
     .hero-preview video { width: 100%; border-radius: 12px; border: 1px solid #dbe2ee; background: #000; }
     .hero-preview video.is-hidden { display: none; }
+    .welcome-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    .welcome-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .welcome-thumb { width: 120px; height: 120px; border-radius: 12px; border: 1px solid #dbe2ee; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; }
+    .welcome-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .welcome-thumb .placeholder { color: #94a3b8; font-size: 0.8rem; text-align: center; padding: 12px; }
+    .welcome-image.is-hidden { display: none; }
     .hero-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
     .hero-slider { display: flex; align-items: center; gap: 12px; }
     .hero-slider input[type="range"] { width: 180px; }
@@ -54,10 +63,21 @@
     .card-form button { align-self: flex-start; }
     .status-success { color: #166534; }
     .status-error { color: #b91c1c; }
+    .social-list { display: flex; flex-direction: column; gap: 16px; margin-bottom: 18px; }
+    .social-card { display: flex; gap: 16px; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; background: #fafcff; align-items: center; flex-wrap: wrap; }
+    .social-card .icon { width: 64px; height: 64px; border-radius: 12px; border: 1px solid #dbe2ee; background: #fff; display: flex; align-items: center; justify-content: center; overflow: hidden; font-weight: 600; color: #1b263b; }
+    .social-card .icon img { width: 100%; height: 100%; object-fit: cover; }
+    .social-card .fields { flex: 1; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+    .social-card .fields label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
+    .social-card .fields input { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
+    .social-card .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
       .hero-preview { width: 100%; }
+      .theme-controls { grid-template-columns: 1fr; }
+      .social-card { flex-direction: column; align-items: stretch; }
+      .social-card .icon { align-self: flex-start; }
     }
   </style>
 </head>
@@ -77,12 +97,40 @@
             Site title
             <input type="text" id="siteTitleInput" placeholder="Linart Systems">
           </label>
+          <label class="inline">
+            Tagline
+            <textarea id="brandTaglineInput" placeholder="Central hub running inside a container. Access every service from one place."></textarea>
+          </label>
+          <div class="theme-controls">
+            <label class="inline">
+              Page background
+              <input type="color" id="pageBackgroundColorInput" value="#05060b">
+            </label>
+            <label class="inline">
+              Card color
+              <input type="color" id="surfaceColorInput" value="#0c1820">
+            </label>
+            <div class="theme-slider">
+              <label class="inline" style="flex:1;">
+                Background opacity
+                <input type="range" id="pageBackgroundOpacityInput" min="0" max="100" step="1" value="100">
+              </label>
+              <strong id="pageBackgroundOpacityValue">100%</strong>
+            </div>
+            <div class="theme-slider">
+              <label class="inline" style="flex:1;">
+                Card opacity
+                <input type="range" id="surfaceOpacityInput" min="0" max="100" step="1" value="72">
+              </label>
+              <strong id="surfaceOpacityValue">72%</strong>
+            </div>
+          </div>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <label class="button">Upload logo<input type="file" id="siteLogoFile" accept="image/*"></label>
             <button type="button" class="secondary" id="siteLogoReset">Reset to default</button>
             <button type="button" id="saveBranding">Save changes</button>
           </div>
-          <div class="hint">Accepted formats: PNG, JPG, SVG, GIF, WEBP. Max 5&nbsp;MB.</div>
+          <div class="hint">Accepted formats: PNG, JPG, SVG, GIF, WEBP. Max 5&nbsp;MB. Colors update the public landing page background and info cards.</div>
         </div>
       </div>
     </section>
@@ -126,6 +174,17 @@
           </label>
             <strong id="heroBlurValue">0</strong>
           </div>
+          <div class="welcome-controls">
+            <div class="welcome-thumb" id="welcomeImageThumb">
+              <img id="welcomeImagePreview" alt="Welcome image preview" class="welcome-image is-hidden">
+              <span class="placeholder">No image</span>
+            </div>
+            <div class="welcome-actions">
+              <label class="button">Upload welcome image<input type="file" id="welcomeImageFile" accept="image/*"></label>
+              <button type="button" class="secondary" id="welcomeImageRemove">Remove image</button>
+            </div>
+          </div>
+          <div class="hint">Shown next to the intro text. Recommended square image up to 5&nbsp;MB.</div>
           <div class="hero-buttons">
             <label class="button">Upload hero video<input type="file" id="heroVideoFile" accept="video/mp4,video/webm,video/ogg"></label>
             <button type="button" class="secondary" id="heroVideoRemove">Remove video</button>
@@ -180,6 +239,26 @@
     </section>
 
     <section>
+      <h2>Footer social links</h2>
+      <div id="socialList" class="social-list"></div>
+      <form id="addSocial" class="card-form">
+        <label class="inline">
+          Label
+          <input type="text" id="newSocialLabel" placeholder="Twitter" required>
+        </label>
+        <label class="inline">
+          URL
+          <input type="url" id="newSocialUrl" placeholder="https://twitter.com/linart" required>
+        </label>
+        <div class="full">
+          <label class="button">Upload icon<input type="file" id="addSocialIconFile" accept="image/*"></label>
+          <button type="submit">Add link</button>
+          <span class="hint">Upload SVG or PNG (square, up to 2&nbsp;MB). Leave blank to use initials.</span>
+        </div>
+      </form>
+    </section>
+
+    <section>
       <h2>Security</h2>
       <form id="passwordForm" class="card-form">
         <label class="inline">
@@ -208,6 +287,7 @@
       config: {
         siteLogo: '/static/logo1.svg',
         siteTitle: 'Linart Systems',
+        brandTagline: 'Central hub running inside a container. Access every service from one place.',
         introTitle: '',
         introBody: '',
         contactWhatsapp: '',
@@ -215,6 +295,12 @@
         heroVideoBlur: 8,
         heroOverlayColor: '#05060b',
         heroOverlayOpacity: 0.85,
+        surfaceColor: '#0c1820',
+        surfaceOpacity: 0.72,
+        pageBackgroundColor: '#05060b',
+        pageBackgroundOpacity: 1,
+        welcomeImage: '',
+        socialLinks: [],
       },
       services: []
     };
@@ -242,6 +328,13 @@
 
     const siteLogoPreview = document.getElementById('siteLogoPreview');
     const siteTitleInput = document.getElementById('siteTitleInput');
+    const brandTaglineInput = document.getElementById('brandTaglineInput');
+    const pageBackgroundColorInput = document.getElementById('pageBackgroundColorInput');
+    const pageBackgroundOpacityInput = document.getElementById('pageBackgroundOpacityInput');
+    const pageBackgroundOpacityValue = document.getElementById('pageBackgroundOpacityValue');
+    const surfaceColorInput = document.getElementById('surfaceColorInput');
+    const surfaceOpacityInput = document.getElementById('surfaceOpacityInput');
+    const surfaceOpacityValue = document.getElementById('surfaceOpacityValue');
     const heroVideoPreview = document.getElementById('heroVideoPreview');
     const heroVideoFile = document.getElementById('heroVideoFile');
     const heroVideoRemove = document.getElementById('heroVideoRemove');
@@ -253,15 +346,54 @@
     const heroOverlayOpacityValue = document.getElementById('heroOverlayOpacityValue');
     const heroBlurInput = document.getElementById('heroBlurInput');
     const heroBlurValue = document.getElementById('heroBlurValue');
+    const welcomeImageThumb = document.getElementById('welcomeImageThumb');
+    const welcomeImagePreview = document.getElementById('welcomeImagePreview');
+    const welcomeImagePlaceholder = welcomeImageThumb.querySelector('.placeholder');
+    const welcomeImageFile = document.getElementById('welcomeImageFile');
+    const welcomeImageRemove = document.getElementById('welcomeImageRemove');
     const servicesList = document.getElementById('servicesList');
+    const socialList = document.getElementById('socialList');
+    const addSocialForm = document.getElementById('addSocial');
+    const newSocialLabelInput = document.getElementById('newSocialLabel');
+    const newSocialUrlInput = document.getElementById('newSocialUrl');
+    const addSocialIconFile = document.getElementById('addSocialIconFile');
     const passwordStatus = document.getElementById('passwordStatus');
 
+    pageBackgroundOpacityInput.value = 100;
+    pageBackgroundOpacityValue.textContent = '100%';
     heroBlurInput.value = 8;
     heroBlurValue.textContent = '8';
+    surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
 
     function renderBranding() {
       siteLogoPreview.src = state.config.siteLogo || '/static/logo1.svg';
       siteTitleInput.value = state.config.siteTitle || '';
+      brandTaglineInput.value = state.config.brandTagline || '';
+
+      const pageColor =
+        typeof state.config.pageBackgroundColor === 'string' && state.config.pageBackgroundColor
+          ? state.config.pageBackgroundColor
+          : '#05060b';
+      pageBackgroundColorInput.value = pageColor;
+
+      const pageOpacity = Number.isFinite(Number(state.config.pageBackgroundOpacity))
+        ? Math.max(0, Math.min(1, Number(state.config.pageBackgroundOpacity)))
+        : 1;
+      const pageOpacityPercent = Math.round(pageOpacity * 100);
+      pageBackgroundOpacityInput.value = pageOpacityPercent;
+      pageBackgroundOpacityValue.textContent = pageOpacityPercent + '%';
+      const surfaceColor =
+        typeof state.config.surfaceColor === 'string' && state.config.surfaceColor
+          ? state.config.surfaceColor
+          : '#0c1820';
+      surfaceColorInput.value = surfaceColor;
+
+      const surfaceOpacity = Number.isFinite(Number(state.config.surfaceOpacity))
+        ? Math.max(0, Math.min(1, Number(state.config.surfaceOpacity)))
+        : 0.72;
+      const surfaceOpacityPercent = Math.round(surfaceOpacity * 100);
+      surfaceOpacityInput.value = surfaceOpacityPercent;
+      surfaceOpacityValue.textContent = surfaceOpacityPercent + '%';
     }
 
     function renderHero() {
@@ -289,6 +421,20 @@
         heroVideoPreview.removeAttribute('src');
         heroVideoPreview.classList.add('is-hidden');
         heroVideoPreview.load();
+      }
+
+      setWelcomeImagePreview(state.config.welcomeImage);
+    }
+
+    function setWelcomeImagePreview(src) {
+      if (src) {
+        welcomeImagePreview.src = src;
+        welcomeImagePreview.classList.remove('is-hidden');
+        welcomeImagePlaceholder.style.display = 'none';
+      } else {
+        welcomeImagePreview.classList.add('is-hidden');
+        welcomeImagePreview.removeAttribute('src');
+        welcomeImagePlaceholder.style.display = 'block';
       }
     }
 
@@ -396,6 +542,144 @@
       });
     }
 
+    function renderSocialLinks() {
+      socialList.innerHTML = '';
+
+      const links = Array.isArray(state.config.socialLinks) ? state.config.socialLinks : [];
+      if (!links.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No social links configured.';
+        socialList.appendChild(empty);
+        return;
+      }
+
+      links.forEach((link) => {
+        const card = document.createElement('div');
+        card.className = 'social-card';
+
+        const icon = document.createElement('div');
+        icon.className = 'icon';
+        if (link.icon) {
+          const img = document.createElement('img');
+          img.src = link.icon;
+          img.alt = `${link.label} icon`;
+          icon.appendChild(img);
+        } else {
+          icon.textContent = (link.label || '?').trim().charAt(0).toUpperCase() || '?';
+        }
+        card.appendChild(icon);
+
+        const fields = document.createElement('div');
+        fields.className = 'fields';
+
+        const labelField = document.createElement('label');
+        labelField.textContent = 'Label';
+        const labelInput = document.createElement('input');
+        labelInput.type = 'text';
+        labelInput.value = link.label || '';
+        labelField.appendChild(labelInput);
+        fields.appendChild(labelField);
+
+        const urlField = document.createElement('label');
+        urlField.textContent = 'URL';
+        const urlInput = document.createElement('input');
+        urlInput.type = 'url';
+        urlInput.value = link.url || '';
+        urlField.appendChild(urlInput);
+        fields.appendChild(urlField);
+
+        card.appendChild(fields);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', async () => {
+          const label = labelInput.value.trim();
+          const url = urlInput.value.trim();
+          if (!label || !url) {
+            alert('Label and URL are required.');
+            return;
+          }
+          try {
+            await fetchJson(`/admin/social-links/${encodeURIComponent(link.id)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ label, url })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(saveBtn);
+
+        const uploadLabel = document.createElement('label');
+        uploadLabel.className = 'button';
+        uploadLabel.textContent = 'Upload icon';
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        uploadLabel.appendChild(fileInput);
+        fileInput.addEventListener('change', async (event) => {
+          if (!event.target.files?.length) return;
+          try {
+            const path = await uploadAsset(event.target.files[0]);
+            await fetchJson(`/admin/social-links/${encodeURIComponent(link.id)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ icon: path })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          } finally {
+            event.target.value = '';
+          }
+        });
+        actions.appendChild(uploadLabel);
+
+        const removeIconBtn = document.createElement('button');
+        removeIconBtn.type = 'button';
+        removeIconBtn.className = 'secondary';
+        removeIconBtn.textContent = 'Remove icon';
+        removeIconBtn.addEventListener('click', async () => {
+          try {
+            await fetchJson(`/admin/social-links/${encodeURIComponent(link.id)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ icon: '' })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(removeIconBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'secondary';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', async () => {
+          if (!confirm(`Delete link "${link.label}"?`)) return;
+          try {
+            await fetchJson(`/admin/social-links/${encodeURIComponent(link.id)}`, { method: 'DELETE' });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(actions);
+        socialList.appendChild(card);
+      });
+    }
+
     async function loadAll() {
       try {
         const [services, config] = await Promise.all([
@@ -407,6 +691,7 @@
         renderBranding();
         renderHero();
         renderServices();
+        renderSocialLinks();
       } catch (error) {
         handleError(error);
       }
@@ -414,11 +699,18 @@
 
     document.getElementById('saveBranding').addEventListener('click', async () => {
       try {
-        const siteTitle = siteTitleInput.value.trim();
+        const payload = {
+          siteTitle: siteTitleInput.value.trim(),
+          brandTagline: brandTaglineInput.value.trim(),
+          pageBackgroundColor: pageBackgroundColorInput.value,
+          pageBackgroundOpacity: Number(pageBackgroundOpacityInput.value) / 100,
+          surfaceColor: surfaceColorInput.value,
+          surfaceOpacity: Number(surfaceOpacityInput.value) / 100
+        };
         await fetchJson('/admin/config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ siteTitle })
+          body: JSON.stringify(payload)
         });
         await loadAll();
       } catch (error) {
@@ -454,6 +746,45 @@
         handleError(error);
       } finally {
         event.target.value = '';
+      }
+    });
+
+    pageBackgroundOpacityInput.addEventListener('input', () => {
+      pageBackgroundOpacityValue.textContent = pageBackgroundOpacityInput.value + '%';
+    });
+    surfaceOpacityInput.addEventListener('input', () => {
+      surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
+    });
+
+    welcomeImageFile.addEventListener('change', async (event) => {
+      if (!event.target.files?.length) return;
+      const file = event.target.files[0];
+      try {
+        const path = await uploadAsset(file);
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ welcomeImage: path })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      } finally {
+        event.target.value = '';
+      }
+    });
+
+    welcomeImageRemove.addEventListener('click', async () => {
+      if (!state.config.welcomeImage) return;
+      try {
+        await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ welcomeImage: '' })
+        });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
       }
     });
 
@@ -513,6 +844,35 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ heroVideo: '' })
         });
+        await loadAll();
+      } catch (error) {
+        handleError(error);
+      }
+    });
+
+    addSocialForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const label = newSocialLabelInput.value.trim();
+      const url = newSocialUrlInput.value.trim();
+      if (!label || !url) {
+        alert('Label and URL are required.');
+        return;
+      }
+
+      try {
+        let iconPath = '';
+        if (addSocialIconFile.files?.length) {
+          iconPath = await uploadAsset(addSocialIconFile.files[0]);
+        }
+
+        await fetchJson('/admin/social-links', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label, url, icon: iconPath })
+        });
+
+        addSocialForm.reset();
+        addSocialIconFile.value = '';
         await loadAll();
       } catch (error) {
         handleError(error);

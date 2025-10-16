@@ -8,6 +8,7 @@ const session = require('express-session');
 const fs = require('fs');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -23,6 +24,7 @@ const UPLOAD_DIR = path.join(__dirname, 'static', 'uploads');
 const DEFAULT_CONFIG = {
   siteLogo: '/static/logo1.svg',
   siteTitle: 'Linart Systems',
+  brandTagline: 'Central hub running inside a container. Access every service from one place.',
   introTitle: 'Welcome to my server!',
   introBody: 'I am Vladimir. If you have any questions or need help, feel free to reach out on WhatsApp.',
   contactWhatsapp: '+491754000261',
@@ -30,10 +32,94 @@ const DEFAULT_CONFIG = {
   heroVideoBlur: 8,
   heroOverlayColor: '#05060b',
   heroOverlayOpacity: 0.85,
+  surfaceColor: '#0c1820',
+  surfaceOpacity: 0.72,
+  pageBackgroundColor: '#05060b',
+  pageBackgroundOpacity: 1,
+  welcomeImage: '',
+  socialLinks: [],
 };
 const DEFAULT_ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD || 'admin';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+function clamp(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  if (number < min) return min;
+  if (number > max) return max;
+  return number;
+}
+
+function normalizeSocialLink(link) {
+  if (!link || typeof link !== 'object') return null;
+  const label = typeof link.label === 'string' ? link.label.trim() : '';
+  const url = typeof link.url === 'string' ? link.url.trim() : '';
+  if (!label || !url) return null;
+  const icon = typeof link.icon === 'string' ? link.icon.trim() : '';
+  const idRaw = typeof link.id === 'string' ? link.id.trim() : '';
+  const id = idRaw || crypto.randomUUID();
+  return { id, label, url, icon };
+}
+
+function sanitizeConfig(input) {
+  const merged = { ...DEFAULT_CONFIG, ...(input || {}) };
+
+  merged.siteLogo =
+    typeof merged.siteLogo === 'string' && merged.siteLogo.trim()
+      ? merged.siteLogo.trim()
+      : DEFAULT_CONFIG.siteLogo;
+  merged.siteTitle =
+    typeof merged.siteTitle === 'string' && merged.siteTitle.trim()
+      ? merged.siteTitle.trim()
+      : DEFAULT_CONFIG.siteTitle;
+  merged.brandTagline =
+    typeof merged.brandTagline === 'string' && merged.brandTagline.trim()
+      ? merged.brandTagline.trim()
+      : DEFAULT_CONFIG.brandTagline;
+  merged.introTitle =
+    typeof merged.introTitle === 'string' && merged.introTitle.trim()
+      ? merged.introTitle.trim()
+      : DEFAULT_CONFIG.introTitle;
+  merged.introBody =
+    typeof merged.introBody === 'string' && merged.introBody.trim()
+      ? merged.introBody.trim()
+      : DEFAULT_CONFIG.introBody;
+  merged.contactWhatsapp =
+    typeof merged.contactWhatsapp === 'string' && merged.contactWhatsapp.trim()
+      ? merged.contactWhatsapp.trim()
+      : DEFAULT_CONFIG.contactWhatsapp;
+  merged.heroVideo = typeof merged.heroVideo === 'string' ? merged.heroVideo.trim() : '';
+  merged.heroVideoBlur = clamp(merged.heroVideoBlur, 0, 40);
+  merged.heroOverlayOpacity = clamp(merged.heroOverlayOpacity, 0, 1);
+  if (typeof merged.heroOverlayColor !== 'string' || !HEX_COLOR_PATTERN.test(merged.heroOverlayColor.trim())) {
+    merged.heroOverlayColor = DEFAULT_CONFIG.heroOverlayColor;
+  } else {
+    merged.heroOverlayColor = merged.heroOverlayColor.trim();
+  }
+  if (typeof merged.surfaceColor !== 'string' || !HEX_COLOR_PATTERN.test(merged.surfaceColor.trim())) {
+    merged.surfaceColor = DEFAULT_CONFIG.surfaceColor;
+  } else {
+    merged.surfaceColor = merged.surfaceColor.trim();
+  }
+  merged.surfaceOpacity = clamp(merged.surfaceOpacity, 0, 1);
+  merged.pageBackgroundOpacity = clamp(merged.pageBackgroundOpacity, 0, 1);
+  if (typeof merged.pageBackgroundColor !== 'string' || !HEX_COLOR_PATTERN.test(merged.pageBackgroundColor.trim())) {
+    merged.pageBackgroundColor = DEFAULT_CONFIG.pageBackgroundColor;
+  } else {
+    merged.pageBackgroundColor = merged.pageBackgroundColor.trim();
+  }
+  merged.welcomeImage = typeof merged.welcomeImage === 'string' ? merged.welcomeImage.trim() : '';
+  merged.socialLinks = Array.isArray(merged.socialLinks)
+    ? merged.socialLinks
+        .map(normalizeSocialLink)
+        .filter(Boolean)
+    : [];
+
+  return merged;
+}
 
 function normalizeService(service) {
   if (!service || typeof service !== 'object') return null;
@@ -77,39 +163,16 @@ function saveServices(list){
 function loadConfig(){
   try{
     const data = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-  const merged = { ...DEFAULT_CONFIG, ...(data || {}) };
-  merged.heroVideoBlur = Number.isFinite(Number(merged.heroVideoBlur))
-    ? Math.max(0, Math.min(40, Number(merged.heroVideoBlur)))
-    : DEFAULT_CONFIG.heroVideoBlur;
-  merged.heroOverlayOpacity = Number.isFinite(Number(merged.heroOverlayOpacity))
-    ? Math.max(0, Math.min(1, Number(merged.heroOverlayOpacity)))
-    : DEFAULT_CONFIG.heroOverlayOpacity;
-  if (typeof merged.heroOverlayColor !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(merged.heroOverlayColor.trim())) {
-    merged.heroOverlayColor = DEFAULT_CONFIG.heroOverlayColor;
-  } else {
-    merged.heroOverlayColor = merged.heroOverlayColor.trim();
+    return sanitizeConfig(data);
+  }catch(err){
+    return sanitizeConfig(null);
   }
-  return merged;
-}catch(err){
-  return { ...DEFAULT_CONFIG };
-}
 }
 
 function saveConfig(next){
-  const merged = { ...DEFAULT_CONFIG, ...(next || {}) };
-  merged.heroVideoBlur = Number.isFinite(Number(merged.heroVideoBlur))
-    ? Math.max(0, Math.min(40, Number(merged.heroVideoBlur)))
-    : DEFAULT_CONFIG.heroVideoBlur;
-  merged.heroOverlayOpacity = Number.isFinite(Number(merged.heroOverlayOpacity))
-    ? Math.max(0, Math.min(1, Number(merged.heroOverlayOpacity)))
-    : DEFAULT_CONFIG.heroOverlayOpacity;
-  if (typeof merged.heroOverlayColor !== 'string' || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(merged.heroOverlayColor.trim())) {
-    merged.heroOverlayColor = DEFAULT_CONFIG.heroOverlayColor;
-  } else {
-    merged.heroOverlayColor = merged.heroOverlayColor.trim();
-  }
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(merged, null, 2));
-  return merged;
+  const sanitized = sanitizeConfig(next);
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(sanitized, null, 2));
+  return sanitized;
 }
 
 function loadAdminCredentials() {
@@ -263,6 +326,7 @@ app.get('/api/status', async (req, res) => {
       now: new Date().toISOString(),
       siteLogo: config.siteLogo,
       siteTitle: config.siteTitle,
+      brandTagline: config.brandTagline,
       introTitle: config.introTitle,
       introBody: config.introBody,
       contactWhatsapp: config.contactWhatsapp,
@@ -270,6 +334,12 @@ app.get('/api/status', async (req, res) => {
       heroVideoBlur: config.heroVideoBlur,
       heroOverlayColor: config.heroOverlayColor,
       heroOverlayOpacity: config.heroOverlayOpacity,
+      pageBackgroundColor: config.pageBackgroundColor,
+      pageBackgroundOpacity: config.pageBackgroundOpacity,
+      surfaceColor: config.surfaceColor,
+      surfaceOpacity: config.surfaceOpacity,
+      welcomeImage: config.welcomeImage,
+      socialLinks: config.socialLinks,
     },
   });
 });
@@ -436,6 +506,11 @@ app.post('/admin/config', requireAuth, (req, res) => {
     next.siteTitle = value || DEFAULT_CONFIG.siteTitle;
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'brandTagline')) {
+    const value = typeof body.brandTagline === 'string' ? body.brandTagline.trim() : '';
+    next.brandTagline = value || DEFAULT_CONFIG.brandTagline;
+  }
+
   if (Object.prototype.hasOwnProperty.call(body, 'introTitle')) {
     const value = typeof body.introTitle === 'string' ? body.introTitle.trim() : '';
     next.introTitle = value || DEFAULT_CONFIG.introTitle;
@@ -451,6 +526,36 @@ app.post('/admin/config', requireAuth, (req, res) => {
     const value =
       typeof body.contactWhatsapp === 'string' ? body.contactWhatsapp.trim() : '';
     next.contactWhatsapp = value || DEFAULT_CONFIG.contactWhatsapp;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'pageBackgroundColor')) {
+    const value =
+      typeof body.pageBackgroundColor === 'string' ? body.pageBackgroundColor.trim() : '';
+    if (HEX_COLOR_PATTERN.test(value)) {
+      next.pageBackgroundColor = value;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'pageBackgroundOpacity')) {
+    const parsedOpacity = Number(body.pageBackgroundOpacity);
+    if (Number.isFinite(parsedOpacity)) {
+      next.pageBackgroundOpacity = Math.max(0, Math.min(1, parsedOpacity));
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'surfaceColor')) {
+    const value =
+      typeof body.surfaceColor === 'string' ? body.surfaceColor.trim() : '';
+    if (HEX_COLOR_PATTERN.test(value)) {
+      next.surfaceColor = value;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'surfaceOpacity')) {
+    const parsedOpacity = Number(body.surfaceOpacity);
+    if (Number.isFinite(parsedOpacity)) {
+      next.surfaceOpacity = Math.max(0, Math.min(1, parsedOpacity));
+    }
   }
 
   if (Object.prototype.hasOwnProperty.call(body, 'heroVideo')) {
@@ -479,8 +584,88 @@ app.post('/admin/config', requireAuth, (req, res) => {
     }
   }
 
+  if (Object.prototype.hasOwnProperty.call(body, 'welcomeImage')) {
+    const value = typeof body.welcomeImage === 'string' ? body.welcomeImage.trim() : '';
+    next.welcomeImage = value;
+  }
+
   const saved = saveConfig(next);
   res.json({ ok: true, config: saved });
+});
+
+app.get('/admin/social-links', requireAuth, (req, res) => {
+  const config = loadConfig();
+  res.json({ ok: true, links: config.socialLinks });
+});
+
+app.post('/admin/social-links', requireAuth, (req, res) => {
+  const body = req.body || {};
+  const candidate = normalizeSocialLink({
+    id: crypto.randomUUID(),
+    label: body.label,
+    url: body.url,
+    icon: body.icon,
+  });
+
+  if (!candidate) {
+    return res.status(400).json({ ok: false, error: 'invalid_link' });
+  }
+
+  const config = loadConfig();
+  const next = { ...config, socialLinks: [...config.socialLinks, candidate] };
+  const saved = saveConfig(next);
+  res.json({ ok: true, link: candidate, links: saved.socialLinks });
+});
+
+app.patch('/admin/social-links/:id', requireAuth, (req, res) => {
+  const linkId = String(req.params.id || '').trim();
+  if (!linkId) {
+    return res.status(400).json({ ok: false, error: 'missing_id' });
+  }
+
+  const body = req.body || {};
+  const config = loadConfig();
+  const index = config.socialLinks.findIndex((link) => link.id === linkId);
+  if (index === -1) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+
+  const updated = { ...config.socialLinks[index] };
+  if (Object.prototype.hasOwnProperty.call(body, 'label')) {
+    updated.label = typeof body.label === 'string' ? body.label.trim() : '';
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'url')) {
+    updated.url = typeof body.url === 'string' ? body.url.trim() : '';
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'icon')) {
+    updated.icon = typeof body.icon === 'string' ? body.icon.trim() : '';
+  }
+
+  const normalised = normalizeSocialLink({ ...updated, id: linkId });
+  if (!normalised) {
+    return res.status(400).json({ ok: false, error: 'invalid_link' });
+  }
+
+  const next = { ...config, socialLinks: [...config.socialLinks] };
+  next.socialLinks[index] = normalised;
+  const saved = saveConfig(next);
+  res.json({ ok: true, link: saved.socialLinks[index], links: saved.socialLinks });
+});
+
+app.delete('/admin/social-links/:id', requireAuth, (req, res) => {
+  const linkId = String(req.params.id || '').trim();
+  if (!linkId) {
+    return res.status(400).json({ ok: false, error: 'missing_id' });
+  }
+
+  const config = loadConfig();
+  const nextLinks = config.socialLinks.filter((link) => link.id !== linkId);
+  if (nextLinks.length === config.socialLinks.length) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+
+  const saved = saveConfig({ ...config, socialLinks: nextLinks });
+  res.json({ ok: true, links: saved.socialLinks });
 });
 
 app.post('/admin/upload-logo', requireAuth, (req, res, next) => {
