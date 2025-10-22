@@ -20,20 +20,32 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
-const SERVICE_NAME = process.env.SERVICE_NAME || 'service1';
-const PUBLIC_TEMPLATE_PATH = path.join(PUBLIC_DIR, 'form-template.pdf');
-const LEGACY_TEMPLATE_PATHS = [
-  '/mnt/data/SNDS-LED-Preventative-Maintenance-Checklist BER Blanko.pdf',
-  'C:\\Code\\PDF_LinArt_form\\public\\form-template.pdf',
-];
+const DEFAULT_TEMPLATE = '/mnt/data/SNDS-LED-Preventative-Maintenance-Checklist BER Blanko.pdf';
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;
 const TEMPLATE_PATH_ENV = process.env.TEMPLATE_PATH;
+const MAX_FILE_SIZE_BYTES = 128 * 1024 * 1024;
+const MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
 fsExtra.ensureDirSync(DATA_DIR);
+
+function formatBytesHuman(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let index = 0;
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024;
+    index += 1;
+  }
+  const decimals = value < 10 && index > 0 ? 1 : 0;
+  return `${value.toFixed(decimals)} ${units[index]}`;
+}
 
 /**
  * Load a JSON file from disk, returning a fallback value on failure.
@@ -54,64 +66,7 @@ function loadJson(filePath, fallback = null) {
 const fieldsConfig = loadJson(FIELDS_PATH, { fields: [] }) || { fields: [] };
 const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
 
-function normalizeTemplateCandidate(candidate) {
-  if (!candidate) return null;
-  const trimmed = String(candidate).trim();
-  if (!trimmed) return null;
-
-  if (/^~[\\/]/.test(trimmed)) {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || ROOT_DIR;
-    return path.join(homeDir, trimmed.slice(2));
-  }
-
-  if (/^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith('\\\\')) {
-    return trimmed;
-  }
-
-  if (path.isAbsolute(trimmed)) {
-    return trimmed;
-  }
-
-  return path.join(ROOT_DIR, trimmed);
-}
-
-function resolveTemplatePath() {
-  const preferredCandidates = [
-    normalizeTemplateCandidate(TEMPLATE_PATH_ENV),
-    normalizeTemplateCandidate(fieldsConfig.templatePath),
-  ].filter(Boolean);
-
-  const fallbackCandidates = [
-    normalizeTemplateCandidate(PUBLIC_TEMPLATE_PATH),
-    ...LEGACY_TEMPLATE_PATHS.map(normalizeTemplateCandidate),
-  ].filter(Boolean);
-
-  const seen = new Set();
-  const candidates = [...preferredCandidates, ...fallbackCandidates].filter((candidate) => {
-    if (!candidate) return false;
-    const key = process.platform === 'win32' ? candidate.toLowerCase() : candidate;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-
-  const primaryPreferred = preferredCandidates[0] || null;
-
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      if (primaryPreferred && candidate !== primaryPreferred) {
-        console.warn(`[server] Template path ${primaryPreferred} not found; using fallback ${candidate}`);
-      }
-      return candidate;
-    }
-  }
-
-  const fallback = primaryPreferred || fallbackCandidates[0] || path.join(ROOT_DIR, 'public', 'form-template.pdf');
-  console.warn(`[server] Template file not found at any candidate path. Using fallback: ${fallback}`);
-  return fallback;
-}
-
-const templatePath = resolveTemplatePath();
+const templatePath = TEMPLATE_PATH_ENV || fieldsConfig.templatePath || DEFAULT_TEMPLATE;
 
 function toSingleValue(value) {
   if (Array.isArray(value)) {
@@ -347,6 +302,8 @@ const PARTS_FIELD_PREFIXES = [
   'parts_used_serial_',
 ];
 
+const EMPLOYEE_MAX_COUNT = 20;
+
 const PARTS_TABLE_LAYOUT = {
   pageIndex: 2,
   leftMargin: 40,
@@ -358,6 +315,7 @@ const PARTS_TABLE_LAYOUT = {
 };
 
 const TABLE_BORDER_COLOR = rgb(0.1, 0.1, 0.4);
+const TABLE_BORDER_WIDTH = 0.8;
 const TEXT_FIELD_INNER_PADDING = 2;
 
 const SIGN_OFF_REQUEST_FIELDS = new Set([
@@ -619,6 +577,479 @@ function collectPartsRowUsage(body) {
   return rows;
 }
 
+function parseLocalDateTime(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const [year, month, day, hour, minute, second] = match.slice(1).map((item) => Number(item));
+  if (
+    [year, month, day, hour, minute].some((item) => Number.isNaN(item)) ||
+    (second !== undefined && Number.isNaN(second))
+  ) {
+    return null;
+  }
+  const date = new Date(year, month - 1, day, hour, minute, second || 0, 0);
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function formatEmployeeDateTime(value) {
+  const parsed = parseLocalDateTime(value);
+  if (!parsed) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+  const pad = (input) => String(input).padStart(2, '0');
+  return (
+    `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ` +
+    `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+  );
+}
+
+function formatIsoFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const pad = (input) => String(input).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
+function formatEmployeeDuration(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0m';
+  const rounded = Math.round(minutes);
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (mins > 0) parts.push(`${mins}m`);
+  return parts.length ? parts.join(' ') : '0m';
+}
+
+function determineBreakRequirement(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return { code: 'UNKNOWN', minutes: 0, label: 'Pending (set arrival and departure)' };
+  }
+  if (minutes <= 6 * 60) {
+    return { code: 'NONE', minutes: 0, label: 'No mandatory break (<=6h)' };
+  }
+  if (minutes <= 9 * 60) {
+    return { code: 'MIN30', minutes: 30, label: '>=30m (6-9h, 2x15m allowed)' };
+  }
+  return { code: 'MIN45', minutes: 45, label: '>=45m (>9h)' };
+}
+
+function formatBreakStatsSummary(breakStats) {
+  if (!breakStats || typeof breakStats !== 'object') {
+    return '';
+  }
+  const descriptors = [
+    { key: 'MIN45', label: '>=45m (>9h)' },
+    { key: 'MIN30', label: '>=30m (6-9h, 2x15m)' },
+    { key: 'NONE', label: 'no mandatory break (<=6h)' },
+  ];
+  const parts = [];
+  descriptors.forEach(({ key, label }) => {
+    const count = Number(breakStats[key] || 0);
+    if (count > 0) {
+      parts.push(`${count} x ${label}`);
+    }
+  });
+  const pendingCount = Number(breakStats.UNKNOWN || 0);
+  if (pendingCount > 0 && parts.length) {
+    parts.push(`${pendingCount} x pending`);
+  }
+  return parts.join(', ');
+}
+
+function collectEmployeeEntries(body) {
+  const entries = [];
+  const summary = {
+    entries,
+    totalMinutes: 0,
+    totalBreakMinutes: 0,
+    breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+  };
+  if (!body || typeof body !== 'object') {
+    return summary;
+  }
+
+  const sources = [];
+  const appendSource = (value, indexHint) => {
+    if (value === undefined || value === null) return;
+    const index = Number.isFinite(Number(indexHint)) ? Number(indexHint) : sources.length;
+    sources.push({ index, value });
+  };
+
+  if (Array.isArray(body.employees)) {
+    body.employees.slice(0, EMPLOYEE_MAX_COUNT).forEach((entry, idx) => appendSource(entry, idx));
+  } else if (body.employees && typeof body.employees === 'object') {
+    Object.keys(body.employees)
+      .sort((a, b) => Number(a) - Number(b))
+      .slice(0, EMPLOYEE_MAX_COUNT)
+      .forEach((key) => appendSource(body.employees[key], key));
+  }
+
+  if (!sources.length) {
+    for (let i = 1; i <= EMPLOYEE_MAX_COUNT; i += 1) {
+      const stub = {
+        name: toSingleValue(body[`employee_name_${i}`]),
+        role: toSingleValue(body[`employee_role_${i}`]),
+        arrival: toSingleValue(body[`employee_arrival_${i}`]),
+        departure: toSingleValue(body[`employee_departure_${i}`]),
+      };
+      if (
+        (stub.name && String(stub.name).trim()) ||
+        (stub.role && String(stub.role).trim()) ||
+        (stub.arrival && String(stub.arrival).trim()) ||
+        (stub.departure && String(stub.departure).trim())
+      ) {
+        appendSource(stub, i - 1);
+      }
+    }
+  }
+
+  sources
+    .sort((a, b) => a.index - b.index)
+    .slice(0, EMPLOYEE_MAX_COUNT)
+    .forEach(({ index, value }) => {
+      const record = value && typeof value === 'object' ? value : { name: value };
+      const name = toSingleValue(record.name) ? String(toSingleValue(record.name)).trim() : '';
+      const role = toSingleValue(record.role) ? String(toSingleValue(record.role)).trim() : '';
+      let arrival = toSingleValue(record.arrival) ? String(toSingleValue(record.arrival)).trim() : '';
+      let departure = toSingleValue(record.departure)
+        ? String(toSingleValue(record.departure)).trim()
+        : '';
+      if (!name && !role && !arrival && !departure) {
+        return;
+      }
+
+      let arrivalDate = parseLocalDateTime(arrival);
+      if (!arrivalDate && (name || role || departure)) {
+        arrivalDate = new Date();
+        arrival = formatIsoFromDate(arrivalDate);
+      }
+
+      let departureDate = parseLocalDateTime(departure);
+      if (!departureDate && arrivalDate) {
+        departureDate = new Date(arrivalDate.getTime() + 60 * 60000);
+        departure = formatIsoFromDate(departureDate);
+      }
+
+      let durationMinutes = 0;
+      if (arrivalDate && departureDate) {
+        durationMinutes = Math.round((departureDate.getTime() - arrivalDate.getTime()) / 60000);
+        if (durationMinutes <= 0) {
+          departureDate = new Date(arrivalDate.getTime() + 15 * 60000);
+          departure = formatIsoFromDate(departureDate);
+          durationMinutes = 15;
+        }
+      }
+
+      const breakInfo = determineBreakRequirement(durationMinutes);
+      entries.push({
+        index: index + 1,
+        name,
+        role,
+        arrival,
+        departure,
+        arrivalDisplay: formatEmployeeDateTime(arrival),
+        departureDisplay: formatEmployeeDateTime(departure),
+        durationMinutes,
+        durationLabel: formatEmployeeDuration(durationMinutes),
+        breakCode: breakInfo.code,
+        breakRequiredMinutes: breakInfo.minutes,
+        breakLabel: breakInfo.label,
+      });
+
+      summary.totalMinutes += durationMinutes;
+      summary.totalBreakMinutes += breakInfo.minutes || 0;
+      if (summary.breakStats[breakInfo.code] === undefined) {
+        summary.breakStats.UNKNOWN += 1;
+      } else {
+        summary.breakStats[breakInfo.code] += 1;
+      }
+    });
+
+  return summary;
+}
+
+function addPageNumbers(pdfDoc, font, options = {}) {
+  if (!pdfDoc || !font) return;
+  const pages = pdfDoc.getPages();
+  if (!pages.length) return;
+  const color = options.color || rgb(0.25, 0.25, 0.3);
+  const size = options.fontSize || 10;
+  const margin = options.margin || 36;
+  const total = pages.length;
+  pages.forEach((page, index) => {
+    const label = `Page ${index + 1} of ${total}`;
+    const width = font.widthOfTextAtSize(label, size);
+    page.drawText(label, {
+      x: page.getWidth() - margin - width,
+      y: margin,
+      size,
+      font,
+      color,
+    });
+  });
+}
+
+
+function parseLocalDateTime(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = match[6] !== undefined ? Number(match[6]) : 0;
+  if (
+    Number.isNaN(year) ||
+    Number.isNaN(month) ||
+    Number.isNaN(day) ||
+    Number.isNaN(hour) ||
+    Number.isNaN(minute) ||
+    Number.isNaN(second)
+  ) {
+    return null;
+  }
+  const date = new Date(year, month - 1, day, hour, minute, second, 0);
+  if (Number.isNaN(date.getTime())) return null;
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function formatEmployeeDateTime(value) {
+  const parsed = parseLocalDateTime(value);
+  if (!parsed) {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+  const pad = (input) => String(input).padStart(2, '0');
+  return (
+    `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ` +
+    `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
+  );
+}
+
+function formatIsoFromDate(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const pad = (input) => String(input).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  );
+}
+
+function formatEmployeeDuration(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) return '0m';
+  const rounded = Math.round(minutes);
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (mins > 0) parts.push(`${mins}m`);
+  return parts.length ? parts.join(' ') : '0m';
+}
+
+function determineBreakRequirement(minutes) {
+  if (!Number.isFinite(minutes) || minutes <= 0) {
+    return { code: 'UNKNOWN', minutes: 0, label: 'Pending (set arrival & departure)' };
+  }
+  if (minutes <= 6 * 60) {
+    return { code: 'NONE', minutes: 0, label: 'No mandatory break (<=6h)' };
+  }
+  if (minutes <= 9 * 60) {
+    return { code: 'MIN30', minutes: 30, label: '>=30m (6-9h, 2x15m allowed)' };
+  }
+  return { code: 'MIN45', minutes: 45, label: '>=45m (>9h)' };
+}
+
+function formatBreakStatsSummary(breakStats) {
+  if (!breakStats || typeof breakStats !== 'object') {
+    return '';
+  }
+  const descriptors = [
+    { key: 'MIN45', label: '>=45m (>9h)' },
+    { key: 'MIN30', label: '>=30m (6-9h, 2x15m)' },
+    { key: 'NONE', label: 'no mandatory break (<=6h)' },
+  ];
+  const parts = [];
+  descriptors.forEach(({ key, label }) => {
+    const count = Number(breakStats[key] || 0);
+    if (count > 0) {
+      parts.push(`${count} x ${label}`);
+    }
+  });
+  const pendingCount = Number(breakStats.UNKNOWN || 0);
+  if (pendingCount > 0 && parts.length) {
+    parts.push(`${pendingCount} x pending`);
+  }
+  return parts.join(', ');
+}
+
+function collectEmployeeEntries(body) {
+  const entries = [];
+  const summary = {
+    entries,
+    totalMinutes: 0,
+    totalBreakMinutes: 0,
+    breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+  };
+  if (!body || typeof body !== 'object') {
+    return summary;
+  }
+
+  const sources = [];
+  const rawEmployees = body.employees;
+  const appendSource = (value, indexHint) => {
+    if (value === undefined || value === null) return;
+    const index = Number.isFinite(Number(indexHint)) ? Number(indexHint) : sources.length;
+    sources.push({ index, value });
+  };
+
+  if (Array.isArray(rawEmployees)) {
+    rawEmployees.slice(0, EMPLOYEE_MAX_COUNT).forEach((item, index) => appendSource(item, index));
+  } else if (rawEmployees && typeof rawEmployees === 'object') {
+    Object.keys(rawEmployees)
+      .sort((a, b) => Number(a) - Number(b))
+      .slice(0, EMPLOYEE_MAX_COUNT)
+      .forEach((key) => appendSource(rawEmployees[key], key));
+  }
+
+  if (!sources.length) {
+    for (let i = 1; i <= EMPLOYEE_MAX_COUNT; i += 1) {
+      const record = {
+        name: toSingleValue(body[`employee_name_${i}`]),
+        role: toSingleValue(body[`employee_role_${i}`]),
+        arrival: toSingleValue(body[`employee_arrival_${i}`]),
+        departure: toSingleValue(body[`employee_departure_${i}`]),
+      };
+      if (
+        (record.name && String(record.name).trim()) ||
+        (record.role && String(record.role).trim()) ||
+        (record.arrival && String(record.arrival).trim()) ||
+        (record.departure && String(record.departure).trim())
+      ) {
+        appendSource(record, i - 1);
+      }
+    }
+  }
+
+  const ensureFutureDeparture = (arrivalIso, departureIso) => {
+    const arrivalDate = parseLocalDateTime(arrivalIso);
+    const departureDate = parseLocalDateTime(departureIso);
+    if (!arrivalDate) return { arrivalIso, departureIso, minutes: 0 };
+    let normalizedArrival = formatIsoFromDate(arrivalDate);
+    let normalizedDeparture = departureDate ? formatIsoFromDate(departureDate) : '';
+    let minutes = 0;
+    if (departureDate) {
+      minutes = Math.round((departureDate.getTime() - arrivalDate.getTime()) / 60000);
+    }
+    if (!departureDate || minutes <= 0) {
+      const fallback = new Date(arrivalDate.getTime() + 60 * 60000);
+      normalizedDeparture = formatIsoFromDate(fallback);
+      minutes = 60;
+    }
+    return { arrivalIso: normalizedArrival, departureIso: normalizedDeparture, minutes };
+  };
+
+  sources
+    .sort((a, b) => a.index - b.index)
+    .slice(0, EMPLOYEE_MAX_COUNT)
+    .forEach(({ index, value }) => {
+      const record = value && typeof value === 'object' ? value : { name: value };
+      const name = toSingleValue(record.name) ? String(toSingleValue(record.name)).trim() : '';
+      const role = toSingleValue(record.role) ? String(toSingleValue(record.role)).trim() : '';
+      let arrivalIso = toSingleValue(record.arrival) ? String(toSingleValue(record.arrival)).trim() : '';
+      let departureIso = toSingleValue(record.departure)
+        ? String(toSingleValue(record.departure)).trim()
+        : '';
+      if (!arrivalIso && (name || role || departureIso)) {
+        arrivalIso = formatIsoFromDate(new Date());
+      }
+      if (!departureIso && arrivalIso) {
+        const arrivalDate = parseLocalDateTime(arrivalIso) || new Date();
+        departureIso = formatIsoFromDate(new Date(arrivalDate.getTime() + 60 * 60000));
+      }
+      if (!name && !role && !arrivalIso && !departureIso) {
+        return;
+      }
+      const normalized = ensureFutureDeparture(arrivalIso, departureIso);
+      const breakInfo = determineBreakRequirement(normalized.minutes);
+      entries.push({
+        index: index + 1,
+        name,
+        role,
+        arrival: normalized.arrivalIso,
+        departure: normalized.departureIso,
+        arrivalDisplay: formatEmployeeDateTime(normalized.arrivalIso),
+        departureDisplay: formatEmployeeDateTime(normalized.departureIso),
+        durationMinutes: normalized.minutes,
+        durationLabel: formatEmployeeDuration(normalized.minutes),
+        breakCode: breakInfo.code,
+        breakRequiredMinutes: breakInfo.minutes,
+        breakLabel: breakInfo.label,
+      });
+      summary.totalMinutes += normalized.minutes;
+      summary.totalBreakMinutes += breakInfo.minutes || 0;
+      if (summary.breakStats[breakInfo.code] === undefined) {
+        summary.breakStats.UNKNOWN += 1;
+      } else {
+        summary.breakStats[breakInfo.code] += 1;
+      }
+    });
+
+  return summary;
+}
+
+function addPageNumbers(pdfDoc, font, options = {}) {
+  if (!pdfDoc || !font) return;
+  const pages = pdfDoc.getPages();
+  if (!pages.length) return;
+  const color = options.color || rgb(0.25, 0.25, 0.3);
+  const size = options.fontSize || 10;
+  const margin = options.margin || 36;
+  const total = pages.length;
+  pages.forEach((page, index) => {
+    const label = `Page ${index + 1} of ${total}`;
+    const width = font.widthOfTextAtSize(label, size);
+    page.drawText(label, {
+      x: page.getWidth() - margin - width,
+      y: margin,
+      size,
+      font,
+      color,
+    });
+  });
+}
+
 function renderPartsTable(pdfDoc, rows, options = {}) {
   if (!pdfDoc || !Array.isArray(rows)) {
     return { hiddenRows: [], renderedRows: [] };
@@ -680,7 +1111,7 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
       width,
       height: headerHeight,
       color: rgb(0.88, 0.92, 0.98),
-      borderWidth: 0.7,
+      borderWidth: TABLE_BORDER_WIDTH,
       borderColor: TABLE_BORDER_COLOR,
     });
     const labelLayout = layoutTextForWidth({
@@ -741,7 +1172,7 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
         width: cellWidth,
         height: rowHeight,
         color: rgb(1, 1, 1),
-        borderWidth: 0.6,
+        borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
       });
 
@@ -774,27 +1205,27 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
 
 function drawCenteredTextBlock(page, text, font, rect, options = {}) {
   if (!page || !font || !rect) return;
-  const content = text === undefined || text === null ? '' : String(text).trim();
+  const content = text === undefined || text === null ? '' : String(text);
   const fontSize = options.fontSize || 10;
   const lineHeightMultiplier = options.lineHeightMultiplier || 1.2;
-  const paddingX = options.paddingX !== undefined ? options.paddingX : 6;
-  const paddingY = options.paddingY !== undefined ? options.paddingY : 6;
+  const paddingX = options.paddingX !== undefined ? options.paddingX : 8;
+  const paddingY = options.paddingY !== undefined ? options.paddingY : 8;
   const align = options.align || 'center';
   const verticalAlign = options.verticalAlign || 'middle';
   const color = options.color || rgb(0.12, 0.12, 0.18);
 
-  const layout =
-    options.layout ||
-    layoutTextForWidth({
-      value: content,
-      font,
+  const availableWidth = Math.max(4, rect.width - paddingX * 2);
+  const measurement =
+    options.precomputed ||
+    layoutMultilineText(content, font, availableWidth, {
       fontSize,
       minFontSize: options.minFontSize || fontSize,
       lineHeightMultiplier,
-      maxWidth: Math.max(4, rect.width - paddingX * 2),
     });
 
-  if (!layout || !Array.isArray(layout.lines) || !layout.lines.length) {
+  const entries = measurement.entries || [];
+
+  if (!entries.length) {
     if (options.drawPlaceholder) {
       page.drawText(' ', {
         x: rect.x + paddingX,
@@ -804,38 +1235,80 @@ function drawCenteredTextBlock(page, text, font, rect, options = {}) {
         color,
       });
     }
-    return layout;
+    return measurement;
   }
 
-  const totalHeight = layout.lineCount * layout.lineHeight;
-  let textY;
+  const totalHeight = measurement.totalHeight;
+  const usableHeight = Math.max(0, rect.height - paddingY * 2);
+  let cursorY;
   if (verticalAlign === 'top') {
-    textY = rect.y + rect.height - paddingY - layout.fontSize;
+    cursorY = rect.y + rect.height - paddingY;
   } else if (verticalAlign === 'bottom') {
-    textY = rect.y + paddingY;
+    cursorY = rect.y + paddingY + Math.min(totalHeight, usableHeight);
   } else {
-    textY = rect.y + (rect.height - totalHeight) / 2 + layout.lineHeight - layout.fontSize;
+    const extraSpace = Math.max(0, usableHeight - totalHeight);
+    cursorY = rect.y + rect.height - paddingY - extraSpace / 2;
   }
 
-  layout.lines.forEach((line) => {
-    const lineWidth = font.widthOfTextAtSize(line, layout.fontSize);
+  entries.forEach((entry) => {
+    cursorY -= entry.fontSize;
+    const lineWidth = font.widthOfTextAtSize(entry.text, entry.fontSize);
     let textX = rect.x + paddingX;
     if (align === 'center') {
       textX = rect.x + (rect.width - lineWidth) / 2;
     } else if (align === 'right') {
       textX = rect.x + rect.width - paddingX - lineWidth;
     }
-    page.drawText(line, {
+    page.drawText(entry.text, {
       x: textX,
-      y: textY,
-      size: layout.fontSize,
+      y: cursorY,
+      size: entry.fontSize,
       font,
       color,
     });
-    textY -= layout.lineHeight;
+    cursorY -= entry.lineHeight - entry.fontSize;
   });
 
-  return layout;
+  return measurement;
+}
+
+function layoutMultilineText(value, font, maxWidth, options = {}) {
+  const fontSize = options.fontSize || 10;
+  const minFontSize = options.minFontSize || fontSize;
+  const lineHeightMultiplier = options.lineHeightMultiplier || 1.2;
+  const content = value === undefined || value === null ? '' : String(value);
+  const segments = content.split(/\n/);
+  const entries = [];
+  let totalHeight = 0;
+
+  segments.forEach((segment) => {
+    const layout = layoutTextForWidth({
+      value: segment,
+      font,
+      fontSize,
+      minFontSize,
+      lineHeightMultiplier,
+      maxWidth,
+    });
+    if (!layout || !Array.isArray(layout.lines) || !layout.lines.length) {
+      const fallbackHeight = fontSize * lineHeightMultiplier;
+      entries.push({ text: '', fontSize, lineHeight: fallbackHeight });
+      totalHeight += fallbackHeight;
+      return;
+    }
+    layout.lines.forEach((line) => {
+      entries.push({ text: line, fontSize: layout.fontSize, lineHeight: layout.lineHeight });
+      totalHeight += layout.lineHeight;
+    });
+  });
+
+  if (!entries.length) {
+    const fallbackHeight = fontSize * lineHeightMultiplier;
+    entries.push({ text: '', fontSize, lineHeight: fallbackHeight });
+    totalHeight = fallbackHeight;
+  }
+
+  return { entries, totalHeight };
 }
 
 function appendOverflowPages(pdfDoc, font, overflowEntries, options = {}) {
@@ -962,15 +1435,19 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 26;
   };
 
-  const addContinuationPage = () => {
+  const addPageWithHeading = (heading) => {
     const next = pdfDoc.addPage([baseSize.width, baseSize.height]);
-    setCurrentPage(next, 'Maintenance Summary (cont.)');
+    setCurrentPage(next, heading);
     return next;
   };
 
-  const ensureSpace = (requiredHeight) => {
+  const addContinuationPage = (heading = 'Maintenance Summary (cont.)') => {
+    return addPageWithHeading(heading);
+  };
+
+  const ensureSpace = (requiredHeight, heading) => {
     if (cursorY - requiredHeight < margin) {
-      return addContinuationPage();
+      return addContinuationPage(heading);
     }
     return null;
   };
@@ -995,7 +1472,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (usedRows.length) {
     const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
     const headerHeight = 18;
-    const rowHeightBase = 22;
+    const rowHeightBase = 32;
     const headers = [
       'Part removed (description)',
       'Part number',
@@ -1014,7 +1491,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           width,
           height: headerHeight,
           color: rgb(0.88, 0.92, 0.98),
-          borderWidth: 0.6,
+          borderWidth: TABLE_BORDER_WIDTH,
           borderColor: TABLE_BORDER_COLOR,
         });
         const labelLayout = layoutTextForWidth({
@@ -1070,7 +1547,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       const rowHeight = Math.max(
         rowHeightBase,
         ...cellLayouts.map(({ layout }) =>
-          Math.ceil(layout.lineCount * layout.lineHeight + 8),
+          Math.ceil(layout.lineCount * layout.lineHeight + 16),
         ),
       );
       if (ensureSpace(rowHeight + 6)) {
@@ -1086,7 +1563,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           width: cellWidth,
           height: rowHeight,
           color: rgb(1, 1, 1),
-          borderWidth: 0.6,
+          borderWidth: TABLE_BORDER_WIDTH,
           borderColor: TABLE_BORDER_COLOR,
         });
         drawCenteredTextBlock(
@@ -1095,9 +1572,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           font,
           { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
           {
-            align: 'left',
-            paddingX: 4,
-            paddingY: 6,
+            align: 'center',
+            paddingX: 6,
+            paddingY: 8,
             color: textColor,
             fontSize: layout.fontSize,
             minFontSize: layout.fontSize,
@@ -1127,6 +1604,212 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 24;
   }
 
+  const employeesData =
+    options.employees && Array.isArray(options.employees.entries)
+      ? options.employees
+      : collectEmployeeEntries(body || {});
+  const employeeEntries = Array.isArray(employeesData.entries) ? employeesData.entries : [];
+  const employeeTotalMinutes = Number(employeesData.totalMinutes || 0);
+  const employeeTotalBreakMinutes = Number(employeesData.totalBreakMinutes || 0);
+  const employeeBreakStats = employeesData.breakStats || { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 };
+
+  const renderEmployeesSection = () => {
+    const columnWidths = [
+      tableWidth * 0.05,
+      tableWidth * 0.2,
+      tableWidth * 0.16,
+      tableWidth * 0.16,
+      tableWidth * 0.15,
+      tableWidth * 0.28,
+    ];
+    const headerHeight = 18;
+    const rowBaseHeight = 34;
+    const sectionLabel =
+      ensureSpace(headerHeight + rowBaseHeight * Math.max(1, employeeEntries.length) + 24)
+        ? 'On-site team (cont.)'
+        : 'On-site team';
+    drawSectionTitle(sectionLabel);
+
+    if (!employeeEntries.length) {
+      page.drawText('No employees were recorded for this visit.', {
+        x: margin,
+        y: cursorY,
+        size: 11,
+        font,
+        color: textColor,
+      });
+      cursorY -= 24;
+      return;
+    }
+
+    const headers = ['#', 'Employee', 'Role', 'Arrival', 'Departure', 'Duration / break'];
+    const drawHeaderRow = () => {
+      let headerX = margin;
+      headers.forEach((label, index) => {
+        const width = columnWidths[index];
+        page.drawRectangle({
+          x: headerX,
+          y: cursorY - headerHeight,
+          width,
+          height: headerHeight,
+          color: rgb(0.92, 0.95, 0.99),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        const labelLayout = layoutTextForWidth({
+          value: label,
+          font,
+          fontSize: 9,
+          minFontSize: 8,
+          lineHeightMultiplier: 1.2,
+          maxWidth: width - 8,
+        });
+        let textY = cursorY - headerHeight + headerHeight - 6;
+        labelLayout.lines.forEach((line) => {
+          page.drawText(line, {
+            x: headerX + 4,
+            y: textY,
+            size: labelLayout.fontSize,
+            font,
+            color: rgb(0.1, 0.1, 0.3),
+          });
+          textY -= labelLayout.lineHeight;
+        });
+        headerX += width;
+      });
+      cursorY -= headerHeight;
+    };
+
+    drawHeaderRow();
+
+    const formatBreakLabelForPdf = (label) => {
+      if (!label) return '';
+      if (label.includes('6-9h') && label.includes('2x15m')) {
+        return label.replace('6-9h, ', '6-9h,\n');
+      }
+      if (label.includes('>9h') && label.includes('45m')) {
+        return label.replace('>9h', '>9h\n');
+      }
+      if (label.includes('No mandatory break')) {
+        return label.replace('No mandatory break', 'No mandatory break\n');
+      }
+      return label;
+    };
+
+    employeeEntries.forEach((entry, index) => {
+      const durationLabel = entry.durationLabel || formatEmployeeDuration(entry.durationMinutes);
+      const breakLabel = entry.breakLabel || '';
+      const durationCell = breakLabel
+        ? `${durationLabel}\n${formatBreakLabelForPdf(breakLabel)}`
+        : durationLabel;
+      const cells = [
+        String(index + 1),
+        entry.name || '--',
+        entry.role || '--',
+        entry.arrivalDisplay || entry.arrival || '--',
+        entry.departureDisplay || entry.departure || '--',
+        durationCell,
+      ];
+      const measurements = cells.map((value, idx) =>
+        layoutMultilineText(value, font, Math.max(4, columnWidths[idx] - 8), {
+          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+        }),
+      );
+      const rowHeight = Math.max(
+        rowBaseHeight,
+        ...measurements.map((measurement) => Math.ceil(measurement.totalHeight + 18)),
+      );
+      if (ensureSpace(rowHeight + 8)) {
+        drawSectionTitle('On-site team (cont.)');
+        drawHeaderRow();
+      }
+      let cellX = margin;
+      measurements.forEach((measurement, idx) => {
+        const cellWidth = columnWidths[idx];
+        page.drawRectangle({
+          x: cellX,
+          y: cursorY - rowHeight,
+          width: cellWidth,
+          height: rowHeight,
+          color: rgb(1, 1, 1),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        drawCenteredTextBlock(
+          page,
+          cells[idx],
+          font,
+          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
+          {
+            align: 'center',
+            paddingX: 6,
+            paddingY: 8,
+            color: textColor,
+            fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+            minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+            precomputed: measurement,
+          },
+        );
+      cellX += cellWidth;
+    });
+      cursorY -= rowHeight;
+    });
+
+    cursorY -= 14;
+    const durationSummary = employeeEntries.length
+      ? formatEmployeeDuration(employeeTotalMinutes)
+      : '0m';
+    const knownBreakCount =
+      (employeeBreakStats.MIN45 || 0) +
+      (employeeBreakStats.MIN30 || 0) +
+      (employeeBreakStats.NONE || 0);
+    const breakMinutesLabel =
+      employeeEntries.length === 0
+        ? 'pending'
+        : knownBreakCount > 0
+        ? employeeTotalBreakMinutes
+          ? formatEmployeeDuration(employeeTotalBreakMinutes)
+          : '0m'
+        : employeeBreakStats.UNKNOWN > 0
+        ? 'pending'
+        : '0m';
+    const breakDetails =
+      knownBreakCount > 0
+        ? formatBreakStatsSummary(employeeBreakStats)
+        : employeeBreakStats.UNKNOWN > 0
+        ? `${employeeBreakStats.UNKNOWN} pending`
+        : '';
+    page.drawText(
+      `Total recorded time: ${durationSummary} across ${employeeEntries.length} ${
+        employeeEntries.length === 1 ? 'employee' : 'employees'
+      }.`,
+      {
+        x: margin,
+        y: cursorY,
+        size: 10,
+        font,
+        color: textColor,
+      },
+    );
+    cursorY -= 16;
+    page.drawText(
+      `Mandated breaks: ${breakMinutesLabel}${breakDetails ? ` (${breakDetails})` : ''}.`,
+      {
+        x: margin,
+        y: cursorY,
+        size: 10,
+        font,
+        color: textColor,
+      },
+    );
+    cursorY -= 26;
+  };
+
+  renderEmployeesSection();
+
   const drawChecklistSection = (section) => {
     const columnWidths = [tableWidth * 0.55, tableWidth * 0.12, tableWidth * 0.33];
     const headerHeight = 18;
@@ -1143,7 +1826,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           width,
           height: headerHeight,
           color: rgb(0.92, 0.95, 0.99),
-          borderWidth: 0.6,
+          borderWidth: TABLE_BORDER_WIDTH,
           borderColor: TABLE_BORDER_COLOR,
         });
         page.drawText(label, {
@@ -1198,7 +1881,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         width: columnWidths[0],
         height: rowHeight,
         color: rgb(1, 1, 1),
-        borderWidth: 0.6,
+        borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
       });
       drawCenteredTextBlock(
@@ -1225,7 +1908,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         width: columnWidths[1],
         height: rowHeight,
         color: rgb(1, 1, 1),
-        borderWidth: 0.6,
+        borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
       });
       const checkboxSize = 12;
@@ -1261,7 +1944,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         width: columnWidths[2],
         height: rowHeight,
         color: rgb(1, 1, 1),
-        borderWidth: 0.6,
+        borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
       });
       drawCenteredTextBlock(
@@ -1290,6 +1973,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
   drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
+  addPageWithHeading('Sign-off details');
+
   const engineerDetails = [
     { label: 'On-site engineer company', value: toSingleValue(body?.engineer_company) || '' },
     { label: 'Engineer date & time', value: toSingleValue(body?.engineer_datetime) || '' },
@@ -1303,7 +1988,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const detailRows = engineerDetails.length;
   const detailHeight = 28;
   const detailHeading =
-    ensureSpace(detailHeight * detailRows + 40) ? 'Sign-off details (cont.)' : 'Sign-off details';
+    ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
+      ? 'Sign-off details (cont.)'
+      : 'Sign-off details';
   drawSectionTitle(detailHeading);
   const columnWidth = (page.getWidth() - margin * 2 - 16) / 2;
   const baseDetailY = cursorY;
@@ -1319,7 +2006,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       y: engineerRect.y,
       width: engineerRect.width,
       height: engineerRect.height,
-      borderWidth: 0.6,
+      borderWidth: TABLE_BORDER_WIDTH,
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
@@ -1344,7 +2031,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       y: customerRect.y,
       width: customerRect.width,
       height: customerRect.height,
-      borderWidth: 0.6,
+      borderWidth: TABLE_BORDER_WIDTH,
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
@@ -1361,7 +2048,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const signatureHeight = 90;
   const signatureHeading =
-    ensureSpace(signatureHeight + 60) ? 'Signatures (cont.)' : 'Signatures';
+    ensureSpace(signatureHeight + 60, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
   const signatureWidth = columnWidth;
   const signatureBoxes = [
@@ -1478,12 +2165,6 @@ function generateIndexHtml() {
     ['parts_used_serial_1', 'SN-99012'],
     ['signoff_notes_1', 'All visual checks complete; system stable.'],
     ['signoff_notes_2', 'Customer to monitor cabinet C4 fan speed.'],
-    ['engineer_company', 'LSC Sharp NEC'],
-    ['engineer_datetime', '2024-06-24T10:30'],
-    ['engineer_name', 'Ivan Technician'],
-    ['customer_company', 'Mercedes-Benz AG'],
-    ['customer_datetime', '2024-06-24T11:15'],
-    ['customer_name', 'Anna Schneider'],
   ]);
 
   const signatureSamples = new Map([
@@ -1527,9 +2208,23 @@ function generateIndexHtml() {
         ` data-suggest-field="${escapeHtml(descriptor.requestName)}" list="${escapeHtml(listId)}" autocomplete="off"`;
       datalistMarkup = `\n          <datalist id="${escapeHtml(listId)}" data-suggest-list="${escapeHtml(descriptor.requestName)}"></datalist>`;
     }
+    let actualType = type;
+    let resolvedPlaceholder = placeholder || label;
+    let extraAttrs = '';
+    if (type === 'time') {
+      actualType = 'text';
+      resolvedPlaceholder = 'HH:MM';
+      extraAttrs =
+        ' data-input-kind="time" step="60" lang="en-GB" inputmode="numeric" pattern="[0-2][0-9]:[0-5][0-9]" title="Use 24-hour format HH:MM" min="00:00" max="23:59"';
+    } else if (type === 'datetime-local') {
+      actualType = 'text';
+      resolvedPlaceholder = 'YYYY-MM-DD HH:MM';
+      extraAttrs =
+        ' data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM"';
+    }
     return `        <label class="field" for="${id}">
           <span>${escapeHtml(label)}</span>
-          <input type="${escapeHtml(type)}" id="${id}" name="${escapeHtml(descriptor.requestName)}"${valueAttr} placeholder="${escapeHtml(placeholder || label)}"${suggestionAttrs} />${datalistMarkup}
+          <input type="${escapeHtml(actualType)}" id="${id}" name="${escapeHtml(descriptor.requestName)}"${valueAttr} placeholder="${escapeHtml(resolvedPlaceholder)}"${suggestionAttrs}${extraAttrs} />${datalistMarkup}
         </label>`;
   };
 
@@ -1641,11 +2336,16 @@ ${rows.join('\n')}
 
   const htmlParts = [];
   htmlParts.push(`<!doctype html>
-<html lang="en">
+<html lang="en-GB">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Preventative Maintenance Checklist</title>
+    <link
+      rel="icon"
+      type="image/gif"
+      href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+    />
     <style>
       :root {
         color-scheme: light;
@@ -1723,6 +2423,18 @@ ${rows.join('\n')}
       textarea {
         resize: vertical;
         min-height: 120px;
+      }
+      input[type="time"],
+      input[type="datetime-local"] {
+        min-width: 120px;
+      }
+      input[type="time"]::-webkit-datetime-edit-ampm-field,
+      input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+        display: none;
+      }
+      input.is-invalid {
+        border-color: #dc2626;
+        background: #fee2e2;
       }
       input[type="checkbox"] {
         width: 26px;
@@ -1833,6 +2545,152 @@ ${rows.join('\n')}
         margin: 0;
         font-size: 0.85rem;
         color: #6b7280;
+      }
+      .employee-card p {
+        margin: 0;
+        color: #4c4f63;
+      }
+      .employee-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .employee-actions .button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .employee-actions .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .employee-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .employee-row {
+        border: 1px solid #c7d2fe;
+        border-radius: 12px;
+        padding: 0.85rem 1rem;
+        background: #eef2ff;
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .employee-row-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        color: #1f2a5b;
+        font-size: 0.95rem;
+      }
+      .employee-grid {
+        display: grid;
+        gap: 0.75rem 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        align-items: end;
+      }
+      .employee-grid .field > span,
+      .field-datetime > span {
+        font-size: 0.85rem;
+        color: #4b5563;
+      }
+      .field-datetime {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .field-datetime .datetime-inputs {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .field-datetime .datetime-inputs input {
+        padding: 0.55rem;
+        border: 1px solid #c7cbef;
+        border-radius: 8px;
+        background: #ffffff;
+        font: inherit;
+      }
+      .time-input-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: center;
+      }
+      .time-input-wrapper input {
+        flex: 0 1 120px;
+        min-width: 100px;
+      }
+      .time-shortcut {
+        border: 1px solid #c7cbef;
+        border-radius: 6px;
+        background: #f0f4ff;
+        color: #1f2a5b;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.35rem 0.6rem;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .time-shortcut:hover,
+      .time-shortcut:focus-visible {
+        background: #e0e7ff;
+        border-color: #94a3f2;
+        outline: none;
+      }
+      .time-shortcut:active {
+        background: #c7d2fe;
+      }
+      .time-shortcut:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+      .employee-duration {
+        font-weight: 600;
+        color: #1d4ed8;
+        white-space: pre-line;
+        font-size: 0.9rem;
+      }
+      .employee-summary {
+        margin-top: 0.5rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #d8d8e5;
+        display: grid;
+        gap: 0.35rem;
+        font-weight: 600;
+        color: #1f2a5b;
+      }
+      .employee-summary span {
+        display: block;
+      }
+      .employee-summary [data-employee-total] {
+        white-space: pre-line;
+      }
+      @media (min-width: 640px) {
+        .employee-summary {
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          align-items: start;
+        }
+      }
+      .link-button {
+        background: none;
+        border: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .link-button:disabled {
+        color: #a1a1b3;
+        cursor: default;
       }
       .photos-card {
         display: grid;
@@ -2137,6 +2995,80 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
 ${partsTable()}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
+        <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
+          <h2>On-site team</h2>
+          <p>Record every team member on site to capture arrival/departure time and required breaks.</p>
+          <div class="employee-actions">
+            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
+          </div>
+          <div class="employee-list" data-employee-list></div>
+          <div class="employee-summary" data-employee-summary>
+            <span data-employee-total>Working time: 0m | Required breaks: pending</span>
+            <span data-employee-count>No employees added yet.</span>
+          </div>
+          <template id="employee-row-template">
+            <div class="employee-row" data-employee-row>
+              <div class="employee-row-header">
+                <span data-employee-title>Employee #1</span>
+                <button type="button" class="link-button" data-action="employee-remove">Remove</button>
+              </div>
+              <div class="employee-grid">
+                <label class="field" data-field-wrapper="name">
+                  <span>Employee name</span>
+                  <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
+                </label>
+                <label class="field" data-field-wrapper="role">
+                  <span>Role / position</span>
+                  <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
+                </label>
+                <div class="field field-datetime" data-datetime-field="arrival">
+                  <span>Arrival (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="arrival" />
+                </div>
+                <div class="field field-datetime" data-datetime-field="departure">
+                  <span>Departure (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="departure" />
+                </div>
+              </div>
+              <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
+            </div>
+          </template>
+        </section>
+
         <section class="card">
           <h2>Signatures</h2>
           <div class="grid two-col signature-info">
@@ -2192,29 +3124,232 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const selectedFiles = new Map();
         const previewUrls = new Map();
         const debugState = { enabled: false, timeline: [] };
-        const basePath = window.location.pathname.endsWith('/')
-          ? window.location.pathname
-          : window.location.pathname + '/';
+        const DATETIME_TEXT_SELECTOR = '[data-datetime-text]';
+        const TIME_INPUT_SELECTOR = 'input[data-datetime-part="time"]';
+        const TIME_PRESET_LIST_ID = 'time-presets';
+        const TIME_PRESET_STEP_MINUTES = 15;
+        const TIME_VALUE_REGEX = /^([01]\\d|2[0-3]):([0-5]\\d)$/;
 
-        function withBase(path) {
-          if (!path || typeof path !== 'string') {
-            return basePath;
+        const clampNumber = (value, min, max) => {
+          if (!Number.isFinite(value)) return min;
+          return Math.min(max, Math.max(min, value));
+        };
+
+        const pad2 = (value) => {
+          const numeric = Number.isFinite(value) ? Math.trunc(value) : 0;
+          const clamped = clampNumber(numeric, 0, 99);
+          return String(clamped).padStart(2, '0');
+        };
+
+        const ensureTimePresetList = () => {
+          let listEl = document.getElementById(TIME_PRESET_LIST_ID);
+          if (listEl) {
+            return TIME_PRESET_LIST_ID;
           }
-          const trimmed = path.trim();
-          if (!trimmed) {
-            return basePath;
+          listEl = document.createElement('datalist');
+          listEl.id = TIME_PRESET_LIST_ID;
+          for (let hour = 0; hour < 24; hour += 1) {
+            for (let minute = 0; minute < 60; minute += TIME_PRESET_STEP_MINUTES) {
+              const option = document.createElement('option');
+              option.value = pad2(hour) + ':' + pad2(minute);
+              listEl.appendChild(option);
+            }
           }
-          if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed) || trimmed.startsWith('//')) {
-            return trimmed;
+          if (formEl && formEl.parentNode) {
+            formEl.parentNode.insertBefore(listEl, formEl.nextSibling);
+          } else {
+            document.body.appendChild(listEl);
           }
-          if (trimmed.startsWith('/')) {
-            return trimmed;
+          return TIME_PRESET_LIST_ID;
+        };
+
+        const formatTimeDraft = (raw) => {
+          if (typeof raw !== 'string') return '';
+          const digits = raw.replace(/\\D/g, '').slice(0, 4);
+          if (!digits) return '';
+          if (digits.length <= 2) {
+            return digits;
           }
-          if (trimmed.startsWith('./')) {
-            return basePath + trimmed.slice(2);
+          if (digits.length === 3) {
+            return digits.slice(0, 1) + ':' + digits.slice(1);
           }
-          return basePath + trimmed;
-        }
+          return digits.slice(0, 2) + ':' + digits.slice(2);
+        };
+
+        const normalizeTimeInputValue = (raw) => {
+          if (typeof raw !== 'string') return '';
+          const digits = raw.replace(/\\D/g, '').slice(0, 4);
+          if (!digits) return '';
+          let hours = '';
+          let minutes = '';
+          if (digits.length === 1) {
+            hours = '0' + digits;
+            minutes = '00';
+          } else if (digits.length === 2) {
+            hours = digits;
+            minutes = '00';
+          } else if (digits.length === 3) {
+            hours = digits.slice(0, 1);
+            minutes = digits.slice(1);
+          } else {
+            hours = digits.slice(0, 2);
+            minutes = digits.slice(2);
+          }
+          const hourNum = clampNumber(Number(hours), 0, 23);
+          const minuteNum = clampNumber(Number(minutes), 0, 59);
+          return pad2(hourNum) + ':' + pad2(minuteNum);
+        };
+
+        const applyTimeInputBehavior = (input) => {
+          if (!input || input.dataset.timeFormatterApplied === '1') return;
+          input.dataset.timeFormatterApplied = '1';
+          input.type = 'text';
+          input.setAttribute('inputmode', 'numeric');
+          input.setAttribute('pattern', '[0-2][0-9]:[0-5][0-9]');
+          input.setAttribute('title', 'Use 24-hour format HH:MM');
+          if (!input.getAttribute('placeholder')) {
+            input.setAttribute('placeholder', 'HH:MM');
+          }
+          input.setAttribute('autocomplete', 'off');
+          const listId = ensureTimePresetList();
+          if (listId) {
+            input.setAttribute('list', listId);
+          }
+          const commitIfChanged = () => {
+            const current = input.value.trim();
+            if (input.dataset.timeCommittedValue === current) return;
+            input.dataset.timeCommittedValue = current;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          };
+          const enforce = () => {
+            const trimmed = input.value.trim();
+            if (!trimmed) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              input.value = '';
+              commitIfChanged();
+              return;
+            }
+            const normalized = normalizeTimeInputValue(trimmed);
+            if (!TIME_VALUE_REGEX.test(normalized)) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use 24-hour format HH:MM');
+              input.value = normalized;
+            } else {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              input.value = normalized;
+              commitIfChanged();
+            }
+          };
+          input.addEventListener('input', () => {
+            const draft = formatTimeDraft(input.value);
+            input.value = draft;
+            if (!draft) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              commitIfChanged();
+              return;
+            }
+            if (TIME_VALUE_REGEX.test(draft)) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              commitIfChanged();
+            }
+          });
+          input.addEventListener('blur', () => {
+            enforce();
+          });
+          input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              enforce();
+            }
+          });
+          input.addEventListener('focus', () => {
+            requestAnimationFrame(() => {
+              try {
+                input.select();
+              } catch (err) {
+                /* ignore selection failures */
+              }
+            });
+          });
+          const initial = normalizeTimeInputValue(input.value || '');
+          if (initial && TIME_VALUE_REGEX.test(initial)) {
+            input.value = initial;
+            input.dataset.timeCommittedValue = initial;
+          } else {
+            input.dataset.timeCommittedValue = (input.value || '').trim();
+          }
+        };
+
+        const normalizeDateTimeText = (raw) => {
+          if (typeof raw !== 'string') return { iso: '', display: '' };
+          const trimmed = raw.trim();
+          if (!trimmed) return { iso: '', display: '' };
+          let cleaned = trimmed
+            .replace(/[\/\.]/g, '-')
+            .replace(/[tT]/, ' ')
+            .replace(/\\s+/g, ' ')
+            .trim();
+
+          let match = /(\\d{4})-(\\d{1,2})-(\\d{1,2})\\s+([0-2]?\\d):([0-5]?\\d)$/.exec(cleaned);
+          if (!match) {
+            const digitsOnly = cleaned.replace(/\\D/g, '');
+            if (digitsOnly.length === 12) {
+              match = [
+                '',
+                digitsOnly.slice(0, 4),
+                digitsOnly.slice(4, 6),
+                digitsOnly.slice(6, 8),
+                digitsOnly.slice(8, 10),
+                digitsOnly.slice(10, 12),
+              ];
+            } else {
+              return { iso: '', display: cleaned };
+            }
+          }
+
+          const year = clampNumber(Number(match[1]), 1970, 9999);
+          const month = clampNumber(Number(match[2]), 1, 12);
+          const day = clampNumber(Number(match[3]), 1, 31);
+          const hours = clampNumber(Number(match[4]), 0, 23);
+          const minutes = clampNumber(Number(match[5]), 0, 59);
+          const iso =
+            String(year).padStart(4, '0') +
+            '-' +
+            String(month).padStart(2, '0') +
+            '-' +
+            String(day).padStart(2, '0') +
+            'T' +
+            String(hours).padStart(2, '0') +
+            ':' +
+            String(minutes).padStart(2, '0');
+          const display = iso.slice(0, 10) + ' ' + iso.slice(11, 16);
+          return { iso, display };
+        };
+
+        const applyDateTimeTextBehavior = (input) => {
+          if (!input || input.dataset.datetimeFormatterApplied === '1') return;
+          input.dataset.datetimeFormatterApplied = '1';
+          const enforce = () => {
+            const normalized = normalizeDateTimeText(input.value);
+            if (input.value.trim() && !normalized.iso) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+            } else {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+            }
+            input.value = normalized.display;
+          };
+          input.addEventListener('input', () => {
+            input.value = input.value.replace(/[^0-9 T:-]/g, '');
+          });
+          input.addEventListener('blur', enforce);
+          enforce();
+        };
 
         function formatBytes(bytes) {
           if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -2421,6 +3556,28 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
         }
 
+        function setupAutoResizeTextareas() {
+          const textareas = document.querySelectorAll('textarea[data-auto-resize]');
+          if (!textareas.length) return;
+          const resize = (textarea) => {
+            textarea.style.height = 'auto';
+            const newHeight = Math.max(textarea.scrollHeight, 44);
+            textarea.style.height = newHeight + 'px';
+          };
+          textareas.forEach((textarea) => {
+            textarea.style.overflow = 'hidden';
+            resize(textarea);
+            textarea.addEventListener('input', () => resize(textarea));
+            textarea.addEventListener('change', () => resize(textarea));
+          });
+        }
+
+        function setupDateTimeTextInputs() {
+          document.querySelectorAll(DATETIME_TEXT_SELECTOR).forEach((input) => {
+            applyDateTimeTextBehavior(input);
+          });
+        }
+
         function setupPartsTable() {
           const table = document.querySelector('[data-parts-table]');
           if (!table) return;
@@ -2492,6 +3649,704 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           }
         }
 
+        function setupEmployees() {
+          const section = document.querySelector('[data-employees-section]');
+          if (!section) return;
+          ensureTimePresetList();
+
+          const listEl = section.querySelector('[data-employee-list]');
+          const template = section.querySelector('#employee-row-template');
+          const addButton = section.querySelector('[data-action="employee-add"]');
+          const summaryEl = section.querySelector('[data-employee-summary]');
+          const summaryTotalEl = summaryEl ? summaryEl.querySelector('[data-employee-total]') : null;
+          const summaryCountEl = summaryEl ? summaryEl.querySelector('[data-employee-count]') : null;
+
+          if (!listEl || !template) return;
+
+          const engineerNameInput = document.querySelector('#engineer-name');
+          const engineerDatetimeInput = document.querySelector('#engineer-datetime');
+          const customerDatetimeInput = document.querySelector('#customer-datetime');
+
+          const maxRows = Math.max(1, Number(section.dataset.employeeMax || '0') || 20);
+          const DEFAULT_SHIFT_MINUTES = 8 * 60;
+          const rowStates = new Map();
+          let suppressSummaryLog = false;
+
+          const signoffSync = {
+            name: { manual: false, syncedValue: '' },
+            datetime: { manual: false, syncedValue: '' },
+          };
+
+          const pad = (value) => (value < 10 ? '0' + value : String(value));
+
+          const formatIsoFromDate = (date) => {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+              return '';
+            }
+            return (
+              date.getFullYear() +
+              '-' +
+              pad(date.getMonth() + 1) +
+              '-' +
+              pad(date.getDate()) +
+              'T' +
+              pad(date.getHours()) +
+              ':' +
+              pad(date.getMinutes())
+            );
+          };
+
+          const parseLocalDateTime = (value) => {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            const match = /^(\\d{4})-(\\d{2})-(\\d{2})[T ](\\d{2}):(\\d{2})$/.exec(trimmed);
+            if (!match) return null;
+            const date = new Date(
+              Number(match[1]),
+              Number(match[2]) - 1,
+              Number(match[3]),
+              Number(match[4]),
+              Number(match[5]),
+              0,
+              0
+            );
+            if (Number.isNaN(date.getTime())) return null;
+            return date;
+          };
+
+          const nowLocalIso = () => formatIsoFromDate(new Date());
+
+          const addMinutesToIso = (iso, minutes) => {
+            const base = parseLocalDateTime(iso);
+            if (!base) return '';
+            const delta = Number(minutes || 0);
+            if (Number.isNaN(delta)) return iso;
+            base.setMinutes(base.getMinutes() + delta);
+            return formatIsoFromDate(base);
+          };
+
+          const formatEmployeeDuration = (minutes) => {
+            if (!Number.isFinite(minutes) || minutes <= 0) return '0m';
+            const rounded = Math.round(minutes);
+            const hours = Math.floor(rounded / 60);
+            const mins = Math.max(0, rounded - hours * 60);
+            const parts = [];
+            if (hours) parts.push(hours + 'h');
+            if (mins) parts.push(mins + 'm');
+            return parts.length ? parts.join(' ') : '0m';
+          };
+
+          const determineBreakRequirement = (minutes) => {
+            if (!Number.isFinite(minutes) || minutes <= 0) {
+              return { code: 'UNKNOWN', minutes: 0, label: 'Pending (set arrival and departure)' };
+            }
+            if (minutes <= 6 * 60) {
+              return { code: 'NONE', minutes: 0, label: 'No mandatory break (<=6h)' };
+            }
+            if (minutes <= 9 * 60) {
+              return { code: 'MIN30', minutes: 30, label: '>=30m (6-9h, 2x15m allowed)' };
+            }
+            return { code: 'MIN45', minutes: 45, label: '>=45m (>9h)' };
+          };
+
+          const formatBreakStatsSummary = (stats) => {
+            if (!stats) return '';
+            const descriptors = [
+              { key: 'MIN45', label: '>=45m (>9h)' },
+              { key: 'MIN30', label: '>=30m (6-9h, 2x15m)' },
+              { key: 'NONE', label: 'no mandatory break (<=6h)' },
+            ];
+            const parts = [];
+            descriptors.forEach(({ key, label }) => {
+              const count = Number(stats[key] || 0);
+              if (count > 0) {
+                parts.push(count + ' x ' + label);
+              }
+            });
+            const pending = Number(stats.UNKNOWN || 0);
+            if (pending > 0 && parts.length) {
+              parts.push(pending + ' x pending');
+            }
+            return parts.join(', ');
+          };
+
+          const rowElements = () => Array.from(listEl.querySelectorAll('[data-employee-row]'));
+          const isPrimaryRow = (row) => row && row === rowElements()[0];
+
+          const ensureSignoffDefaults = () => {
+            const defaultIso = nowLocalIso();
+            if (engineerDatetimeInput && !engineerDatetimeInput.value) {
+              engineerDatetimeInput.value = defaultIso;
+              signoffSync.datetime.syncedValue = defaultIso;
+            }
+            if (customerDatetimeInput && !customerDatetimeInput.value) {
+              customerDatetimeInput.value = defaultIso;
+            }
+          };
+
+          ensureSignoffDefaults();
+
+          if (engineerNameInput) {
+            engineerNameInput.addEventListener('input', () => {
+              signoffSync.name.manual = true;
+            });
+          }
+          if (engineerDatetimeInput) {
+            engineerDatetimeInput.addEventListener('input', () => {
+              signoffSync.datetime.manual = true;
+            });
+          }
+
+          function setDateTimeValue(row, field, iso) {
+            const wrapper = row.querySelector('[data-datetime-field="' + field + '"]');
+            if (!wrapper) return;
+            const hidden = wrapper.querySelector('input[data-field="' + field + '"]');
+            const dateInput = wrapper.querySelector('input[data-datetime-part="date"]');
+            const timeInput = wrapper.querySelector('input[data-datetime-part="time"]');
+            const safeIso = iso || '';
+            if (hidden) hidden.value = safeIso;
+            const parts = safeIso.split('T');
+            if (dateInput) {
+              dateInput.value = parts[0] || '';
+            }
+            if (timeInput) {
+              const nextValue = parts[1] ? parts[1].slice(0, 5) : '';
+              timeInput.value = nextValue;
+              if (timeInput.dataset) {
+                timeInput.dataset.timeCommittedValue = (nextValue || '').trim();
+              }
+            }
+          }
+
+          function getDateTimePair(row, field) {
+            const wrapper = row.querySelector('[data-datetime-field="' + field + '"]');
+            if (!wrapper) return null;
+            return {
+              dateInput: wrapper.querySelector('input[data-datetime-part="date"]'),
+              timeInput: wrapper.querySelector('input[data-datetime-part="time"]'),
+              hiddenInput: wrapper.querySelector('input[data-field="' + field + '"]'),
+            };
+          }
+
+          function combineDateTimeValue(row, field) {
+            const pair = getDateTimePair(row, field);
+            if (!pair) return '';
+            const dateValue = pair.dateInput ? pair.dateInput.value.trim() : '';
+            const timeValue = pair.timeInput ? pair.timeInput.value.trim() : '';
+            const hasValidTime = TIME_VALUE_REGEX.test(timeValue);
+            const iso = dateValue && hasValidTime ? dateValue + 'T' + timeValue : '';
+            if (pair.hiddenInput) {
+              if (iso) {
+                pair.hiddenInput.value = iso;
+              } else if (!dateValue && !timeValue) {
+                pair.hiddenInput.value = '';
+              } else if (!hasValidTime) {
+                pair.hiddenInput.value = '';
+              }
+            }
+            return iso;
+          }
+
+          function updateRowDurationDisplay(row, state) {
+            const target = row.querySelector('[data-employee-duration]');
+            if (!target) return;
+            target.textContent =
+              'Working time: ' +
+              formatEmployeeDuration(state.durationMinutes) +
+              ' | Break: ' +
+              state.breakLabel;
+          }
+
+          const updateControlState = () => {
+            if (addButton) {
+              addButton.disabled = rowElements().length >= maxRows;
+            }
+          };
+
+          function renumberRows() {
+            rowElements().forEach((row, index) => {
+              row.dataset.index = String(index + 1);
+              const title = row.querySelector('[data-employee-title]');
+              if (title) {
+                title.textContent = 'Employee #' + (index + 1);
+              }
+              const setName = (selector, field) => {
+                const input = row.querySelector(selector);
+                if (input) {
+                  input.name = 'employees[' + index + '][' + field + ']';
+                }
+              };
+              setName('input[data-field="name"]', 'name');
+              setName('input[data-field="role"]', 'role');
+              setName('input[data-field="arrival"]', 'arrival');
+              setName('input[data-field="departure"]', 'departure');
+            });
+            updateControlState();
+          }
+
+          function updateSummary(reason) {
+            const summary = {
+              count: 0,
+              totalMinutes: 0,
+              totalBreakMinutes: 0,
+              breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+            };
+            rowElements().forEach((row) => {
+              const state = rowStates.get(row);
+              if (!state || !state.hasData) return;
+              summary.count += 1;
+              summary.totalMinutes += state.durationMinutes;
+              summary.totalBreakMinutes += state.breakRequiredMinutes;
+              if (summary.breakStats[state.breakCode] === undefined) {
+                summary.breakStats.UNKNOWN += 1;
+              } else {
+                summary.breakStats[state.breakCode] += 1;
+              }
+            });
+
+            if (summaryTotalEl) {
+              if (summary.count === 0) {
+                summaryTotalEl.textContent = 'Working time: 0m | Required breaks: pending';
+              } else {
+                summaryTotalEl.textContent =
+                  'Working time: ' +
+                  formatEmployeeDuration(summary.totalMinutes) +
+                  ' | Required breaks: ' +
+                  formatEmployeeDuration(summary.totalBreakMinutes);
+              }
+            }
+
+            if (summaryCountEl) {
+              if (summary.count === 0) {
+                summaryCountEl.textContent = 'No employees added yet.';
+              } else {
+                const base =
+                  summary.count === 1
+                    ? '1 employee recorded.'
+                    : summary.count + ' employees recorded.';
+                const breakSummary = formatBreakStatsSummary(summary.breakStats);
+                summaryCountEl.textContent = breakSummary ? base + ' ' + breakSummary : base;
+              }
+            }
+
+            if (!suppressSummaryLog) {
+              recordDebug('employee-summary', {
+                reason: reason || 'update',
+                totalMinutes: summary.totalMinutes,
+                totalBreakMinutes: summary.totalBreakMinutes,
+                breakStats: summary.breakStats,
+                count: summary.count,
+              });
+            }
+
+            return summary;
+          }
+
+          function syncEngineerSignoff(primaryState) {
+            if (!primaryState) return;
+            if (engineerNameInput && !signoffSync.name.manual && primaryState.name) {
+              engineerNameInput.value = primaryState.name;
+              signoffSync.name.syncedValue = primaryState.name;
+            }
+            if (engineerDatetimeInput && !signoffSync.datetime.manual) {
+              const candidate = primaryState.departure || primaryState.arrival || nowLocalIso();
+              if (candidate) {
+                engineerDatetimeInput.value = candidate;
+                signoffSync.datetime.syncedValue = candidate;
+              }
+            }
+          }
+
+          function updateRowState(row, reason, options = {}) {
+            const previous = rowStates.get(row) || {};
+            const indexLabel = row.dataset.index || '';
+            const nameInput = row.querySelector('input[data-field="name"]');
+            const roleInput = row.querySelector('input[data-field="role"]');
+
+            const name = nameInput ? nameInput.value.trim() : '';
+            const role = roleInput ? roleInput.value.trim() : '';
+            let arrivalIso = combineDateTimeValue(row, 'arrival');
+            let departureIso = combineDateTimeValue(row, 'departure');
+
+            const arrivalDate = parseLocalDateTime(arrivalIso);
+            let departureDate = parseLocalDateTime(departureIso);
+            let durationMinutes = 0;
+
+            const departurePair = getDateTimePair(row, 'departure');
+            const departureTimeInput = departurePair ? departurePair.timeInput : null;
+            const departureActive =
+              departureTimeInput && document.activeElement === departureTimeInput;
+            const departureRaw =
+              departureTimeInput && typeof departureTimeInput.value === 'string'
+                ? departureTimeInput.value.trim()
+                : '';
+            const departureValueValid = TIME_VALUE_REGEX.test(departureRaw);
+
+            if (arrivalDate && !departureDate) {
+              if (!(departureActive && !departureValueValid)) {
+                departureDate = new Date(arrivalDate.getTime() + 60 * 60000);
+                departureIso = formatIsoFromDate(departureDate);
+                setDateTimeValue(row, 'departure', departureIso);
+              }
+            }
+
+            if (arrivalDate && departureDate) {
+              durationMinutes = Math.round((departureDate.getTime() - arrivalDate.getTime()) / 60000);
+              if (durationMinutes <= 0) {
+                departureDate = new Date(arrivalDate.getTime() + 15 * 60000);
+                departureIso = formatIsoFromDate(departureDate);
+                setDateTimeValue(row, 'departure', departureIso);
+                durationMinutes = 15;
+              }
+            }
+
+            const breakInfo = determineBreakRequirement(durationMinutes);
+            const hasData = Boolean(name || role || arrivalIso || departureIso);
+
+            let syncedWithPrimary = previous.syncedWithPrimary || false;
+            if (options.markSynced === true) {
+              syncedWithPrimary = true;
+            } else if (reason !== 'primary-sync' && !options.preserveSyncFlag) {
+              syncedWithPrimary = false;
+            }
+
+            const state = {
+              hasData,
+              name,
+              role,
+              arrival: arrivalIso,
+              departure: departureIso,
+              durationMinutes,
+              breakCode: breakInfo.code,
+              breakRequiredMinutes: breakInfo.minutes,
+              breakLabel: breakInfo.label,
+              syncedWithPrimary,
+            };
+
+            updateRowDurationDisplay(row, state);
+            rowStates.set(row, state);
+
+            if (!suppressSummaryLog && options.logDebug !== false) {
+              recordDebug('employee-updated', {
+                index: indexLabel,
+                reason: reason || 'change',
+                hasData,
+                durationMinutes,
+                breakCode: breakInfo.code,
+                syncedWithPrimary,
+              });
+            }
+
+            if (isPrimaryRow(row)) {
+              if (!options.skipPropagation) {
+                propagatePrimarySchedule();
+              }
+              syncEngineerSignoff(state);
+            }
+
+            return state;
+          }
+
+          function propagatePrimarySchedule() {
+            const rows = rowElements();
+            if (!rows.length) return;
+            const primaryRow = rows[0];
+            const primaryState = rowStates.get(primaryRow);
+            if (!primaryState || !primaryState.arrival) return;
+
+            let summaryPending = false;
+            rows.slice(1).forEach((row) => {
+              const state = rowStates.get(row);
+              if (!state || !state.hasData || state.syncedWithPrimary) {
+                setDateTimeValue(row, 'arrival', primaryState.arrival);
+                setDateTimeValue(row, 'departure', primaryState.departure || '');
+                updateRowState(row, 'primary-sync', {
+                  markSynced: true,
+                  skipPropagation: true,
+                  logDebug: false,
+                  preserveSyncFlag: true,
+                });
+                summaryPending = true;
+              }
+            });
+
+            if (summaryPending) {
+              updateSummary('primary-sync');
+            }
+          }
+
+          function attachListeners(row) {
+            row
+              .querySelectorAll('input[data-field]:not([type="hidden"])')
+              .forEach((input) => {
+                input.addEventListener('input', () => {
+                  updateRowState(row, 'input');
+                  updateSummary('input');
+                });
+                input.addEventListener('change', () => {
+                  updateRowState(row, 'change');
+                  updateSummary('change');
+                });
+              });
+
+            ['arrival', 'departure'].forEach((field) => {
+              const pair = getDateTimePair(row, field);
+              if (!pair) return;
+              [pair.dateInput, pair.timeInput].forEach((input) => {
+                if (!input) return;
+                input.addEventListener('input', () => {
+                  updateRowState(row, 'datetime');
+                  updateSummary('datetime');
+                });
+                input.addEventListener('change', () => {
+                  updateRowState(row, 'datetime');
+                  updateSummary('datetime');
+                });
+              });
+            });
+
+            const removeBtn = row.querySelector('[data-action="employee-remove"]');
+            if (removeBtn) {
+              removeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                recordDebug('employee-removed', { index: row.dataset.index });
+                rowStates.delete(row);
+                row.remove();
+                renumberRows();
+                updateSummary('remove');
+                propagatePrimarySchedule();
+                const primaryRow = rowElements()[0];
+                if (primaryRow) {
+                  const primaryState = rowStates.get(primaryRow);
+                  if (primaryState) {
+                    primaryState.syncedWithPrimary = false;
+                    rowStates.set(primaryRow, primaryState);
+                    syncEngineerSignoff(primaryState);
+                  }
+                }
+              });
+            }
+          }
+
+          function bindTimeShortcuts(row) {
+            if (!row) return;
+            row.querySelectorAll(TIME_INPUT_SELECTOR).forEach((input) => applyTimeInputBehavior(input));
+            if (row.dataset.timeShortcutsBound === '1') return;
+            row.dataset.timeShortcutsBound = '1';
+            row.addEventListener('click', (event) => {
+              const trigger = event.target.closest('[data-action="time-now"], [data-action="time-adjust"]');
+              if (!trigger) return;
+              event.preventDefault();
+              const wrapper = trigger.closest('[data-datetime-field]');
+              if (!wrapper) return;
+              const field = wrapper.dataset.datetimeField;
+              if (!field) return;
+              const pair = getDateTimePair(row, field);
+              if (!pair || !pair.timeInput) return;
+              if (trigger.dataset.action === 'time-now') {
+                const nowIso = nowLocalIso();
+                const dateValue = nowIso.slice(0, 10);
+                const timeValue = normalizeTimeInputValue(nowIso.slice(11, 16));
+                const iso = dateValue && timeValue ? dateValue + 'T' + timeValue : '';
+                if (iso) {
+                  setDateTimeValue(row, field, iso);
+                } else {
+                  if (pair.dateInput && !pair.dateInput.value) {
+                    pair.dateInput.value = dateValue;
+                  }
+                  pair.timeInput.value = timeValue;
+                  if (pair.timeInput.dataset) {
+                    pair.timeInput.dataset.timeCommittedValue = (timeValue || '').trim();
+                  }
+                }
+                const combinedIso = combineDateTimeValue(row, field) || iso;
+                updateRowState(row, 'time-now');
+                updateSummary('time-now');
+                recordDebug('employee-time-now', {
+                  index: row.dataset.index,
+                  field,
+                  value: combinedIso,
+                });
+                return;
+              }
+              if (trigger.dataset.action === 'time-adjust') {
+                const step = Number(trigger.dataset.step || 0);
+                if (!step) return;
+                let iso = combineDateTimeValue(row, field);
+                if (!iso) {
+                  const datePart =
+                    (pair.dateInput && pair.dateInput.value && pair.dateInput.value.trim()) ||
+                    nowLocalIso().slice(0, 10);
+                  const timePart =
+                    normalizeTimeInputValue(pair.timeInput.value) || nowLocalIso().slice(11, 16);
+                  iso = datePart + 'T' + timePart;
+                }
+                if (!iso) return;
+                const adjusted = addMinutesToIso(iso, step);
+                if (adjusted) {
+                  setDateTimeValue(row, field, adjusted);
+                  updateRowState(row, 'time-adjust');
+                  updateSummary('time-adjust');
+                  recordDebug('employee-time-adjust', {
+                    index: row.dataset.index,
+                    field,
+                    step,
+                    value: adjusted,
+                  });
+                }
+              }
+            });
+          }
+
+          function addRow(data = {}, options = {}) {
+            const existing = rowElements().length;
+            if (existing >= maxRows) {
+              if (!options.silent) {
+                recordDebug('employee-add-blocked', { reason: 'max-reached', max: maxRows });
+              }
+              return null;
+            }
+
+            const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('[data-employee-row]');
+            listEl.appendChild(fragment);
+            renumberRows();
+
+            const isPrimary = isPrimaryRow(row);
+            const primaryState = rowStates.get(rowElements()[0]) || null;
+
+            const nameInput = row.querySelector('input[data-field="name"]');
+            if (nameInput) {
+              nameInput.value = data.name ? String(data.name) : '';
+            }
+            const roleInput = row.querySelector('input[data-field="role"]');
+            if (roleInput) {
+              roleInput.value = data.role ? String(data.role) : '';
+            }
+
+            const arrivalValue =
+              (data.arrival ? String(data.arrival) : '') ||
+              (isPrimary ? nowLocalIso() : primaryState?.arrival) ||
+              options.prefillArrival ||
+              nowLocalIso();
+
+            const departureValue =
+              (data.departure ? String(data.departure) : '') ||
+              (isPrimary ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES) : primaryState?.departure) ||
+              options.prefillDeparture ||
+              addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES);
+
+            setDateTimeValue(row, 'arrival', arrivalValue);
+            setDateTimeValue(row, 'departure', departureValue);
+
+            bindTimeShortcuts(row);
+
+            attachListeners(row);
+
+            const state = updateRowState(
+              row,
+              options.summaryTrigger || (isPrimary ? 'init' : 'seed'),
+              {
+                markSynced: !isPrimary,
+                skipPropagation: !isPrimary && Boolean(primaryState),
+                logDebug: !options.silent,
+              },
+            );
+
+            const summaryReason =
+              options.summaryTrigger ||
+              (state.hasData ? (isPrimary ? 'init' : 'seed') : 'refresh');
+            updateSummary(summaryReason);
+
+            if (!options.silent) {
+              recordDebug('employee-added', {
+                index: row.dataset.index,
+                seeded: Boolean(options.summaryTrigger === 'seed'),
+                syncedWithPrimary: !isPrimary,
+              });
+              const focusTarget = row.querySelector('input[data-field="name"]');
+              if (focusTarget) {
+                focusTarget.focus();
+              }
+            }
+
+            return row;
+          }
+
+          let seedEmployees = [];
+          if (section.dataset.employeesSeed) {
+            try {
+              const parsed = JSON.parse(section.dataset.employeesSeed);
+              if (Array.isArray(parsed)) {
+                seedEmployees = parsed.slice(0, maxRows);
+              }
+            } catch (err) {
+              recordDebug('employee-seed-error', { message: err.message });
+            }
+          }
+
+          suppressSummaryLog = true;
+          if (seedEmployees.length) {
+            seedEmployees.forEach((employee) => {
+              addRow(
+                {
+                  name: employee.name,
+                  role: employee.role,
+                  arrival: employee.arrival,
+                  departure: employee.departure,
+                },
+                { silent: true, summaryTrigger: 'seed' },
+              );
+            });
+          } else {
+            addRow(
+              {},
+              {
+                silent: true,
+                summaryTrigger: 'init',
+              },
+            );
+          }
+          suppressSummaryLog = false;
+          updateSummary('init');
+          propagatePrimarySchedule();
+          const primaryRow = rowElements()[0];
+          if (primaryRow) {
+            const primaryState = rowStates.get(primaryRow);
+            if (primaryState) {
+              primaryState.syncedWithPrimary = false;
+              rowStates.set(primaryRow, primaryState);
+              syncEngineerSignoff(primaryState);
+            }
+          }
+
+          if (addButton) {
+            addButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const primaryState = rowStates.get(rowElements()[0]);
+              const baseArrival = (primaryState && primaryState.arrival) || nowLocalIso();
+              const row = addRow(
+                {},
+                {
+                  prefillArrival: baseArrival,
+                  prefillDeparture:
+                    (primaryState && primaryState.departure) ||
+                    addMinutesToIso(baseArrival, DEFAULT_SHIFT_MINUTES),
+                  summaryTrigger: 'add',
+                },
+              );
+              if (row && primaryState && primaryState.arrival) {
+                recordDebug('employee-arrival-prefill', {
+                  index: row.dataset.index,
+                  value: primaryState.arrival,
+                });
+              }
+            });
+          }
+
+        }
+
         function setupPhotoUploads() {
           document.querySelectorAll('[data-photo-preview]').forEach((container) => {
             const fieldName = container.dataset.photoPreview;
@@ -2501,22 +4356,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const mode = container.dataset.photoMode || (input.multiple ? 'multi' : 'single');
             handleFileSelection(fieldName, input.files, mode);
             input.addEventListener('change', () => handleFileSelection(fieldName, input.files, mode));
-          });
-        }
-
-        function setupAutoResizeTextareas() {
-          const textareas = document.querySelectorAll('textarea[data-auto-resize]');
-          if (!textareas.length) return;
-          const resize = (textarea) => {
-            textarea.style.height = 'auto';
-            const newHeight = Math.max(textarea.scrollHeight, 44);
-            textarea.style.height = newHeight + 'px';
-          };
-          textareas.forEach((textarea) => {
-            textarea.style.overflow = 'hidden';
-            resize(textarea);
-            textarea.addEventListener('input', () => resize(textarea));
-            textarea.addEventListener('change', () => resize(textarea));
           });
         }
 
@@ -2715,7 +4554,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               const params =
                 '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
               const init = pendingController ? { signal: pendingController.signal } : undefined;
-              fetch(withBase('suggest' + params), init)
+              fetch('/suggest' + params, init)
                 .then((response) => (response.ok ? response.json() : null))
                 .then((payload) => {
                   if (!payload || !Array.isArray(payload.suggestions)) {
@@ -2754,8 +4593,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         setupAutoResizeTextareas();
         setupPartsTable();
+        setupEmployees();
         setupPhotoUploads();
         setupSignaturePads();
+        setupDateTimeTextInputs();
         setupAutoSuggestions();
         updateFilesSummary();
 
@@ -2768,7 +4609,38 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           submitButton.classList.add('is-disabled');
           submitButton.disabled = true;
 
+          const dateTimeSnapshots = Array.from(formEl.querySelectorAll(DATETIME_TEXT_SELECTOR)).map((input) => ({
+            input,
+            normalized: normalizeDateTimeText(input.value),
+          }));
+          const hasInvalidDateTimes = dateTimeSnapshots.some(({ input, normalized }) => {
+            const raw = input.value.trim();
+            if (raw && !normalized.iso) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              return true;
+            }
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
+            return false;
+          });
+          if (hasInvalidDateTimes) {
+            submitButton.classList.remove('is-disabled');
+            submitButton.disabled = false;
+            if (statusEl) {
+              statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
+            }
+            return;
+          }
+          dateTimeSnapshots.forEach(({ input, normalized }) => {
+            input.dataset.displayValue = normalized.display;
+            input.value = normalized.iso;
+          });
+
           const formData = new FormData(formEl);
+          dateTimeSnapshots.forEach(({ input, normalized }) => {
+            input.value = normalized.display;
+          });
           if (debugState.enabled) {
             formData.set('debug_mode', 'true');
           } else {
@@ -2790,7 +4662,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
 
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', withBase('submit'));
+          xhr.open('POST', '/submit');
 
           xhr.upload.onprogress = (event) => {
             if (!event) return;
@@ -2862,24 +4734,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               parseError,
             });
 
-            let rawDownload = null;
-            if (payload && typeof payload.path === 'string') {
-              rawDownload = payload.path;
-            } else if (payload && typeof payload.url === 'string') {
-              try {
-                const absolute = new URL(payload.url, window.location.origin);
-                rawDownload = absolute.pathname + absolute.search + absolute.hash;
-              } catch (err) {
-                rawDownload = payload.url;
-              }
-            }
-            const downloadTarget = rawDownload ? withBase(rawDownload) : null;
             const success =
               xhr.status >= 200 &&
               xhr.status < 300 &&
               payload &&
               payload.ok &&
-              typeof downloadTarget === 'string';
+              typeof payload.url === 'string';
 
             if (success) {
               submitButton.classList.add('is-success');
@@ -2889,7 +4749,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               setProgress(100, 'Upload complete');
               setTimeout(() => {
                 hideProgress();
-                window.location.href = downloadTarget;
+                window.location.href = payload.url;
               }, 200);
             } else {
               submitButton.classList.add('is-error');
@@ -2927,7 +4787,7 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:"],
+        imgSrc: ["'self'", "data:", "blob:"],
         connectSrc: ["'self'"],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
@@ -2943,17 +4803,29 @@ app.use(express.static(PUBLIC_DIR));
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 8 * 1024 * 1024,
+    fileSize: MAX_FILE_SIZE_BYTES,
     files: 64,
   },
   fileFilter: (req, file, cb) => {
-    const allowed = ['image/jpeg', 'image/png'];
-    if (!file.mimetype) {
-      return cb(new Error('Invalid file type.'));
+    const allowed = new Set(['image/jpeg', 'image/png']);
+    const rawType = (file.mimetype || '').toLowerCase();
+    if (!rawType) {
+      const err = new Error('Invalid file type.');
+      err.statusCode = 400;
+      return cb(err);
     }
-    if (!allowed.includes(file.mimetype.toLowerCase())) {
-      return cb(new Error('Only JPEG and PNG images are allowed.'));
+    let normalized = rawType;
+    if (rawType === 'image/jpg' || rawType === 'image/pjpeg') {
+      normalized = 'image/jpeg';
+    } else if (rawType === 'image/x-png') {
+      normalized = 'image/png';
     }
+    if (!allowed.has(normalized)) {
+      const err = new Error('Only JPEG and PNG images are allowed.');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    file.mimetype = normalized;
     return cb(null, true);
   },
 });
@@ -3013,10 +4885,22 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
   const embeddings = [];
   for (const file of photoFiles) {
     if (!file || !file.buffer) continue;
-    const image =
-      file.mimetype && file.mimetype.toLowerCase() === 'image/png'
-        ? await pdfDoc.embedPng(file.buffer)
-        : await pdfDoc.embedJpg(file.buffer);
+    let image;
+    try {
+      image =
+        file.mimetype && file.mimetype.toLowerCase() === 'image/png'
+          ? await pdfDoc.embedPng(file.buffer)
+          : await pdfDoc.embedJpg(file.buffer);
+    } catch (err) {
+      const name = sanitizeFilename(file.originalname || file.fieldname || 'image');
+      const friendly = new Error(
+        `Unable to embed image "${name}". Please ensure the file is a valid JPEG/PNG and below ${formatBytesHuman(
+          MAX_FILE_SIZE_BYTES,
+        )}. (${err.message})`,
+      );
+      friendly.statusCode = 400;
+      throw friendly;
+    }
     embeddings.push({ file, image });
   }
 
@@ -3114,21 +4998,8 @@ function detectSubmitterName(body) {
   return 'Unknown';
 }
 
-app.get('/health', (req, res) => {
-  const uptimeSeconds = Math.round(process.uptime() * 100) / 100;
-  const templateAvailable = fs.existsSync(templatePath);
-  const status = templateAvailable ? 'ok' : 'fail';
-
-  const payload = {
-    status,
-    service: SERVICE_NAME,
-    uptime: uptimeSeconds,
-    now: new Date().toISOString(),
-    templatePath,
-    templateAvailable,
-  };
-
-  return res.status(templateAvailable ? 200 : 503).json(payload);
+app.get('/favicon.ico', (req, res) => {
+  res.status(204).end();
 });
 
 app.get('/', (req, res) => {
@@ -3159,10 +5030,33 @@ app.post('/submit', (req, res, next) => {
   });
 }, async (req, res) => {
   const photoFiles = collectPhotoFiles(req.files);
+  const totalPhotoBytes = photoFiles.reduce((sum, file) => {
+    if (!file) return sum;
+    if (typeof file.size === 'number' && Number.isFinite(file.size)) {
+      return sum + Math.max(0, file.size);
+    }
+    if (file.buffer && Buffer.isBuffer(file.buffer)) {
+      return sum + file.buffer.length;
+    }
+    return sum;
+  }, 0);
+
+  if (totalPhotoBytes > MAX_TOTAL_UPLOAD_BYTES) {
+    return res.status(413).json({
+      ok: false,
+      error:
+        'Total photo upload size is ' +
+        formatBytesHuman(totalPhotoBytes) +
+        ', which exceeds the ' +
+        formatBytesHuman(MAX_TOTAL_UPLOAD_BYTES) +
+        ' limit. Please remove or compress some images.',
+    });
+  }
   const signatureImages = [];
   const sanitizedBody = {};
   const overflowTextEntries = [];
   const partsRowUsage = collectPartsRowUsage(req.body || {});
+  const employeeSummary = collectEmployeeEntries(req.body || {});
   let overflowPlacements = [];
   let hiddenPartRows = [];
   let partsRowsRendered = [];
@@ -3324,8 +5218,13 @@ app.post('/submit', (req, res, next) => {
       sanitizedBody,
       signatureImages,
       partsRowUsage,
-      { targetPage: clearedSignoff ? clearedSignoff.page : undefined },
+      {
+        targetPage: clearedSignoff ? clearedSignoff.page : undefined,
+        employees: employeeSummary,
+      },
     );
+
+    addPageNumbers(pdfDoc, helveticaFont);
 
     const pages = pdfDoc.getPages();
     if (pages.length) {
@@ -3379,6 +5278,7 @@ app.post('/submit', (req, res, next) => {
         size: file.size,
         fieldname: file.fieldname,
       })),
+      totalPhotoBytes,
       imagePlacements,
       signaturePlacements,
       overflowText: overflowTextEntries.map((entry) => ({
@@ -3392,6 +5292,23 @@ app.post('/submit', (req, res, next) => {
       partsRowsUsed: partsRowsRendered,
       partsRowsHidden: hiddenPartRows,
       partsRowsRendered,
+      employees: employeeSummary.entries.map((entry) => ({
+        index: entry.index,
+        name: entry.name,
+        role: entry.role,
+        arrival: entry.arrival,
+        departure: entry.departure,
+        durationMinutes: entry.durationMinutes,
+        breakCode: entry.breakCode,
+        breakRequiredMinutes: entry.breakRequiredMinutes,
+        breakLabel: entry.breakLabel,
+      })),
+      employeesTotalMinutes: employeeSummary.totalMinutes,
+      employeesTotalHours: Number((employeeSummary.totalMinutes / 60).toFixed(2)),
+      employeesRequiredBreakMinutes: employeeSummary.totalBreakMinutes,
+      employeesRequiredBreakDuration: formatEmployeeDuration(employeeSummary.totalBreakMinutes),
+      employeesBreakStats: employeeSummary.breakStats,
+      employeesBreakSummary: formatBreakStatsSummary(employeeSummary.breakStats),
     };
 
     const metadataFilename = filename.replace(/\.pdf$/i, '.json');
@@ -3403,22 +5320,46 @@ app.post('/submit', (req, res, next) => {
 
     recordSuggestionsFromSubmission(req.body || {});
 
-    const relativeDownloadPath = `download/${encodeURIComponent(filename)}`;
-    const downloadPath = `./${relativeDownloadPath}`;
     const hostUrl = HOST_URL_ENV || `${req.protocol}://${req.get('host')}`;
-    const absoluteUrl = `${hostUrl.replace(/\/$/, '')}/${relativeDownloadPath}`;
+    const downloadUrl = `${hostUrl.replace(/\/$/, '')}/download/${encodeURIComponent(filename)}`;
 
     return res.json({
       ok: true,
-      url: absoluteUrl,
-      path: downloadPath,
+      url: downloadUrl,
       overflowCount: overflowTextEntries.length,
       partsRowsHidden: hiddenPartRows,
       partsRowsRendered,
+      employees: employeeSummary.entries.map((entry) => ({
+        index: entry.index,
+        name: entry.name,
+        role: entry.role,
+        arrival: entry.arrival,
+        departure: entry.departure,
+        durationMinutes: entry.durationMinutes,
+        breakCode: entry.breakCode,
+        breakRequiredMinutes: entry.breakRequiredMinutes,
+        breakLabel: entry.breakLabel,
+      })),
+      employeesTotalMinutes: employeeSummary.totalMinutes,
+      employeesTotalHours: Number((employeeSummary.totalMinutes / 60).toFixed(2)),
+      employeesRequiredBreakMinutes: employeeSummary.totalBreakMinutes,
+      employeesRequiredBreakDuration: formatEmployeeDuration(employeeSummary.totalBreakMinutes),
+      employeesBreakStats: employeeSummary.breakStats,
+      employeesBreakSummary: formatBreakStatsSummary(employeeSummary.breakStats),
     });
   } catch (err) {
     console.error('[server] Failed to process submission', err);
-    return res.status(500).json({ ok: false, error: err.message });
+    const statusCandidate =
+      err && Object.prototype.hasOwnProperty.call(err, 'statusCode')
+        ? err.statusCode
+        : err && Object.prototype.hasOwnProperty.call(err, 'status')
+        ? err.status
+        : undefined;
+    const statusNumber = Number(statusCandidate);
+    const status = Number.isFinite(statusNumber) ? statusNumber : 500;
+    return res
+      .status(status >= 400 && status < 600 ? status : 500)
+      .json({ ok: false, error: err && err.message ? err.message : 'Unexpected error' });
   }
 });
 
@@ -3439,6 +5380,21 @@ app.get('/download/:file', async (req, res) => {
 
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        ok: false,
+        error:
+          'One of the uploaded images exceeds the ' +
+          formatBytesHuman(MAX_FILE_SIZE_BYTES) +
+          ' per-file limit. Please compress or resize the photo and try again.',
+      });
+    }
+    if (err.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({
+        ok: false,
+        error: 'Too many images were uploaded in a single request. Please remove a few and retry.',
+      });
+    }
     return res.status(400).json({ ok: false, error: err.message });
   }
   if (err) {
@@ -3461,12 +5417,5 @@ if (require.main === module) {
 }
 
 module.exports = { app, start, fieldDescriptors, templatePath };
-
-
-
-
-
-
-
 
 

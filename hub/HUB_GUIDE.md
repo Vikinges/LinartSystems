@@ -39,9 +39,7 @@
    ```
 2. Пересобрать и перезапустить:
    ```powershell
-   docker compose down
-   docker compose up -d --build
-   ```
+   docker compose down   ```
    Если нужно быстрее без остановки Traefik, можно:
    ```powershell
    docker compose build hub
