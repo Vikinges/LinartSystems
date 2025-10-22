@@ -12,7 +12,7 @@
         <video id="heroVideo" autoplay muted loop playsinline class="is-hidden"></video>
       </div>
       <div class="container hero-content">
-        <header>
+  <header>
           <div class="brand">
             <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
             <div class="brand-copy">
@@ -21,10 +21,12 @@
             </div>
           </div>
           <div class="header-actions">
-            <button type="button" class="link-button" id="openAdminModal">Admin</button>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
+
+        <!-- floating admin button -->
+        <a class="admin-fab" href="/admin" title="Admin">Admin</a>
 
         <div class="intro-card" id="introCard">
           <div class="intro-content">
