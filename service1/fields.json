@@ -1,5 +1,5 @@
 {
-  "templatePath": "C:\\Code\\PDF_LinArt_form\\public\\form-template.pdf",
+  "templatePath": "./public/form-template.pdf",
   "extractedAt": "2025-10-13T10:50:36.550Z",
   "fieldCount": 122,
   "fields": [

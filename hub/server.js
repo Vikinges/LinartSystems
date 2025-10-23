@@ -270,47 +270,48 @@ function registerProxies(app){
 // register once on startup
 registerProxies(app);
 
-// Dynamic proxy: forward common service endpoints (used by service frontends) that may be requested
-// as root-relative paths (e.g. POST /submit from the client) by inspecting the Referer header and
-// routing the request to the appropriate service target. This helps when the frontend uses
-// relative or absolute paths and the hub serves the page under /serviceX/.
-const dynamicProxy = createProxyMiddleware({
-  target: 'http://localhost', // default placeholder; router will pick actual target
-  changeOrigin: true,
-  logLevel: 'warn',
-  selfHandleResponse: false,
-  router: (req) => {
-    try {
-      const ref = req.get('referer') || req.get('referrer') || '';
-      if (!ref) return null;
-      const u = new URL(ref);
-      const p = u.pathname || '/';
-      const services = loadServices();
-      for (const s of services) {
-        if (!s || !s.prefix) continue;
-        if (p.startsWith(s.prefix + '/') || p === s.prefix) return s.target;
-      }
-    } catch (e) {
-      // ignore and fallback
-    }
-    return null;
-  },
-  onError: (err, req, res) => {
-    console.warn('[hub] dynamic proxy error', err && err.message);
-    if (!res.headersSent) res.status(502).send('Bad gateway');
-  },
-});
-
-// Apply dynamic proxy for likely endpoints used by service frontends
+// Safer Referer-based proxy: only proxy when we can match a service by the Referer path.
+// This avoids defaulting to an incorrect target (previously 'http://localhost') which
+// caused ECONNREFUSED and 502 responses.
 app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res, next) => {
-  // Only proxy methods that are typically forwarded (GET/POST/PUT/DELETE)
   const allowed = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
   if (!allowed.includes(req.method)) return next();
-  // Try to route via dynamicProxy; if router returns null, dynamicProxy will pass-through to next
-  return dynamicProxy(req, res, (err) => {
-    // if the proxy did not handle it, continue to next
-    return next(err);
+
+  const ref = req.get('referer') || req.get('referrer') || '';
+  if (!ref) {
+    // No referer — cannot determine which service should handle this request
+    return res.status(502).send('Bad gateway: missing Referer');
+  }
+
+  let target = null;
+  try {
+    const u = new URL(ref);
+    const p = u.pathname || '/';
+    const services = loadServices();
+    for (const s of services) {
+      if (!s || !s.prefix) continue;
+      if (p === s.prefix || p.startsWith(s.prefix + '/')) {
+        target = s.target;
+        break;
+      }
+    }
+  } catch (err) {
+    console.warn('[hub] referer parse failed', err && err.message);
+    return res.status(502).send('Bad gateway: invalid Referer');
+  }
+
+  if (!target) {
+    return res.status(502).send('Bad gateway: no matching service for Referer ' + ref);
+  }
+
+  // Create a one-off proxy to the resolved target and pass the request through.
+  const proxy = createProxyMiddleware({
+    target: target,
+    changeOrigin: true,
+    logLevel: 'warn'
   });
+
+  return proxy(req, res, next);
 });
 
 // Static files

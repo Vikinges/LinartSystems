@@ -5002,6 +5002,16 @@ app.get('/favicon.ico', (req, res) => {
   res.status(204).end();
 });
 
+// Health endpoint used by docker healthcheck and hub
+app.get('/health', (req, res) => {
+  try {
+    const uptime = process.uptime();
+    return res.json({ status: 'ok', service: 'service1', uptime: Math.floor(uptime), now: new Date().toISOString() });
+  } catch (err) {
+    return res.status(500).json({ status: 'fail', service: 'service1', error: String(err && err.message ? err.message : err) });
+  }
+});
+
 app.get('/', (req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
