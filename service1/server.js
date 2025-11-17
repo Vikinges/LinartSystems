@@ -444,14 +444,19 @@ function layoutTextForField(options) {
     Math.max((rect.x2 || rect[2]) - (rect.x1 || rect[0]) - TEXT_FIELD_INNER_PADDING * 2, 1);
   const height =
     Math.max((rect.y2 || rect[3]) - (rect.y1 || rect[1]) - TEXT_FIELD_INNER_PADDING * 2, fontSize);
+  const effectiveLineHeightMultiplier = lineHeightMultiplier || 1.2;
+  const baselineLineHeight = fontSize * effectiveLineHeightMultiplier;
+  const minHeightForMultiline = baselineLineHeight * 1.8;
+  const multilineAllowed = multiline && height >= minHeightForMultiline;
 
   const buildLayout = (candidateSize) => {
-    const candidateLineHeight = candidateSize * (lineHeightMultiplier || 1.2);
+    const candidateLineHeight = candidateSize * effectiveLineHeightMultiplier;
     const wrappedLines = wrapTextToWidth(text, font, candidateSize, width);
     const trimmedLines = stripTrailingEmptyLines(wrappedLines);
     const maxLines = Math.max(1, Math.floor(height / Math.max(candidateLineHeight, 1)));
+    const multilineActive = multilineAllowed && maxLines >= 2;
 
-    if (!multiline) {
+    if (!multilineActive) {
       const [firstLine = ''] = trimmedLines;
       const remaining = stripLeadingEmptyLines(trimmedLines.slice(1));
       return {
@@ -1468,142 +1473,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const tableWidth = page.getWidth() - margin * 2;
   const signaturePlacements = [];
 
-  const usedRows = (partsRows || []).filter((row) => row.hasData);
-  if (usedRows.length) {
-    const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
-    const headerHeight = 18;
-    const rowHeightBase = 32;
-    const headers = [
-      'Part removed (description)',
-      'Part number',
-      'Serial number (removed)',
-      'Part used in display',
-      'Serial number (used)',
-    ];
-
-    const drawPartsHeader = () => {
-      let headerX = margin;
-      headers.forEach((label, index) => {
-        const width = columnWidths[index];
-        page.drawRectangle({
-          x: headerX,
-          y: cursorY - headerHeight,
-          width,
-          height: headerHeight,
-          color: rgb(0.88, 0.92, 0.98),
-          borderWidth: TABLE_BORDER_WIDTH,
-          borderColor: TABLE_BORDER_COLOR,
-        });
-        const labelLayout = layoutTextForWidth({
-          value: label,
-          font,
-          fontSize: 9,
-          minFontSize: 8,
-          lineHeightMultiplier: 1.2,
-          maxWidth: width - 8,
-        });
-        let textY = cursorY - headerHeight + headerHeight - 6;
-        labelLayout.lines.forEach((line) => {
-          page.drawText(line, {
-            x: headerX + 4,
-            y: textY,
-            size: labelLayout.fontSize,
-            font,
-            color: rgb(0.1, 0.1, 0.3),
-          });
-          textY -= labelLayout.lineHeight;
-        });
-        headerX += width;
-      });
-      cursorY -= headerHeight;
-    };
-
-    const headerLabel =
-      ensureSpace(headerHeight + rowHeightBase * Math.min(usedRows.length, 3) + 12)
-        ? 'Parts record (cont.)'
-        : 'Parts record';
-    drawSectionTitle(headerLabel);
-    drawPartsHeader();
-
-    usedRows.forEach((row) => {
-      const cellValues = [
-        row.fields[`parts_removed_desc_${row.number}`] || '',
-        row.fields[`parts_removed_part_${row.number}`] || '',
-        row.fields[`parts_removed_serial_${row.number}`] || '',
-        row.fields[`parts_used_part_${row.number}`] || '',
-        row.fields[`parts_used_serial_${row.number}`] || '',
-      ];
-      const cellLayouts = cellValues.map((value, index) => {
-        const layout = layoutTextForWidth({
-          value,
-          font,
-          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
-          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
-          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-          maxWidth: columnWidths[index] - 8,
-        });
-        return { value, layout };
-      });
-      const rowHeight = Math.max(
-        rowHeightBase,
-        ...cellLayouts.map(({ layout }) =>
-          Math.ceil(layout.lineCount * layout.lineHeight + 16),
-        ),
-      );
-      if (ensureSpace(rowHeight + 6)) {
-        drawSectionTitle('Parts record (cont.)');
-        drawPartsHeader();
-      }
-      let cellX = margin;
-      cellLayouts.forEach(({ value, layout }, index) => {
-        const cellWidth = columnWidths[index];
-        page.drawRectangle({
-          x: cellX,
-          y: cursorY - rowHeight,
-          width: cellWidth,
-          height: rowHeight,
-          color: rgb(1, 1, 1),
-          borderWidth: TABLE_BORDER_WIDTH,
-          borderColor: TABLE_BORDER_COLOR,
-        });
-        drawCenteredTextBlock(
-          page,
-          value,
-          font,
-          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
-          {
-            align: 'center',
-            paddingX: 6,
-            paddingY: 8,
-            color: textColor,
-            fontSize: layout.fontSize,
-            minFontSize: layout.fontSize,
-            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-            layout,
-          },
-        );
-        cellX += cellWidth;
-      });
-      cursorY -= rowHeight;
-    });
-
-    cursorY -= 24;
-  } else {
-    if (ensureSpace(24)) {
-      drawSectionTitle('Parts record (cont.)');
-    } else {
-      drawSectionTitle('Parts record');
-    }
-    page.drawText('No spare parts were recorded for this visit.', {
-      x: margin,
-      y: cursorY,
-      size: 11,
-      font,
-      color: textColor,
-    });
-    cursorY -= 24;
-  }
-
   const employeesData =
     options.employees && Array.isArray(options.employees.entries)
       ? options.employees
@@ -1753,8 +1622,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
             precomputed: measurement,
           },
         );
-      cellX += cellWidth;
-    });
+        cellX += cellWidth;
+      });
       cursorY -= rowHeight;
     });
 
@@ -1809,6 +1678,142 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   };
 
   renderEmployeesSection();
+
+  const usedRows = (partsRows || []).filter((row) => row.hasData);
+  if (usedRows.length) {
+    const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
+    const headerHeight = 18;
+    const rowHeightBase = 32;
+    const headers = [
+      'Part removed (description)',
+      'Part number',
+      'Serial number (removed)',
+      'Part used in display',
+      'Serial number (used)',
+    ];
+
+    const drawPartsHeader = () => {
+      let headerX = margin;
+      headers.forEach((label, index) => {
+        const width = columnWidths[index];
+        page.drawRectangle({
+          x: headerX,
+          y: cursorY - headerHeight,
+          width,
+          height: headerHeight,
+          color: rgb(0.88, 0.92, 0.98),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        const labelLayout = layoutTextForWidth({
+          value: label,
+          font,
+          fontSize: 9,
+          minFontSize: 8,
+          lineHeightMultiplier: 1.2,
+          maxWidth: width - 8,
+        });
+        let textY = cursorY - headerHeight + headerHeight - 6;
+        labelLayout.lines.forEach((line) => {
+          page.drawText(line, {
+            x: headerX + 4,
+            y: textY,
+            size: labelLayout.fontSize,
+            font,
+            color: rgb(0.1, 0.1, 0.3),
+          });
+          textY -= labelLayout.lineHeight;
+        });
+        headerX += width;
+      });
+      cursorY -= headerHeight;
+    };
+
+    const headerLabel =
+      ensureSpace(headerHeight + rowHeightBase * Math.min(usedRows.length, 3) + 12)
+        ? 'Parts record (cont.)'
+        : 'Parts record';
+    drawSectionTitle(headerLabel);
+    drawPartsHeader();
+
+    usedRows.forEach((row) => {
+      const cellValues = [
+        row.fields[`parts_removed_desc_${row.number}`] || '',
+        row.fields[`parts_removed_part_${row.number}`] || '',
+        row.fields[`parts_removed_serial_${row.number}`] || '',
+        row.fields[`parts_used_part_${row.number}`] || '',
+        row.fields[`parts_used_serial_${row.number}`] || '',
+      ];
+      const cellLayouts = cellValues.map((value, index) => {
+        const layout = layoutTextForWidth({
+          value,
+          font,
+          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+          maxWidth: columnWidths[index] - 8,
+        });
+        return { value, layout };
+      });
+      const rowHeight = Math.max(
+        rowHeightBase,
+        ...cellLayouts.map(({ layout }) =>
+          Math.ceil(layout.lineCount * layout.lineHeight + 16),
+        ),
+      );
+      if (ensureSpace(rowHeight + 6)) {
+        drawSectionTitle('Parts record (cont.)');
+        drawPartsHeader();
+      }
+      let cellX = margin;
+      cellLayouts.forEach(({ value, layout }, index) => {
+        const cellWidth = columnWidths[index];
+        page.drawRectangle({
+          x: cellX,
+          y: cursorY - rowHeight,
+          width: cellWidth,
+          height: rowHeight,
+          color: rgb(1, 1, 1),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        drawCenteredTextBlock(
+          page,
+          value,
+          font,
+          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
+          {
+            align: 'center',
+            paddingX: 6,
+            paddingY: 8,
+            color: textColor,
+            fontSize: layout.fontSize,
+            minFontSize: layout.fontSize,
+            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+            layout,
+          },
+        );
+        cellX += cellWidth;
+      });
+      cursorY -= rowHeight;
+    });
+
+    cursorY -= 24;
+  } else {
+    if (ensureSpace(24)) {
+      drawSectionTitle('Parts record (cont.)');
+    } else {
+      drawSectionTitle('Parts record');
+    }
+    page.drawText('No spare parts were recorded for this visit.', {
+      x: margin,
+      y: cursorY,
+      size: 11,
+      font,
+      color: textColor,
+    });
+    cursorY -= 24;
+  }
 
   const drawChecklistSection = (section) => {
     const columnWidths = [tableWidth * 0.55, tableWidth * 0.12, tableWidth * 0.33];
@@ -2547,8 +2552,11 @@ ${rows.join('\n')}
         color: #6b7280;
       }
       .employee-card p {
-        margin: 0;
+        margin: 0 0 0.35rem 0;
         color: #4c4f63;
+      }
+      .employee-card small {
+        color: #6b7280;
       }
       .employee-actions {
         display: flex;
@@ -2558,7 +2566,7 @@ ${rows.join('\n')}
       }
       .employee-actions .button {
         background: #2563eb;
-        color: white;
+        color: #ffffff;
         border: none;
         border-radius: 999px;
         padding: 0.6rem 1.2rem;
@@ -2569,37 +2577,63 @@ ${rows.join('\n')}
         opacity: 0.6;
         cursor: not-allowed;
       }
-      .employee-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .employee-row {
+      .employee-table-wrapper {
+        margin-top: 1rem;
         border: 1px solid #c7d2fe;
-        border-radius: 12px;
-        padding: 0.85rem 1rem;
+        border-radius: 16px;
         background: #eef2ff;
+        padding: 0.75rem;
+        overflow-x: auto;
+      }
+      .employee-table {
+        width: 100%;
+        min-width: 640px;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .employee-table th,
+      .employee-table td {
+        border: 1px solid #d9def8;
+        padding: 0.55rem 0.65rem;
+        vertical-align: top;
+        background: #f8f9ff;
+      }
+      .employee-table thead th {
+        background: #dfe6ff;
+        color: #1f2a5b;
+        font-weight: 600;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .employee-table tbody tr:nth-child(even) td {
+        background: #fdfdff;
+      }
+      .employee-index-cell {
+        min-width: 95px;
+        width: 14%;
+      }
+      .employee-index-header {
         display: flex;
         flex-direction: column;
-        gap: 0.6rem;
-      }
-      .employee-row-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        gap: 0.35rem;
         font-weight: 600;
         color: #1f2a5b;
-        font-size: 0.95rem;
+        margin-bottom: 0.35rem;
       }
-      .employee-grid {
-        display: grid;
-        gap: 0.75rem 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        align-items: end;
+      .employee-person-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
       }
-      .employee-grid .field > span,
+      .employee-person-fields .field,
+      .employee-table td .field {
+        margin: 0;
+      }
+      .employee-table td .field > span,
       .field-datetime > span {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: #4b5563;
       }
       .field-datetime {
@@ -2627,7 +2661,7 @@ ${rows.join('\n')}
       }
       .time-input-wrapper input {
         flex: 0 1 120px;
-        min-width: 100px;
+        min-width: 110px;
       }
       .time-shortcut {
         border: 1px solid #c7cbef;
@@ -2636,7 +2670,8 @@ ${rows.join('\n')}
         color: #1f2a5b;
         font-size: 0.75rem;
         font-weight: 600;
-        padding: 0.35rem 0.6rem;
+        padding: 0.4rem 0.7rem;
+        min-width: 3rem;
         cursor: pointer;
         transition: background 0.15s ease, border-color 0.15s ease;
       }
@@ -2657,14 +2692,30 @@ ${rows.join('\n')}
         font-weight: 600;
         color: #1d4ed8;
         white-space: pre-line;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
+      }
+      .employee-remove-button {
+        border: 1px dashed #c7cbef;
+        border-radius: 999px;
+        padding: 0.45rem 0.75rem;
+        background: #ffffff;
+        color: #b91c1c;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .employee-remove-button:hover,
+      .employee-remove-button:focus-visible {
+        border-color: #ef4444;
+        color: #ef4444;
+        outline: none;
+      }
+      .employee-remove-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
       .employee-summary {
-        margin-top: 0.5rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #d8d8e5;
         display: grid;
-        gap: 0.35rem;
+        gap: 0.4rem;
         font-weight: 600;
         color: #1f2a5b;
       }
@@ -2677,20 +2728,12 @@ ${rows.join('\n')}
       @media (min-width: 640px) {
         .employee-summary {
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          align-items: start;
         }
       }
-      .link-button {
-        background: none;
-        border: none;
-        color: #2563eb;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 0;
-      }
-      .link-button:disabled {
-        color: #a1a1b3;
-        cursor: default;
+      @media (max-width: 720px) {
+        .employee-table {
+          min-width: 560px;
+        }
       }
       .photos-card {
         display: grid;
@@ -2948,6 +2991,106 @@ ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 ${renderTextInput('service_company_name', 'Service company name')}
           </div>
         </section>
+        <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
+          <h2>On-site team time sheet</h2>
+          <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
+          <div class="employee-actions">
+            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
+          </div>
+          <div class="employee-table-wrapper">
+            <table class="employee-table">
+              <thead>
+                <tr>
+                  <th scope="col">Employee</th>
+                  <th scope="col">Name & role</th>
+                  <th scope="col">Arrival</th>
+                  <th scope="col">Departure</th>
+                </tr>
+              </thead>
+              <tbody data-employee-list></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7">
+                    <div class="employee-summary" data-employee-summary>
+                      <span data-employee-total>Working time: 0m | Required breaks: pending</span>
+                      <span data-employee-count>No employees added yet.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <template id="employee-row-template">
+            <tr class="employee-row" data-employee-row>
+              <td class="employee-index-cell">
+                <div class="employee-index-header">
+                  <span data-employee-title>Employee #1</span>
+                  <button type="button" class="employee-remove-button" data-action="employee-remove">Remove</button>
+                </div>
+                <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
+              </td>
+              <td>
+                <div class="employee-person-fields">
+                  <label class="field" data-field-wrapper="name">
+                    <span>Employee name</span>
+                    <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
+                  </label>
+                  <label class="field" data-field-wrapper="role">
+                    <span>Role / position</span>
+                    <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
+                  </label>
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="arrival">
+                  <span>Arrival (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="arrival" />
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="departure">
+                  <span>Departure (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="departure" />
+                </div>
+              </td>
+            </tr>
+          </template>
+        </section>
 ${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, section.rows)).join('\n')}
         <section class="card">
           <h2>Additional notes</h2>
@@ -2994,80 +3137,6 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
         </section>
 ${partsTable()}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
-
-        <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
-          <h2>On-site team</h2>
-          <p>Record every team member on site to capture arrival/departure time and required breaks.</p>
-          <div class="employee-actions">
-            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
-          </div>
-          <div class="employee-list" data-employee-list></div>
-          <div class="employee-summary" data-employee-summary>
-            <span data-employee-total>Working time: 0m | Required breaks: pending</span>
-            <span data-employee-count>No employees added yet.</span>
-          </div>
-          <template id="employee-row-template">
-            <div class="employee-row" data-employee-row>
-              <div class="employee-row-header">
-                <span data-employee-title>Employee #1</span>
-                <button type="button" class="link-button" data-action="employee-remove">Remove</button>
-              </div>
-              <div class="employee-grid">
-                <label class="field" data-field-wrapper="name">
-                  <span>Employee name</span>
-                  <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
-                </label>
-                <label class="field" data-field-wrapper="role">
-                  <span>Role / position</span>
-                  <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
-                </label>
-                <div class="field field-datetime" data-datetime-field="arrival">
-                  <span>Arrival (24h)</span>
-                  <div class="datetime-inputs">
-                    <input type="date" data-datetime-part="date" />
-                    <div class="time-input-wrapper" data-time-input-wrapper>
-                      <input
-                        type="text"
-                        data-datetime-part="time"
-                        placeholder="HH:MM"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        pattern="[0-2][0-9]:[0-5][0-9]"
-                        title="Use 24-hour format HH:MM"
-                      />
-                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
-                    </div>
-                  </div>
-                  <input type="hidden" data-field="arrival" />
-                </div>
-                <div class="field field-datetime" data-datetime-field="departure">
-                  <span>Departure (24h)</span>
-                  <div class="datetime-inputs">
-                    <input type="date" data-datetime-part="date" />
-                    <div class="time-input-wrapper" data-time-input-wrapper>
-                      <input
-                        type="text"
-                        data-datetime-part="time"
-                        placeholder="HH:MM"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        pattern="[0-2][0-9]:[0-5][0-9]"
-                        title="Use 24-hour format HH:MM"
-                      />
-                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
-                    </div>
-                  </div>
-                  <input type="hidden" data-field="departure" />
-                </div>
-              </div>
-              <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
-            </div>
-          </template>
-        </section>
 
         <section class="card">
           <h2>Signatures</h2>
@@ -3129,6 +3198,41 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const TIME_PRESET_LIST_ID = 'time-presets';
         const TIME_PRESET_STEP_MINUTES = 15;
         const TIME_VALUE_REGEX = /^([01]\\d|2[0-3]):([0-5]\\d)$/;
+        const endCustomerInput = document.getElementById('end-customer-name');
+        const customerNameInput = document.getElementById('customer-name');
+        const customerNameSync = { manual: false };
+
+        const syncCustomerNameFromSite = () => {
+          if (!endCustomerInput || !customerNameInput) return;
+          if (customerNameSync.manual) {
+            return;
+          }
+          customerNameInput.value = endCustomerInput.value.trim();
+        };
+
+        if (endCustomerInput && customerNameInput) {
+          syncCustomerNameFromSite();
+          ['input', 'change'].forEach((eventName) => {
+            endCustomerInput.addEventListener(eventName, () => {
+              if (!customerNameSync.manual || !customerNameInput.value.trim()) {
+                if (!customerNameInput.value.trim()) {
+                  customerNameSync.manual = false;
+                }
+                syncCustomerNameFromSite();
+              }
+            });
+          });
+          customerNameInput.addEventListener('input', () => {
+            const current = customerNameInput.value.trim();
+            const source = endCustomerInput.value.trim();
+            if (!current) {
+              customerNameSync.manual = false;
+              syncCustomerNameFromSite();
+              return;
+            }
+            customerNameSync.manual = current !== source;
+          });
+        }
 
         const clampNumber = (value, min, max) => {
           if (!Number.isFinite(value)) return min;
@@ -3716,6 +3820,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           };
 
           const nowLocalIso = () => formatIsoFromDate(new Date());
+          const formSessionStartIso = nowLocalIso();
 
           const addMinutesToIso = (iso, minutes) => {
             const base = parseLocalDateTime(iso);
@@ -4227,14 +4332,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
             const arrivalValue =
               (data.arrival ? String(data.arrival) : '') ||
-              (isPrimary ? nowLocalIso() : primaryState?.arrival) ||
               options.prefillArrival ||
-              nowLocalIso();
+              (isPrimary ? formSessionStartIso : primaryState?.arrival) ||
+              formSessionStartIso;
 
             const departureValue =
               (data.departure ? String(data.departure) : '') ||
-              (isPrimary ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES) : primaryState?.departure) ||
               options.prefillDeparture ||
+              (isPrimary
+                ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES)
+                : primaryState?.departure) ||
               addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES);
 
             setDateTimeValue(row, 'arrival', arrivalValue);
@@ -4325,7 +4432,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             addButton.addEventListener('click', (event) => {
               event.preventDefault();
               const primaryState = rowStates.get(rowElements()[0]);
-              const baseArrival = (primaryState && primaryState.arrival) || nowLocalIso();
+              const baseArrival = (primaryState && primaryState.arrival) || formSessionStartIso;
               const row = addRow(
                 {},
                 {
