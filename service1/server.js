@@ -12,6 +12,7 @@ const cors = require('cors');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
 const app = express();
+app.set('trust proxy', 1);
 
 const ROOT_DIR = __dirname;
 const FIELDS_PATH = path.join(ROOT_DIR, 'fields.json');
@@ -3129,6 +3130,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const TIME_PRESET_LIST_ID = 'time-presets';
         const TIME_PRESET_STEP_MINUTES = 15;
         const TIME_VALUE_REGEX = /^([01]\\d|2[0-3]):([0-5]\\d)$/;
+        const appBaseUrl = new URL('.', window.location.href);
+        const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };
 
         const clampNumber = (value, min, max) => {
           if (!Number.isFinite(value)) return min;
@@ -4554,7 +4560,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               const params =
                 '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
               const init = pendingController ? { signal: pendingController.signal } : undefined;
-              fetch('/suggest' + params, init)
+              fetch(buildAppUrl('suggest' + params), init)
                 .then((response) => (response.ok ? response.json() : null))
                 .then((payload) => {
                   if (!payload || !Array.isArray(payload.suggestions)) {
@@ -4662,7 +4668,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
 
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/submit');
+          xhr.open('POST', buildAppUrl('submit'));
 
           xhr.upload.onprogress = (event) => {
             if (!event) return;
