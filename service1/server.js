@@ -5,6 +5,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const fsExtra = require('fs-extra');
+const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const helmet = require('helmet');
@@ -21,7 +22,10 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
+const ADMIN_CREDENTIALS_PATH = path.join(DATA_DIR, 'admin.json');
 const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template1.pdf');
+const ADMIN_DEFAULT_USERNAME = 'admin';
+const ADMIN_DEFAULT_PASSWORD = 'admin';
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;
@@ -66,6 +70,68 @@ function loadJson(filePath, fallback = null) {
 
 const fieldsConfig = loadJson(FIELDS_PATH, { fields: [] }) || { fields: [] };
 const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
+
+function generateSalt(length = 16) {
+  return crypto.randomBytes(length).toString('hex');
+}
+
+function hashPassword(password, salt) {
+  return crypto.createHash('sha256').update(String(password || '') + salt).digest('hex');
+}
+
+function loadAdminCredentials() {
+  if (!fs.existsSync(ADMIN_CREDENTIALS_PATH)) {
+    const salt = generateSalt();
+    const record = {
+      username: ADMIN_DEFAULT_USERNAME,
+      passwordHash: hashPassword(ADMIN_DEFAULT_PASSWORD, salt),
+      salt,
+      updatedAt: new Date().toISOString(),
+    };
+    fsExtra.ensureFileSync(ADMIN_CREDENTIALS_PATH);
+    fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(record, null, 2), 'utf8');
+    console.warn('[server] Admin password reset to default (admin/admin). Change it via the admin panel.');
+    return record;
+  }
+  const record = loadJson(ADMIN_CREDENTIALS_PATH, null);
+  if (!record || !record.passwordHash || !record.salt) {
+    const salt = generateSalt();
+    const restored = {
+      username: ADMIN_DEFAULT_USERNAME,
+      passwordHash: hashPassword(ADMIN_DEFAULT_PASSWORD, salt),
+      salt,
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(restored, null, 2), 'utf8');
+    console.warn('[server] Admin credentials were invalid and have been reset to admin/admin.');
+    return restored;
+  }
+  return record;
+}
+
+function saveAdminCredentials(record) {
+  fsExtra.ensureFileSync(ADMIN_CREDENTIALS_PATH);
+  fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(record, null, 2), 'utf8');
+}
+
+let adminCredentials = loadAdminCredentials();
+
+function verifyAdminPassword(password) {
+  if (!adminCredentials || !adminCredentials.salt) return false;
+  const hash = hashPassword(password, adminCredentials.salt);
+  return hash === adminCredentials.passwordHash;
+}
+
+function updateAdminPassword(newPassword) {
+  const salt = generateSalt();
+  adminCredentials = {
+    username: adminCredentials.username || ADMIN_DEFAULT_USERNAME,
+    passwordHash: hashPassword(newPassword, salt),
+    salt,
+    updatedAt: new Date().toISOString(),
+  };
+  saveAdminCredentials(adminCredentials);
+}
 
 function resolveTemplatePath(candidate) {
   if (!candidate || typeof candidate !== 'string') {
@@ -2986,6 +3052,55 @@ ${rows.join('\n')}
         white-space: pre-wrap;
         word-break: break-word;
       }
+      .admin-card {
+        margin-top: 1.5rem;
+      }
+      .admin-card[hidden] {
+        display: none !important;
+      }
+      .admin-card form {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        margin-top: 0.75rem;
+      }
+      .admin-card input[type="password"] {
+        font: inherit;
+        border: 1px solid #d8d8e5;
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-width: 220px;
+      }
+      .admin-errors {
+        margin-top: 0.5rem;
+        color: #b91c1c;
+        font-size: 0.85rem;
+      }
+      .admin-section__status {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #0f172a;
+      }
+      .admin-profile {
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .link-button {
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .link-button.secondary {
+        color: #1e293b;
+      }
+      .link-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
       #status {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -3211,6 +3326,41 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           <pre id="status"></pre>
         </div>
       </form>
+      <section class="card admin-card" data-admin-section>
+        <div data-admin-unauth>
+          <h2>Admin tools</h2>
+          <p>Log in to manage protected features.</p>
+          <form data-admin-login>
+            <label class="field" style="flex:1 1 220px">
+              <span>Password</span>
+              <input type="password" data-admin-password autocomplete="current-password" required />
+            </label>
+            <button type="submit" class="link-button">Log in</button>
+          </form>
+          <div class="admin-errors" data-admin-login-error></div>
+        </div>
+        <div data-admin-auth hidden>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <div>
+              <h2 style="margin:0;">Admin tools</h2>
+              <div class="admin-profile" data-admin-profile></div>
+            </div>
+            <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+          </div>
+          <form data-admin-password-change>
+            <label class="field" style="flex:1 1 200px">
+              <span>Current password</span>
+              <input type="password" autocomplete="current-password" required data-admin-password-current />
+            </label>
+            <label class="field" style="flex:1 1 200px">
+              <span>New password</span>
+              <input type="password" autocomplete="new-password" required data-admin-password-new />
+            </label>
+            <button type="submit" class="link-button">Change password</button>
+          </form>
+          <div class="admin-section__status" data-admin-status></div>
+        </div>
+      </section>
     </div>
     <script>
       (function () {
@@ -3227,6 +3377,195 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+        const adminSectionEl = document.querySelector('[data-admin-section]');
+        const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
+        const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
+        const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
+        const adminPasswordInput = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password]') : null;
+        const adminLoginErrorEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login-error]') : null;
+        const adminLogoutBtn = adminSectionEl ? adminSectionEl.querySelector('[data-admin-logout]') : null;
+        const adminPasswordForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password-change]') : null;
+        const adminPasswordCurrentInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-current]')
+          : null;
+        const adminPasswordNewInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-new]')
+          : null;
+        const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
+        const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const ADMIN_TOKEN_KEY = 'pm-admin-token';
+        let adminTokenStore = null;
+        try {
+          adminTokenStore = window.localStorage;
+        } catch (err) {
+          adminTokenStore = null;
+        }
+
+        const readJsonPayload = async (response) => {
+          try {
+            const text = await response.text();
+            if (!text) return null;
+            return JSON.parse(text);
+          } catch (err) {
+            return null;
+          }
+        };
+
+        const adminState = {
+          token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
+        };
+
+        const setAdminToken = (token) => {
+          adminState.token = token || '';
+          if (adminTokenStore) {
+            if (adminState.token) {
+              adminTokenStore.setItem(ADMIN_TOKEN_KEY, adminState.token);
+            } else {
+              adminTokenStore.removeItem(ADMIN_TOKEN_KEY);
+            }
+          }
+          updateAdminVisibility();
+        };
+
+        const showAdminStatus = (message, isError = false) => {
+          if (!adminStatusEl) return;
+          adminStatusEl.style.color = isError ? '#b91c1c' : '#0f172a';
+          adminStatusEl.textContent = message || '';
+        };
+
+        const renderAdminProfile = (payload) => {
+          if (!adminProfileEl) return;
+          if (!payload || !payload.username) {
+            adminProfileEl.textContent = '';
+            return;
+          }
+          const updated = payload.passwordUpdatedAt
+            ? new Date(payload.passwordUpdatedAt).toLocaleString()
+            : 'unknown';
+          adminProfileEl.textContent =
+            'Logged in as ' + payload.username + '. Password updated ' + updated + '.';
+        };
+
+        const updateAdminVisibility = () => {
+          if (!adminSectionEl) return;
+          const isAuthed = Boolean(adminState.token);
+          if (adminUnauthEl) adminUnauthEl.hidden = isAuthed;
+          if (adminAuthEl) adminAuthEl.hidden = !isAuthed;
+          if (!isAuthed) {
+            if (adminStatusEl) adminStatusEl.textContent = '';
+            if (adminProfileEl) adminProfileEl.textContent = '';
+          }
+        };
+
+        const adminFetch = (relativePath, options = {}) => {
+          if (!adminState.token) {
+            return Promise.reject(new Error('Admin login required.'));
+          }
+          const init = Object.assign({ headers: {}, credentials: 'same-origin' }, options);
+          init.headers = Object.assign({}, init.headers, {
+            Authorization: 'Bearer ' + adminState.token,
+          });
+          const targetUrl = buildAppUrl(relativePath || '');
+          return fetch(targetUrl, init).then(async (response) => {
+            const payload = await readJsonPayload(response);
+            if (!response.ok) {
+              if (response.status === 401) {
+                setAdminToken('');
+              }
+              const message = (payload && payload.error) || response.statusText || 'Request failed';
+              throw new Error(message);
+            }
+            return payload;
+          });
+        };
+
+        const refreshAdminProfile = () => {
+          if (!adminState.token) return;
+          adminFetch('admin/profile')
+            .then((payload) => {
+              renderAdminProfile(payload);
+            })
+            .catch((err) => {
+              console.warn('[admin] profile refresh failed', err);
+            });
+        };
+
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordInput || !adminPasswordInput.value) {
+              showAdminStatus('Enter the admin password.', true);
+              return;
+            }
+            const password = adminPasswordInput.value;
+            showAdminStatus('Signing in...');
+            fetch(buildAppUrl('admin/login'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ password }),
+            })
+              .then(readJsonPayload)
+              .then((payload) => {
+                if (!payload || !payload.token) {
+                  throw new Error('Unexpected response.');
+                }
+                adminPasswordInput.value = '';
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+                setAdminToken(payload.token);
+                showAdminStatus('Logged in.');
+                if (payload.username) {
+                  renderAdminProfile(payload);
+                } else {
+                  refreshAdminProfile();
+                }
+              })
+              .catch((err) => {
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
+                showAdminStatus(err.message || 'Login failed.', true);
+              });
+          });
+        }
+
+        if (adminLogoutBtn) {
+          adminLogoutBtn.addEventListener('click', () => {
+            setAdminToken('');
+            showAdminStatus('Logged out.');
+          });
+        }
+
+        if (adminPasswordForm) {
+          adminPasswordForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordCurrentInput || !adminPasswordNewInput) return;
+            const currentPassword = adminPasswordCurrentInput.value;
+            const newPassword = adminPasswordNewInput.value;
+            if (!newPassword || newPassword.length < 4) {
+              showAdminStatus('New password must be at least 4 characters.', true);
+              return;
+            }
+            showAdminStatus('Updating password...');
+            adminFetch('admin/password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword, newPassword }),
+            })
+              .then(() => {
+                adminPasswordCurrentInput.value = '';
+                adminPasswordNewInput.value = '';
+                setAdminToken('');
+                showAdminStatus('Password updated. Please log in again.');
+              })
+              .catch((err) => {
+                showAdminStatus(err.message || 'Password update failed.', true);
+              });
+          });
+        }
+
+        updateAdminVisibility();
+        if (adminState.token) {
+          refreshAdminProfile();
+        }
 
         const selectedFiles = new Map();
         const previewUrls = new Map();
@@ -5003,6 +5342,48 @@ function collectPhotoFiles(files) {
   return photos;
 }
 
+const adminTokens = new Map();
+const ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+function cleanupAdminTokens() {
+  const now = Date.now();
+  for (const [token, meta] of adminTokens.entries()) {
+    if (!meta || now - meta.createdAt > ADMIN_TOKEN_TTL_MS) {
+      adminTokens.delete(token);
+    }
+  }
+}
+
+function issueAdminToken() {
+  cleanupAdminTokens();
+  const token = crypto.randomBytes(24).toString('hex');
+  adminTokens.set(token, { createdAt: Date.now() });
+  return token;
+}
+
+function extractAdminToken(req) {
+  const auth = req.headers.authorization || '';
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim();
+  }
+  if (req.headers['x-admin-token']) {
+    return String(req.headers['x-admin-token']).trim();
+  }
+  return null;
+}
+
+function requireAdmin(req, res, next) {
+  const token = extractAdminToken(req);
+  if (!token || !adminTokens.has(token)) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
+  return next();
+}
+
+if (verifyAdminPassword(ADMIN_DEFAULT_PASSWORD)) {
+  console.warn('[server] Admin password is set to the default value (admin/admin). Update it via the admin panel.');
+}
+
 function decodeImageDataUrl(dataUrl) {
   if (typeof dataUrl !== 'string') return null;
   const match = /^data:(image\/(?:png|jpe?g));base64,(.+)$/i.exec(dataUrl.trim());
@@ -5180,6 +5561,44 @@ app.get('/suggest', (req, res) => {
     query: queryParam,
     suggestions,
   });
+});
+
+function buildAdminProfilePayload() {
+  return {
+    ok: true,
+    username: adminCredentials.username || ADMIN_DEFAULT_USERNAME,
+    passwordUpdatedAt: adminCredentials.updatedAt || null,
+  };
+}
+
+app.post('/admin/login', (req, res) => {
+  const password = (req.body && req.body.password) || '';
+  if (!password || !verifyAdminPassword(password)) {
+    return res.status(401).json({ ok: false, error: 'Invalid password.' });
+  }
+  const token = issueAdminToken();
+  return res.json(Object.assign({ token }, buildAdminProfilePayload()));
+});
+
+app.get('/admin/profile', requireAdmin, (req, res) => {
+  return res.json(buildAdminProfilePayload());
+});
+
+app.post('/admin/password', requireAdmin, (req, res) => {
+  const currentPassword = req.body && req.body.currentPassword;
+  const newPassword = req.body && req.body.newPassword;
+  if (!newPassword || String(newPassword).length < 4) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'New password must be at least 4 characters long.' });
+  }
+  if (!verifyAdminPassword(currentPassword || '')) {
+    return res.status(400).json({ ok: false, error: 'Current password is incorrect.' });
+  }
+  updateAdminPassword(newPassword);
+  adminTokens.clear();
+  console.log('[server] Admin password updated.');
+  return res.json({ ok: true });
 });
 
 app.post('/submit', (req, res, next) => {

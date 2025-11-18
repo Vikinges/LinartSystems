@@ -12,10 +12,30 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
+const PROXY_PREFIXES = ['/service1', '/service2'];
+
+const shouldBypassBodyParsing = (req) => {
+  const urlPath = req.url || '';
+  return PROXY_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
+};
+
+const jsonParser = express.json();
+const urlencodedParser = express.urlencoded({ extended: true });
+
 app.use(cookieParser());
 app.use(session({ secret: process.env.SESSION_SECRET || 'changeme', resave: false, saveUninitialized: false }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use((req, res, next) => {
+  if (shouldBypassBodyParsing(req)) {
+    return next();
+  }
+  return jsonParser(req, res, next);
+});
+app.use((req, res, next) => {
+  if (shouldBypassBodyParsing(req)) {
+    return next();
+  }
+  return urlencodedParser(req, res, next);
+});
 
 const SERVICES_FILE = path.join(__dirname, 'services.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');

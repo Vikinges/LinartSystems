@@ -210,8 +210,11 @@
         color: #6b7280;
       }
       .employee-card p {
-        margin: 0;
+        margin: 0 0 0.35rem 0;
         color: #4c4f63;
+      }
+      .employee-card small {
+        color: #6b7280;
       }
       .employee-actions {
         display: flex;
@@ -221,7 +224,7 @@
       }
       .employee-actions .button {
         background: #2563eb;
-        color: white;
+        color: #ffffff;
         border: none;
         border-radius: 999px;
         padding: 0.6rem 1.2rem;
@@ -232,37 +235,63 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
-      .employee-list {
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .employee-row {
+      .employee-table-wrapper {
+        margin-top: 1rem;
         border: 1px solid #c7d2fe;
-        border-radius: 12px;
-        padding: 0.85rem 1rem;
+        border-radius: 16px;
         background: #eef2ff;
+        padding: 0.75rem;
+        overflow-x: auto;
+      }
+      .employee-table {
+        width: 100%;
+        min-width: 640px;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .employee-table th,
+      .employee-table td {
+        border: 1px solid #d9def8;
+        padding: 0.55rem 0.65rem;
+        vertical-align: top;
+        background: #f8f9ff;
+      }
+      .employee-table thead th {
+        background: #dfe6ff;
+        color: #1f2a5b;
+        font-weight: 600;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .employee-table tbody tr:nth-child(even) td {
+        background: #fdfdff;
+      }
+      .employee-index-cell {
+        min-width: 95px;
+        width: 14%;
+      }
+      .employee-index-header {
         display: flex;
         flex-direction: column;
-        gap: 0.6rem;
-      }
-      .employee-row-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
+        gap: 0.35rem;
         font-weight: 600;
         color: #1f2a5b;
-        font-size: 0.95rem;
+        margin-bottom: 0.35rem;
       }
-      .employee-grid {
-        display: grid;
-        gap: 0.75rem 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        align-items: end;
+      .employee-person-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
       }
-      .employee-grid .field > span,
+      .employee-person-fields .field,
+      .employee-table td .field {
+        margin: 0;
+      }
+      .employee-table td .field > span,
       .field-datetime > span {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         color: #4b5563;
       }
       .field-datetime {
@@ -290,7 +319,7 @@
       }
       .time-input-wrapper input {
         flex: 0 1 120px;
-        min-width: 100px;
+        min-width: 110px;
       }
       .time-shortcut {
         border: 1px solid #c7cbef;
@@ -299,7 +328,8 @@
         color: #1f2a5b;
         font-size: 0.75rem;
         font-weight: 600;
-        padding: 0.35rem 0.6rem;
+        padding: 0.4rem 0.7rem;
+        min-width: 3rem;
         cursor: pointer;
         transition: background 0.15s ease, border-color 0.15s ease;
       }
@@ -320,14 +350,30 @@
         font-weight: 600;
         color: #1d4ed8;
         white-space: pre-line;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
+      }
+      .employee-remove-button {
+        border: 1px dashed #c7cbef;
+        border-radius: 999px;
+        padding: 0.45rem 0.75rem;
+        background: #ffffff;
+        color: #b91c1c;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .employee-remove-button:hover,
+      .employee-remove-button:focus-visible {
+        border-color: #ef4444;
+        color: #ef4444;
+        outline: none;
+      }
+      .employee-remove-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
       .employee-summary {
-        margin-top: 0.5rem;
-        padding-top: 0.75rem;
-        border-top: 1px solid #d8d8e5;
         display: grid;
-        gap: 0.35rem;
+        gap: 0.4rem;
         font-weight: 600;
         color: #1f2a5b;
       }
@@ -340,20 +386,12 @@
       @media (min-width: 640px) {
         .employee-summary {
           grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-          align-items: start;
         }
       }
-      .link-button {
-        background: none;
-        border: none;
-        color: #2563eb;
-        font-weight: 600;
-        cursor: pointer;
-        padding: 0;
-      }
-      .link-button:disabled {
-        color: #a1a1b3;
-        cursor: default;
+      @media (max-width: 720px) {
+        .employee-table {
+          min-width: 560px;
+        }
       }
       .photos-card {
         display: grid;
@@ -568,6 +606,55 @@
         white-space: pre-wrap;
         word-break: break-word;
       }
+      .admin-card {
+        margin-top: 1.5rem;
+      }
+      .admin-card[hidden] {
+        display: none !important;
+      }
+      .admin-card form {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        margin-top: 0.75rem;
+      }
+      .admin-card input[type="password"] {
+        font: inherit;
+        border: 1px solid #d8d8e5;
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-width: 220px;
+      }
+      .admin-errors {
+        margin-top: 0.5rem;
+        color: #b91c1c;
+        font-size: 0.85rem;
+      }
+      .admin-section__status {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #0f172a;
+      }
+      .admin-profile {
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .link-button {
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .link-button.secondary {
+        color: #1e293b;
+      }
+      .link-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
       #status {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -631,6 +718,106 @@
           <datalist id="suggest-service-company-name" data-suggest-list="service_company_name"></datalist>
         </label>
           </div>
+        </section>
+        <section class="card employee-card" data-employees-section data-employee-max="20">
+          <h2>On-site team time sheet</h2>
+          <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
+          <div class="employee-actions">
+            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
+          </div>
+          <div class="employee-table-wrapper">
+            <table class="employee-table">
+              <thead>
+                <tr>
+                  <th scope="col">Employee</th>
+                  <th scope="col">Name & role</th>
+                  <th scope="col">Arrival</th>
+                  <th scope="col">Departure</th>
+                </tr>
+              </thead>
+              <tbody data-employee-list></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7">
+                    <div class="employee-summary" data-employee-summary>
+                      <span data-employee-total>Working time: 0m | Required breaks: pending</span>
+                      <span data-employee-count>No employees added yet.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <template id="employee-row-template">
+            <tr class="employee-row" data-employee-row>
+              <td class="employee-index-cell">
+                <div class="employee-index-header">
+                  <span data-employee-title>Employee #1</span>
+                  <button type="button" class="employee-remove-button" data-action="employee-remove">Remove</button>
+                </div>
+                <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
+              </td>
+              <td>
+                <div class="employee-person-fields">
+                  <label class="field" data-field-wrapper="name">
+                    <span>Employee name</span>
+                    <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
+                  </label>
+                  <label class="field" data-field-wrapper="role">
+                    <span>Role / position</span>
+                    <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
+                  </label>
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="arrival">
+                  <span>Arrival (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="arrival" />
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="departure">
+                  <span>Departure (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="departure" />
+                </div>
+              </td>
+            </tr>
+          </template>
         </section>
       <section class="card">
         <h2>LED display checks</h2>
@@ -942,80 +1129,6 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         </table>
       </section>
 
-        <section class="card employee-card" data-employees-section data-employee-max="20">
-          <h2>On-site team</h2>
-          <p>Record every team member on site to capture arrival/departure time and required breaks.</p>
-          <div class="employee-actions">
-            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
-          </div>
-          <div class="employee-list" data-employee-list></div>
-          <div class="employee-summary" data-employee-summary>
-            <span data-employee-total>Working time: 0m | Required breaks: pending</span>
-            <span data-employee-count>No employees added yet.</span>
-          </div>
-          <template id="employee-row-template">
-            <div class="employee-row" data-employee-row>
-              <div class="employee-row-header">
-                <span data-employee-title>Employee #1</span>
-                <button type="button" class="link-button" data-action="employee-remove">Remove</button>
-              </div>
-              <div class="employee-grid">
-                <label class="field" data-field-wrapper="name">
-                  <span>Employee name</span>
-                  <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
-                </label>
-                <label class="field" data-field-wrapper="role">
-                  <span>Role / position</span>
-                  <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
-                </label>
-                <div class="field field-datetime" data-datetime-field="arrival">
-                  <span>Arrival (24h)</span>
-                  <div class="datetime-inputs">
-                    <input type="date" data-datetime-part="date" />
-                    <div class="time-input-wrapper" data-time-input-wrapper>
-                      <input
-                        type="text"
-                        data-datetime-part="time"
-                        placeholder="HH:MM"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        pattern="[0-2][0-9]:[0-5][0-9]"
-                        title="Use 24-hour format HH:MM"
-                      />
-                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
-                    </div>
-                  </div>
-                  <input type="hidden" data-field="arrival" />
-                </div>
-                <div class="field field-datetime" data-datetime-field="departure">
-                  <span>Departure (24h)</span>
-                  <div class="datetime-inputs">
-                    <input type="date" data-datetime-part="date" />
-                    <div class="time-input-wrapper" data-time-input-wrapper>
-                      <input
-                        type="text"
-                        data-datetime-part="time"
-                        placeholder="HH:MM"
-                        inputmode="numeric"
-                        autocomplete="off"
-                        pattern="[0-2][0-9]:[0-5][0-9]"
-                        title="Use 24-hour format HH:MM"
-                      />
-                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-15" title="Subtract 15 minutes">-15m</button>
-                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="15" title="Add 15 minutes">+15m</button>
-                    </div>
-                  </div>
-                  <input type="hidden" data-field="departure" />
-                </div>
-              </div>
-              <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
-            </div>
-          </template>
-        </section>
-
         <section class="card">
           <h2>Signatures</h2>
           <div class="grid two-col signature-info">
@@ -1091,6 +1204,41 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           <pre id="status"></pre>
         </div>
       </form>
+      <section class="card admin-card" data-admin-section>
+        <div data-admin-unauth>
+          <h2>Admin tools</h2>
+          <p>Log in to manage protected features.</p>
+          <form data-admin-login>
+            <label class="field" style="flex:1 1 220px">
+              <span>Password</span>
+              <input type="password" data-admin-password autocomplete="current-password" required />
+            </label>
+            <button type="submit" class="link-button">Log in</button>
+          </form>
+          <div class="admin-errors" data-admin-login-error></div>
+        </div>
+        <div data-admin-auth hidden>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <div>
+              <h2 style="margin:0;">Admin tools</h2>
+              <div class="admin-profile" data-admin-profile></div>
+            </div>
+            <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+          </div>
+          <form data-admin-password-change>
+            <label class="field" style="flex:1 1 200px">
+              <span>Current password</span>
+              <input type="password" autocomplete="current-password" required data-admin-password-current />
+            </label>
+            <label class="field" style="flex:1 1 200px">
+              <span>New password</span>
+              <input type="password" autocomplete="new-password" required data-admin-password-new />
+            </label>
+            <button type="submit" class="link-button">Change password</button>
+          </form>
+          <div class="admin-section__status" data-admin-status></div>
+        </div>
+      </section>
     </div>
     <script>
       (function () {
@@ -1107,6 +1255,195 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+        const adminSectionEl = document.querySelector('[data-admin-section]');
+        const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
+        const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
+        const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
+        const adminPasswordInput = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password]') : null;
+        const adminLoginErrorEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login-error]') : null;
+        const adminLogoutBtn = adminSectionEl ? adminSectionEl.querySelector('[data-admin-logout]') : null;
+        const adminPasswordForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password-change]') : null;
+        const adminPasswordCurrentInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-current]')
+          : null;
+        const adminPasswordNewInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-new]')
+          : null;
+        const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
+        const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const ADMIN_TOKEN_KEY = 'pm-admin-token';
+        let adminTokenStore = null;
+        try {
+          adminTokenStore = window.localStorage;
+        } catch (err) {
+          adminTokenStore = null;
+        }
+
+        const readJsonPayload = async (response) => {
+          try {
+            const text = await response.text();
+            if (!text) return null;
+            return JSON.parse(text);
+          } catch (err) {
+            return null;
+          }
+        };
+
+        const adminState = {
+          token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
+        };
+
+        const setAdminToken = (token) => {
+          adminState.token = token || '';
+          if (adminTokenStore) {
+            if (adminState.token) {
+              adminTokenStore.setItem(ADMIN_TOKEN_KEY, adminState.token);
+            } else {
+              adminTokenStore.removeItem(ADMIN_TOKEN_KEY);
+            }
+          }
+          updateAdminVisibility();
+        };
+
+        const showAdminStatus = (message, isError = false) => {
+          if (!adminStatusEl) return;
+          adminStatusEl.style.color = isError ? '#b91c1c' : '#0f172a';
+          adminStatusEl.textContent = message || '';
+        };
+
+        const renderAdminProfile = (payload) => {
+          if (!adminProfileEl) return;
+          if (!payload || !payload.username) {
+            adminProfileEl.textContent = '';
+            return;
+          }
+          const updated = payload.passwordUpdatedAt
+            ? new Date(payload.passwordUpdatedAt).toLocaleString()
+            : 'unknown';
+          adminProfileEl.textContent =
+            'Logged in as ' + payload.username + '. Password updated ' + updated + '.';
+        };
+
+        const updateAdminVisibility = () => {
+          if (!adminSectionEl) return;
+          const isAuthed = Boolean(adminState.token);
+          if (adminUnauthEl) adminUnauthEl.hidden = isAuthed;
+          if (adminAuthEl) adminAuthEl.hidden = !isAuthed;
+          if (!isAuthed) {
+            if (adminStatusEl) adminStatusEl.textContent = '';
+            if (adminProfileEl) adminProfileEl.textContent = '';
+          }
+        };
+
+        const adminFetch = (relativePath, options = {}) => {
+          if (!adminState.token) {
+            return Promise.reject(new Error('Admin login required.'));
+          }
+          const init = Object.assign({ headers: {}, credentials: 'same-origin' }, options);
+          init.headers = Object.assign({}, init.headers, {
+            Authorization: 'Bearer ' + adminState.token,
+          });
+          const targetUrl = buildAppUrl(relativePath || '');
+          return fetch(targetUrl, init).then(async (response) => {
+            const payload = await readJsonPayload(response);
+            if (!response.ok) {
+              if (response.status === 401) {
+                setAdminToken('');
+              }
+              const message = (payload && payload.error) || response.statusText || 'Request failed';
+              throw new Error(message);
+            }
+            return payload;
+          });
+        };
+
+        const refreshAdminProfile = () => {
+          if (!adminState.token) return;
+          adminFetch('admin/profile')
+            .then((payload) => {
+              renderAdminProfile(payload);
+            })
+            .catch((err) => {
+              console.warn('[admin] profile refresh failed', err);
+            });
+        };
+
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordInput || !adminPasswordInput.value) {
+              showAdminStatus('Enter the admin password.', true);
+              return;
+            }
+            const password = adminPasswordInput.value;
+            showAdminStatus('Signing in...');
+            fetch(buildAppUrl('admin/login'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ password }),
+            })
+              .then(readJsonPayload)
+              .then((payload) => {
+                if (!payload || !payload.token) {
+                  throw new Error('Unexpected response.');
+                }
+                adminPasswordInput.value = '';
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+                setAdminToken(payload.token);
+                showAdminStatus('Logged in.');
+                if (payload.username) {
+                  renderAdminProfile(payload);
+                } else {
+                  refreshAdminProfile();
+                }
+              })
+              .catch((err) => {
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
+                showAdminStatus(err.message || 'Login failed.', true);
+              });
+          });
+        }
+
+        if (adminLogoutBtn) {
+          adminLogoutBtn.addEventListener('click', () => {
+            setAdminToken('');
+            showAdminStatus('Logged out.');
+          });
+        }
+
+        if (adminPasswordForm) {
+          adminPasswordForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordCurrentInput || !adminPasswordNewInput) return;
+            const currentPassword = adminPasswordCurrentInput.value;
+            const newPassword = adminPasswordNewInput.value;
+            if (!newPassword || newPassword.length < 4) {
+              showAdminStatus('New password must be at least 4 characters.', true);
+              return;
+            }
+            showAdminStatus('Updating password...');
+            adminFetch('admin/password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword, newPassword }),
+            })
+              .then(() => {
+                adminPasswordCurrentInput.value = '';
+                adminPasswordNewInput.value = '';
+                setAdminToken('');
+                showAdminStatus('Password updated. Please log in again.');
+              })
+              .catch((err) => {
+                showAdminStatus(err.message || 'Password update failed.', true);
+              });
+          });
+        }
+
+        updateAdminVisibility();
+        if (adminState.token) {
+          refreshAdminProfile();
+        }
 
         const selectedFiles = new Map();
         const previewUrls = new Map();
@@ -1116,6 +1453,46 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const TIME_PRESET_LIST_ID = 'time-presets';
         const TIME_PRESET_STEP_MINUTES = 15;
         const TIME_VALUE_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        const endCustomerInput = document.getElementById('end-customer-name');
+        const customerNameInput = document.getElementById('customer-name');
+        const customerNameSync = { manual: false };
+        const appBaseUrl = new URL('.', window.location.href);
+        const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };
+
+        const syncCustomerNameFromSite = () => {
+          if (!endCustomerInput || !customerNameInput) return;
+          if (customerNameSync.manual) {
+            return;
+          }
+          customerNameInput.value = endCustomerInput.value.trim();
+        };
+
+        if (endCustomerInput && customerNameInput) {
+          syncCustomerNameFromSite();
+          ['input', 'change'].forEach((eventName) => {
+            endCustomerInput.addEventListener(eventName, () => {
+              if (!customerNameSync.manual || !customerNameInput.value.trim()) {
+                if (!customerNameInput.value.trim()) {
+                  customerNameSync.manual = false;
+                }
+                syncCustomerNameFromSite();
+              }
+            });
+          });
+          customerNameInput.addEventListener('input', () => {
+            const current = customerNameInput.value.trim();
+            const source = endCustomerInput.value.trim();
+            if (!current) {
+              customerNameSync.manual = false;
+              syncCustomerNameFromSite();
+              return;
+            }
+            customerNameSync.manual = current !== source;
+          });
+        }
 
         const clampNumber = (value, min, max) => {
           if (!Number.isFinite(value)) return min;
@@ -1703,6 +2080,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           };
 
           const nowLocalIso = () => formatIsoFromDate(new Date());
+          const formSessionStartIso = nowLocalIso();
 
           const addMinutesToIso = (iso, minutes) => {
             const base = parseLocalDateTime(iso);
@@ -2214,14 +2592,16 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
 
             const arrivalValue =
               (data.arrival ? String(data.arrival) : '') ||
-              (isPrimary ? nowLocalIso() : primaryState?.arrival) ||
               options.prefillArrival ||
-              nowLocalIso();
+              (isPrimary ? formSessionStartIso : primaryState?.arrival) ||
+              formSessionStartIso;
 
             const departureValue =
               (data.departure ? String(data.departure) : '') ||
-              (isPrimary ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES) : primaryState?.departure) ||
               options.prefillDeparture ||
+              (isPrimary
+                ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES)
+                : primaryState?.departure) ||
               addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES);
 
             setDateTimeValue(row, 'arrival', arrivalValue);
@@ -2312,7 +2692,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             addButton.addEventListener('click', (event) => {
               event.preventDefault();
               const primaryState = rowStates.get(rowElements()[0]);
-              const baseArrival = (primaryState && primaryState.arrival) || nowLocalIso();
+              const baseArrival = (primaryState && primaryState.arrival) || formSessionStartIso;
               const row = addRow(
                 {},
                 {
@@ -2541,7 +2921,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
               const params =
                 '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
               const init = pendingController ? { signal: pendingController.signal } : undefined;
-              fetch('/suggest' + params, init)
+              fetch(buildAppUrl('suggest' + params), init)
                 .then((response) => (response.ok ? response.json() : null))
                 .then((payload) => {
                   if (!payload || !Array.isArray(payload.suggestions)) {
@@ -2649,7 +3029,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           });
 
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', '/submit');
+          xhr.open('POST', buildAppUrl('submit'));
 
           xhr.upload.onprogress = (event) => {
             if (!event) return;
@@ -2736,7 +3116,8 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
               setProgress(100, 'Upload complete');
               setTimeout(() => {
                 hideProgress();
-                window.location.href = payload.url;
+              const downloadUrl = new URL(payload.url || '', window.location.href).toString();
+              window.location.href = downloadUrl;
               }, 200);
             } else {
               submitButton.classList.add('is-error');
