@@ -3289,6 +3289,34 @@ ${rows.join('\n')}
         gap: 0.5rem;
         flex-wrap: wrap;
       }
+      .admin-preview {
+        margin-top: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+        min-height: 320px;
+        background: #f8fafc;
+        display: flex;
+        flex-direction: column;
+      }
+      .admin-preview header {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 600;
+        font-size: 0.9rem;
+        background: #fff;
+      }
+      .admin-preview iframe {
+        flex: 1;
+        width: 100%;
+        border: none;
+        background: #fff;
+      }
+      .admin-preview__empty {
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: #475569;
+      }
       .admin-badge {
         display: inline-flex;
         align-items: center;
@@ -3618,11 +3646,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             <button type="submit" class="link-button">Upload &amp; activate</button>
           </form>
           <div class="admin-templates" data-admin-template-list></div>
-          <div class="admin-section__status" data-admin-status></div>
+          <div class="admin-preview" data-admin-preview hidden>
+            <header data-admin-preview-label>Template preview</header>
+            <iframe title="Template preview" data-admin-preview-frame></iframe>
+            <div class="admin-preview__empty" data-admin-preview-empty>No template selected.</div>
           </div>
+          <div class="admin-section__status" data-admin-status></div>
         </div>
       </div>
-    </section>
+    </div>
+  </section>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -3665,6 +3698,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
+        const adminPreviewEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-preview]') : null;
+        const adminPreviewLabelEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-label]')
+          : null;
+        const adminPreviewFrame = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-frame]')
+          : null;
+        const adminPreviewEmptyEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-empty]')
+          : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
@@ -3697,6 +3740,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
+        };
+        const adminUiState = {
+          previewTemplateId: null,
         };
 
         const setAdminModalVisible = (visible) => {
@@ -3773,6 +3819,25 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             'Logged in as ' + payload.username + '. Password updated ' + updated + '.';
         };
 
+        const showAdminPreview = (template) => {
+          if (!adminPreviewEl || !adminPreviewLabelEl || !adminPreviewFrame || !adminPreviewEmptyEl) return;
+          if (!template) {
+            adminPreviewEl.hidden = true;
+            adminPreviewFrame.src = 'about:blank';
+            adminPreviewFrame.hidden = true;
+            adminPreviewEmptyEl.hidden = false;
+            adminUiState.previewTemplateId = null;
+            return;
+          }
+          adminPreviewEl.hidden = false;
+          adminPreviewLabelEl.textContent = 'Template preview: ' + (template.label || template.relativePath);
+          const previewUrl = buildAppUrl('admin/templates/' + encodeURIComponent(template.id) + '/preview');
+          adminPreviewFrame.src = previewUrl + '#view=FitH&toolbar=0';
+           adminPreviewFrame.hidden = false;
+          adminPreviewEmptyEl.hidden = true;
+          adminUiState.previewTemplateId = template.id;
+        };
+
         const updateAdminVisibility = () => {
           if (!adminSectionEl) return;
           const isAuthed = Boolean(adminState.token);
@@ -3785,6 +3850,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               adminTemplateListEl.innerHTML =
                 '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
             }
+            showAdminPreview(null);
           }
         };
 
@@ -3826,6 +3892,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
             adminTemplateListEl.innerHTML =
               '<div style="padding:0.75rem;color:#475569;">No templates uploaded yet.</div>';
+            showAdminPreview(null);
             return;
           }
           const table = document.createElement('table');
@@ -3834,6 +3901,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             '<tr><th>Template</th><th>Status</th><th style="width:160px;">Actions</th></tr>';
           table.appendChild(thead);
           const tbody = document.createElement('tbody');
+          let previewCandidate = null;
           payload.templates.forEach((tpl) => {
             const row = document.createElement('tr');
             const colInfo = document.createElement('td');
@@ -3867,6 +3935,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             downloadLink.rel = 'noopener noreferrer';
             colActions.appendChild(downloadLink);
 
+            const previewBtn = document.createElement('button');
+            previewBtn.type = 'button';
+            previewBtn.className = 'link-button';
+            previewBtn.textContent = 'Preview';
+            previewBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              showAdminPreview(tpl);
+            });
+            colActions.appendChild(previewBtn);
+
             const selectBtn = document.createElement('button');
             selectBtn.type = 'button';
             selectBtn.className = 'link-button';
@@ -3881,10 +3959,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             row.appendChild(colStatus);
             row.appendChild(colActions);
             tbody.appendChild(row);
+
+            if (!previewCandidate) {
+              if (adminUiState.previewTemplateId && adminUiState.previewTemplateId === tpl.id) {
+                previewCandidate = tpl;
+              } else if (tpl.id === payload.activeTemplateId) {
+                previewCandidate = tpl;
+              }
+            }
           });
           table.appendChild(tbody);
           adminTemplateListEl.innerHTML = '';
           adminTemplateListEl.appendChild(table);
+          if (!previewCandidate) {
+            previewCandidate = payload.templates[0];
+          }
+          showAdminPreview(previewCandidate);
         };
 
         const loadAdminTemplates = () => {
@@ -3914,6 +4004,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           })
             .then((payload) => {
               showAdminStatus('Template activated.');
+              adminUiState.previewTemplateId = payload.activeTemplateId || templateId;
               renderAdminTemplates(payload);
             })
             .catch((err) => {
@@ -4015,6 +4106,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               .then((payload) => {
                 adminUploadInput.value = '';
                 showAdminStatus('Template uploaded and activated.');
+                 adminUiState.previewTemplateId = payload.activeTemplateId;
                 renderAdminTemplates(payload);
               })
               .catch((err) => {
@@ -6132,6 +6224,25 @@ app.post('/admin/templates/select', requireAdmin, (req, res) => {
   } catch (err) {
     return res.status(404).json({ ok: false, error: err.message || 'Template not found.' });
   }
+});
+
+app.get('/admin/templates/:templateId/preview', (req, res) => {
+  const templateId = req.params.templateId;
+  const entry = getTemplateEntryById(templateId);
+  if (!entry) {
+    return res.status(404).json({ ok: false, error: 'Template not found.' });
+  }
+  const safeRelative = sanitizeRelativePath(entry.relativePath || '');
+  const absolute = path.join(PUBLIC_DIR, safeRelative);
+  if (!fs.existsSync(absolute)) {
+    return res.status(404).json({ ok: false, error: 'Template file missing.' });
+  }
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="${encodeURIComponent(path.basename(entry.relativePath || 'template.pdf'))}"`,
+  );
+  return res.sendFile(absolute);
 });
 
 app.post('/submit', (req, res, next) => {
