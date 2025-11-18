@@ -21,7 +21,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
-const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template.pdf');
+const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template1.pdf');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;

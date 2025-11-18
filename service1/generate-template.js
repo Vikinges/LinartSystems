@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 
-const OUTPUT_PATH = path.resolve(__dirname, 'public', 'form-template.pdf');
+const OUTPUT_PATH = path.resolve(__dirname, 'public', 'form-template1.pdf');
 
 async function main() {
   const pdfDoc = await PDFDocument.create();

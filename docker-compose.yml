@@ -35,7 +35,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.linart.rule=Host(`linart.club`)
-      - traefik.http.routers.linart.entrypoints=web
+      - traefik.http.routers.linart.entrypoints=web,websecure
+      - traefik.http.routers.linart.tls=true
+      - traefik.http.routers.linart.tls.certresolver=letsencrypt
       - traefik.http.services.linart.loadbalancer.server.port=8080
 
   service1:

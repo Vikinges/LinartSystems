@@ -2,7 +2,7 @@
 
 ## 1. Overview
 - Node.js 20 + Express application that serves a maintenance checklist form and produces a filled PDF plus JSON metadata.
-- PDF generation relies on pdf-lib and an AcroForm template stored at public/form-template.pdf.
+- PDF generation relies on pdf-lib and an AcroForm template stored at public/form-template1.pdf.
 - Field definitions come from ields.json; human-friendly labels can be overridden via mapping.json.
 - The service can be containerised via the provided Dockerfile/docker-compose.
 
@@ -119,4 +119,3 @@ pm start or Docker) and open http://localhost:3000/ to test the form.
 - **Environment expectations:** Node.js 20+, npm 10+. The server binds to `PORT` (defaults to 3000) and respects `HOST_URL`/`TEMPLATE_PATH` from `.env`.
 - **Publishing updates:** run `npm test` ( to be implemented ), `git commit`, then `git push` to `origin/main`. GitHub Actions are not configured yet; manual deployment is required.
 - **Artifacts:** generated PDFs/JSON land in `out/`; ensure the directory is writable in the target environment.
-
