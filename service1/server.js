@@ -5,6 +5,7 @@ require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
 const fsExtra = require('fs-extra');
+const crypto = require('crypto');
 const express = require('express');
 const multer = require('multer');
 const helmet = require('helmet');
@@ -21,17 +22,26 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
-const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template.pdf');
+const TEMPLATE_STORAGE_DIR = path.join(PUBLIC_DIR, 'templates');
+const TEMPLATE_MANIFEST_PATH = path.join(DATA_DIR, 'templates.json');
+const ADMIN_CREDENTIALS_PATH = path.join(DATA_DIR, 'admin.json');
+const DEFAULT_TEMPLATE_FILENAME = 'form-template1.pdf';
+const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, DEFAULT_TEMPLATE_FILENAME);
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;
 const TEMPLATE_PATH_ENV = process.env.TEMPLATE_PATH;
 const MAX_FILE_SIZE_BYTES = 128 * 1024 * 1024;
 const MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024;
+const ADMIN_DEFAULT_USERNAME = 'admin';
+const ADMIN_DEFAULT_PASSWORD = 'admin';
+
+let templatePath = DEFAULT_TEMPLATE;
 
 fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
 fsExtra.ensureDirSync(DATA_DIR);
+fsExtra.ensureDirSync(TEMPLATE_STORAGE_DIR);
 
 function formatBytesHuman(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -67,6 +77,174 @@ function loadJson(filePath, fallback = null) {
 const fieldsConfig = loadJson(FIELDS_PATH, { fields: [] }) || { fields: [] };
 const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
 
+function loadTemplateManifest() {
+  const fallback = {
+    activeTemplateId: null,
+    templates: [],
+  };
+  const manifest = loadJson(TEMPLATE_MANIFEST_PATH, fallback) || fallback;
+  if (!Array.isArray(manifest.templates)) {
+    manifest.templates = [];
+  }
+  return manifest;
+}
+
+function saveTemplateManifest(manifest) {
+  fsExtra.ensureFileSync(TEMPLATE_MANIFEST_PATH);
+  fs.writeFileSync(TEMPLATE_MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
+}
+
+function sanitizeRelativePath(relativePath) {
+  return relativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+}
+
+function ensureTemplateEntry(manifest, relativePath, overrides = {}) {
+  const sanitized = sanitizeRelativePath(relativePath);
+  let entry = manifest.templates.find((tpl) => tpl && tpl.relativePath === sanitized);
+  if (!entry) {
+    entry = {
+      id: overrides.id || `tpl-${crypto.randomBytes(6).toString('hex')}`,
+      label: overrides.label || path.basename(sanitized),
+      relativePath: sanitized,
+      uploadedAt: overrides.uploadedAt || new Date().toISOString(),
+      size: overrides.size || null,
+      source: overrides.source || 'managed',
+    };
+    manifest.templates.push(entry);
+  } else {
+    entry.label = overrides.label || entry.label;
+    entry.size = overrides.size || entry.size;
+    entry.source = overrides.source || entry.source || 'managed';
+  }
+  return entry;
+}
+
+function pruneMissingTemplates(manifest) {
+  manifest.templates = manifest.templates.filter((entry) => {
+    if (!entry || !entry.relativePath) return false;
+    const absPath = path.join(PUBLIC_DIR, entry.relativePath);
+    return fs.existsSync(absPath);
+  });
+  if (
+    manifest.activeTemplateId &&
+    !manifest.templates.some((entry) => entry.id === manifest.activeTemplateId)
+  ) {
+    manifest.activeTemplateId = null;
+  }
+  return manifest;
+}
+
+let templateManifest = pruneMissingTemplates(loadTemplateManifest());
+const builtinTemplateEntry = ensureTemplateEntry(templateManifest, DEFAULT_TEMPLATE_FILENAME, {
+  id: 'builtin-form-template1',
+  label: 'Form template 1 (default)',
+  source: 'built-in',
+  uploadedAt:
+    templateManifest.templates.find((tpl) => tpl.id === 'builtin-form-template1')?.uploadedAt ||
+    new Date().toISOString(),
+});
+if (!templateManifest.activeTemplateId) {
+  templateManifest.activeTemplateId = builtinTemplateEntry.id;
+}
+saveTemplateManifest(templateManifest);
+
+function getTemplateEntryById(templateId) {
+  if (!templateId) return null;
+  return templateManifest.templates.find((entry) => entry && entry.id === templateId) || null;
+}
+
+function getTemplateAbsolutePath(entry) {
+  if (!entry || !entry.relativePath) return null;
+  return path.join(PUBLIC_DIR, entry.relativePath);
+}
+
+function applyActiveTemplateFromManifest({ persist = false } = {}) {
+  const entry = getTemplateEntryById(templateManifest.activeTemplateId) || builtinTemplateEntry;
+  const absolutePath = getTemplateAbsolutePath(entry);
+  if (!absolutePath || !fs.existsSync(absolutePath)) {
+    templateManifest.activeTemplateId = builtinTemplateEntry.id;
+    if (persist) saveTemplateManifest(templateManifest);
+    return getTemplateAbsolutePath(builtinTemplateEntry);
+  }
+  if (persist) saveTemplateManifest(templateManifest);
+  return absolutePath;
+}
+
+function generateSalt() {
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function hashPassword(password, salt) {
+  return crypto.createHash('sha256').update(String(salt || '') + String(password || '')).digest('hex');
+}
+
+function loadAdminCredentials() {
+  if (!fs.existsSync(ADMIN_CREDENTIALS_PATH)) {
+    const salt = generateSalt();
+    const record = {
+      username: ADMIN_DEFAULT_USERNAME,
+      passwordHash: hashPassword(ADMIN_DEFAULT_PASSWORD, salt),
+      salt,
+      updatedAt: new Date().toISOString(),
+    };
+    fsExtra.ensureFileSync(ADMIN_CREDENTIALS_PATH);
+    fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(record, null, 2), 'utf8');
+    console.warn('[server] Admin password reset to default (admin/admin). Change it immediately via the admin panel.');
+    return record;
+  }
+  const record = loadJson(ADMIN_CREDENTIALS_PATH, null);
+  if (!record || !record.passwordHash || !record.salt) {
+    const salt = generateSalt();
+    const restored = {
+      username: ADMIN_DEFAULT_USERNAME,
+      passwordHash: hashPassword(ADMIN_DEFAULT_PASSWORD, salt),
+      salt,
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(restored, null, 2), 'utf8');
+    return restored;
+  }
+  return record;
+}
+
+function saveAdminCredentials(record) {
+  fsExtra.ensureFileSync(ADMIN_CREDENTIALS_PATH);
+  fs.writeFileSync(ADMIN_CREDENTIALS_PATH, JSON.stringify(record, null, 2), 'utf8');
+}
+
+let adminCredentials = loadAdminCredentials();
+
+function verifyAdminPassword(password) {
+  if (!adminCredentials || !adminCredentials.salt) return false;
+  const hash = hashPassword(password, adminCredentials.salt);
+  return hash === adminCredentials.passwordHash;
+}
+
+function updateAdminPassword(newPassword) {
+  const salt = generateSalt();
+  adminCredentials = {
+    username: adminCredentials.username || ADMIN_DEFAULT_USERNAME,
+    passwordHash: hashPassword(newPassword, salt),
+    salt,
+    updatedAt: new Date().toISOString(),
+  };
+  saveAdminCredentials(adminCredentials);
+}
+
+function setActiveTemplateById(templateId, { persist = true } = {}) {
+  const entry = getTemplateEntryById(templateId);
+  if (!entry) {
+    throw new Error(`Template ${templateId} not found`);
+  }
+  templateManifest.activeTemplateId = entry.id;
+  const absolutePath = applyActiveTemplateFromManifest({ persist });
+  templatePath = absolutePath;
+  console.log(
+    `[server] Active template switched to ${entry.label} (${entry.relativePath})`,
+  );
+  return absolutePath;
+}
+
 function resolveTemplatePath(candidate) {
   if (!candidate || typeof candidate !== 'string') {
     return null;
@@ -89,22 +267,22 @@ function resolveTemplatePath(candidate) {
   return null;
 }
 
+const manifestActivePath = applyActiveTemplateFromManifest();
 const templateCandidates = [
   TEMPLATE_PATH_ENV,
+  manifestActivePath,
   fieldsConfig.templatePath,
   DEFAULT_TEMPLATE,
 ];
-let templatePath = null;
+let resolvedTemplatePath = null;
 for (const candidate of templateCandidates) {
   const resolved = resolveTemplatePath(candidate);
   if (resolved) {
-    templatePath = resolved;
+    resolvedTemplatePath = resolved;
     break;
   }
 }
-if (!templatePath) {
-  templatePath = DEFAULT_TEMPLATE;
-}
+templatePath = resolvedTemplatePath || DEFAULT_TEMPLATE;
 
 function toSingleValue(value) {
   if (Array.isArray(value)) {
@@ -2986,6 +3164,87 @@ ${rows.join('\n')}
         white-space: pre-wrap;
         word-break: break-word;
       }
+      .admin-card {
+        margin-top: 1.5rem;
+      }
+      .admin-card[hidden] {
+        display: none !important;
+      }
+      .admin-card [hidden] {
+        display: none !important;
+      }
+      .admin-card form {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        align-items: flex-end;
+      }
+      .admin-card input[type="password"],
+      .admin-card input[type="file"] {
+        font: inherit;
+        border: 1px solid #d8d8e5;
+        border-radius: 8px;
+        padding: 0.6rem;
+      }
+      .admin-section__status {
+        margin-top: 0.5rem;
+        color: #0f172a;
+        font-size: 0.9rem;
+      }
+      .admin-errors {
+        color: #b91c1c;
+        font-size: 0.85rem;
+        margin-top: 0.4rem;
+      }
+      .admin-templates {
+        margin-top: 1rem;
+        border: 1px solid #d8d8e5;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .admin-templates table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .admin-templates th,
+      .admin-templates td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+        text-align: left;
+        font-size: 0.9rem;
+      }
+      .admin-templates th {
+        background: #f8fafc;
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .admin-templates tr:last-child td {
+        border-bottom: none;
+      }
+      .admin-template__name {
+        font-weight: 600;
+      }
+      .admin-template__meta {
+        color: #64748b;
+        font-size: 0.8rem;
+      }
+      .admin-template__actions {
+        text-align: right;
+      }
+      .admin-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        font-size: 0.75rem;
+        padding: 0.1rem 0.45rem;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #0f172a;
+      }
+      .admin-badge--active {
+        background: #d1fae5;
+        color: #065f46;
+      }
       #status {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -3212,6 +3471,46 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         </div>
       </form>
     </div>
+    <section class="card admin-card" data-admin-section>
+      <div data-admin-unauth>
+        <h2>Admin tools</h2>
+        <p>Login to upload new PDF templates or switch the active one.</p>
+        <form data-admin-login>
+          <label class="field" style="flex:1 1 240px">
+            <span>Password</span>
+            <input type="password" data-admin-password autocomplete="current-password" required />
+          </label>
+          <button type="submit" class="link-button">Log in</button>
+        </form>
+        <div class="admin-errors" data-admin-login-error></div>
+      </div>
+      <div data-admin-auth hidden>
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.75rem;">
+          <h2 style="margin:0;">Template manager</h2>
+          <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+        </div>
+        <form data-admin-upload>
+          <label class="field" style="flex:1 1 260px">
+            <span>Upload new PDF</span>
+            <input type="file" accept="application/pdf" data-admin-upload-input required />
+          </label>
+          <button type="submit" class="link-button">Upload &amp; activate</button>
+        </form>
+        <form data-admin-password-change style="margin-top:0.75rem;">
+          <label class="field" style="flex:1 1 200px">
+            <span>Current password</span>
+            <input type="password" autocomplete="current-password" required data-admin-password-current />
+          </label>
+          <label class="field" style="flex:1 1 200px">
+            <span>New password</span>
+            <input type="password" autocomplete="new-password" required data-admin-password-new />
+          </label>
+          <button type="submit" class="link-button secondary">Change password</button>
+        </form>
+        <div class="admin-section__status" data-admin-status></div>
+        <div class="admin-templates" data-admin-template-list></div>
+      </div>
+    </section>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -3227,6 +3526,288 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+
+        const adminSectionEl = document.querySelector('[data-admin-section]');
+        const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
+        const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
+        const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
+        const adminLoginErrorEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login-error]') : null;
+        const adminPasswordInput = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password]') : null;
+        const adminUploadForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-upload]') : null;
+        const adminUploadInput = adminSectionEl ? adminSectionEl.querySelector('[data-admin-upload-input]') : null;
+        const adminTemplateListEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-template-list]') : null;
+        const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
+        const adminLogoutBtn = adminSectionEl ? adminSectionEl.querySelector('[data-admin-logout]') : null;
+        const adminPasswordForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password-change]') : null;
+        const adminPasswordCurrentInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-current]')
+          : null;
+        const adminPasswordNewInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-new]')
+          : null;
+        const ADMIN_TOKEN_KEY = 'pm-admin-token';
+        let adminTokenStore = null;
+        try {
+          adminTokenStore = window.localStorage;
+        } catch (err) {
+          adminTokenStore = null;
+        }
+        const adminState = {
+          token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
+        };
+
+        const readJsonPayload = async (response) => {
+          try {
+            const text = await response.text();
+            if (!text) return null;
+            return JSON.parse(text);
+          } catch (err) {
+            return null;
+          }
+        };
+
+        const setAdminToken = (token) => {
+          adminState.token = token || '';
+          if (adminTokenStore) {
+            if (adminState.token) {
+              adminTokenStore.setItem(ADMIN_TOKEN_KEY, adminState.token);
+            } else {
+              adminTokenStore.removeItem(ADMIN_TOKEN_KEY);
+            }
+          }
+          updateAdminVisibility();
+        };
+
+        const updateAdminVisibility = () => {
+          if (!adminSectionEl) return;
+          const hasToken = Boolean(adminState.token);
+          if (adminUnauthEl) adminUnauthEl.hidden = hasToken;
+          if (adminAuthEl) adminAuthEl.hidden = !hasToken;
+          if (!hasToken && adminTemplateListEl) {
+            adminTemplateListEl.innerHTML =
+              '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+          }
+        };
+
+        const showAdminStatus = (message, isError = false) => {
+          if (!adminStatusEl) return;
+          adminStatusEl.style.color = isError ? '#b91c1c' : '#0f172a';
+          adminStatusEl.textContent = message || '';
+        };
+
+        const adminFetch = (relativePath, options = {}) => {
+          if (!adminState.token) {
+            return Promise.reject(new Error('Admin not authenticated'));
+          }
+          const init = Object.assign({ headers: {} }, options);
+          init.headers = Object.assign({}, init.headers, {
+            Authorization: 'Bearer ' + adminState.token,
+          });
+          const targetUrl = buildAppUrl(relativePath || '');
+          return fetch(targetUrl, init).then(async (response) => {
+            const payload = await readJsonPayload(response);
+            if (!response.ok) {
+              if (response.status === 401) {
+                setAdminToken('');
+                updateAdminVisibility();
+              }
+              throw new Error((payload && payload.error) || response.statusText || 'Request failed');
+            }
+            return payload;
+          });
+        };
+
+        const renderAdminTemplates = (payload) => {
+          if (!adminTemplateListEl) return;
+          if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
+            adminTemplateListEl.innerHTML =
+              '<div style="padding:0.75rem;color:#475569;">No templates uploaded yet.</div>';
+            return;
+          }
+          adminTemplateListEl.innerHTML = '';
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          const headRow = document.createElement('tr');
+          const thName = document.createElement('th');
+          thName.textContent = 'Template';
+          const thStatus = document.createElement('th');
+          thStatus.textContent = 'Status';
+          headRow.appendChild(thName);
+          headRow.appendChild(thStatus);
+          thead.appendChild(headRow);
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          payload.templates.forEach((tpl) => {
+            const isActive = tpl.id === payload.activeTemplateId;
+            const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown';
+            const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : '—';
+            const source = tpl.source || 'managed';
+            const row = document.createElement('tr');
+            const colInfo = document.createElement('td');
+            const label = document.createElement('label');
+            label.style.display = 'flex';
+            label.style.alignItems = 'center';
+            label.style.gap = '0.5rem';
+            label.style.cursor = 'pointer';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'template-choice';
+            radio.value = tpl.id;
+            radio.dataset.templateId = tpl.id;
+            radio.checked = isActive;
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'admin-template__name';
+            nameSpan.textContent = tpl.label || tpl.relativePath;
+            label.appendChild(radio);
+            label.appendChild(nameSpan);
+            const meta = document.createElement('div');
+            meta.className = 'admin-template__meta';
+            meta.innerHTML = tpl.relativePath + ' &middot; ' + uploaded + ' &middot; ' + size;
+            colInfo.appendChild(label);
+            colInfo.appendChild(meta);
+            const colStatus = document.createElement('td');
+            colStatus.className = 'admin-template__actions';
+            const badge = document.createElement('span');
+            badge.className = 'admin-badge' + (isActive ? ' admin-badge--active' : '');
+            badge.textContent = isActive ? 'Active' : source === 'built-in' ? 'Built-in' : 'Uploaded';
+            colStatus.appendChild(badge);
+            row.appendChild(colInfo);
+            row.appendChild(colStatus);
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+          adminTemplateListEl.appendChild(table);
+          adminTemplateListEl.querySelectorAll('input[data-template-id]').forEach((input) => {
+            input.addEventListener('change', () => {
+              if (!input.checked) return;
+              selectAdminTemplate(input.value);
+            });
+          });
+        };
+
+        const loadAdminTemplates = () => {
+          if (!adminSectionEl || !adminState.token) return;
+          showAdminStatus('Loading templates...');
+          adminFetch('admin/templates')
+            .then((payload) => {
+              showAdminStatus('Templates loaded at ' + new Date().toLocaleTimeString());
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        const selectAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Activating template...');
+          adminFetch('admin/templates/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template activated.');
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordInput || !adminPasswordInput.value) return;
+            const password = adminPasswordInput.value;
+            showAdminStatus('Logging in...');
+            fetch(buildAppUrl('admin/login'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ password }),
+            })
+              .then(readJsonPayload)
+              .then((payload) => {
+                if (!payload || !payload.ok || !payload.token) {
+                  throw new Error((payload && payload.error) || 'Invalid response');
+                }
+                adminPasswordInput.value = '';
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+                setAdminToken(payload.token);
+                updateAdminVisibility();
+                showAdminStatus('Logged in.');
+                loadAdminTemplates();
+              })
+              .catch((err) => {
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed';
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
+        if (adminUploadForm) {
+          adminUploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminUploadInput || !adminUploadInput.files || !adminUploadInput.files[0]) {
+              showAdminStatus('Choose a PDF file to upload.', true);
+              return;
+            }
+            const formData = new FormData();
+            formData.append('file', adminUploadInput.files[0]);
+            showAdminStatus('Uploading template...');
+            adminFetch('admin/templates/upload', {
+              method: 'POST',
+              body: formData,
+            })
+              .then((payload) => {
+                adminUploadInput.value = '';
+                showAdminStatus('Template uploaded and activated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
+        if (adminPasswordForm) {
+          adminPasswordForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordCurrentInput || !adminPasswordNewInput) return;
+            const currentPassword = adminPasswordCurrentInput.value;
+            const newPassword = adminPasswordNewInput.value;
+            if (!newPassword || newPassword.length < 4) {
+              showAdminStatus('New password must be at least 4 characters.', true);
+              return;
+            }
+            adminFetch('admin/password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword, newPassword }),
+            })
+              .then(() => {
+                adminPasswordCurrentInput.value = '';
+                adminPasswordNewInput.value = '';
+                setAdminToken('');
+                showAdminStatus('Password updated. Please log in again.');
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
+        if (adminLogoutBtn) {
+          adminLogoutBtn.addEventListener('click', () => {
+            setAdminToken('');
+            showAdminStatus('Logged out.');
+          });
+        }
+
+        updateAdminVisibility();
+        if (adminState.token) {
+          loadAdminTemplates();
+        }
 
         const selectedFiles = new Map();
         const previewUrls = new Map();
@@ -4988,6 +5569,111 @@ const uploadFields = upload.fields([
   { name: 'photos[]', maxCount: 20 },
 ]);
 
+function slugifyFilename(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 64) || 'template';
+}
+
+const templateUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, file, cb) => {
+      cb(null, TEMPLATE_STORAGE_DIR);
+    },
+    filename: (req, file, cb) => {
+      const base = slugifyFilename(path.basename(file.originalname || 'template.pdf', path.extname(file.originalname || '')));
+      const filename = `${Date.now()}-${base || 'template'}.pdf`;
+      cb(null, filename);
+    },
+  }),
+  limits: {
+    fileSize: MAX_FILE_SIZE_BYTES,
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    const mimetype = (file.mimetype || '').toLowerCase();
+    if (mimetype === 'application/pdf' || (file.originalname || '').toLowerCase().endsWith('.pdf')) {
+      return cb(null, true);
+    }
+    const err = new Error('Only PDF files are allowed.');
+    err.statusCode = 400;
+    return cb(err);
+  },
+});
+
+if (verifyAdminPassword(ADMIN_DEFAULT_PASSWORD)) {
+  console.warn('[server] Admin password is set to the default value (admin/admin). Update it from the admin panel.');
+}
+
+app.post('/admin/login', (req, res) => {
+  const password = (req.body && req.body.password) || '';
+  if (!password || !verifyAdminPassword(password)) {
+    return res.status(401).json({ ok: false, error: 'Invalid password.' });
+  }
+  const token = issueAdminToken();
+  return res.json({ ok: true, token });
+});
+
+app.get('/admin/templates', requireAdmin, (req, res) => {
+  return res.json(buildTemplatesResponse());
+});
+
+app.post(
+  '/admin/templates/upload',
+  requireAdmin,
+  templateUpload.single('file'),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: 'Missing PDF file.' });
+    }
+    const relativePath = sanitizeRelativePath(path.relative(PUBLIC_DIR, req.file.path));
+    const entry = ensureTemplateEntry(templateManifest, relativePath, {
+      id: `tpl-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+      label: req.file.originalname || path.basename(relativePath),
+      uploadedAt: new Date().toISOString(),
+      size: req.file.size,
+      source: 'upload',
+    });
+    templateManifest.activeTemplateId = entry.id;
+    saveTemplateManifest(templateManifest);
+    setActiveTemplateById(entry.id, { persist: true });
+    console.log(`[server] Uploaded template ${entry.label} (${entry.relativePath})`);
+    return res.json(buildTemplatesResponse());
+  },
+);
+
+app.post('/admin/templates/select', requireAdmin, (req, res) => {
+  const templateId = req.body && req.body.templateId;
+  if (!templateId) {
+    return res.status(400).json({ ok: false, error: 'templateId is required.' });
+  }
+  try {
+    setActiveTemplateById(templateId, { persist: true });
+    return res.json(buildTemplatesResponse());
+  } catch (err) {
+    return res.status(404).json({ ok: false, error: err.message || 'Template not found.' });
+  }
+});
+
+app.post('/admin/password', requireAdmin, (req, res) => {
+  const currentPassword = req.body && req.body.currentPassword;
+  const newPassword = req.body && req.body.newPassword;
+  if (!newPassword || String(newPassword).length < 4) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'New password must be at least 4 characters long.' });
+  }
+  if (!verifyAdminPassword(currentPassword || '')) {
+    return res.status(400).json({ ok: false, error: 'Current password is incorrect.' });
+  }
+  updateAdminPassword(newPassword);
+  adminTokens.clear();
+  console.log('[server] Admin password updated.');
+  return res.json({ ok: true });
+});
+
 function collectPhotoFiles(files) {
   if (!files) return [];
   const photos = [];
@@ -5001,6 +5687,63 @@ function collectPhotoFiles(files) {
   append(files.photos);
   append(files['photos[]']);
   return photos;
+}
+
+const adminTokens = new Map();
+const ADMIN_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+
+function cleanupAdminTokens() {
+  const now = Date.now();
+  for (const [token, meta] of adminTokens.entries()) {
+    if (!meta || now - meta.createdAt > ADMIN_TOKEN_TTL_MS) {
+      adminTokens.delete(token);
+    }
+  }
+}
+
+function issueAdminToken() {
+  cleanupAdminTokens();
+  const token = crypto.randomBytes(24).toString('hex');
+  adminTokens.set(token, { createdAt: Date.now() });
+  return token;
+}
+
+function extractAdminToken(req) {
+  const auth = req.headers.authorization || '';
+  if (auth.toLowerCase().startsWith('bearer ')) {
+    return auth.slice(7).trim();
+  }
+  if (req.headers['x-admin-token']) {
+    return String(req.headers['x-admin-token']).trim();
+  }
+  return null;
+}
+
+function requireAdmin(req, res, next) {
+  const token = extractAdminToken(req);
+  if (!token || !adminTokens.has(token)) {
+    return res.status(401).json({ ok: false, error: 'Admin authentication required.' });
+  }
+  return next();
+}
+
+function buildTemplatesResponse() {
+  const templates = templateManifest.templates
+    .slice()
+    .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
+    .map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      relativePath: entry.relativePath,
+      uploadedAt: entry.uploadedAt,
+      size: entry.size,
+      source: entry.source || 'managed',
+    }));
+  return {
+    ok: true,
+    activeTemplateId: templateManifest.activeTemplateId,
+    templates,
+  };
 }
 
 function decodeImageDataUrl(dataUrl) {
