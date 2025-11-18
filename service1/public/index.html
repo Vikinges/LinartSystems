@@ -35,6 +35,7 @@
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        position: relative;
       }
       header h1 {
         margin: 0;
@@ -655,6 +656,97 @@
         opacity: 0.6;
         cursor: not-allowed;
       }
+      .admin-templates {
+        margin-top: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .admin-templates table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .admin-templates th,
+      .admin-templates td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+      }
+      .admin-templates tr:last-child td {
+        border-bottom: none;
+      }
+      .admin-template__name {
+        font-weight: 600;
+        display: block;
+      }
+      .admin-template__meta {
+        font-size: 0.8rem;
+        color: #475569;
+      }
+      .admin-template__actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .admin-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #e0e7ff;
+        color: #1e40af;
+      }
+      .admin-launch {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        border: none;
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        background: #0f172a;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .admin-launch:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+      }
+      .admin-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 40;
+      }
+      .admin-modal[hidden] {
+        display: none;
+      }
+      .admin-modal__dialog {
+        background: #fff;
+        border-radius: 16px;
+        padding: 1.5rem;
+        max-width: 460px;
+        width: 100%;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+      }
+      .admin-modal__close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #475569;
+      }
       #status {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -683,6 +775,7 @@
   <body>
     <div class="container">
       <header>
+        <button type="button" class="admin-launch" data-admin-open>Admin</button>
         <h1>Preventative Maintenance Checklist</h1>
         <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
       </header>
@@ -1204,42 +1297,55 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           <pre id="status"></pre>
         </div>
       </form>
-      <section class="card admin-card" data-admin-section>
-        <div data-admin-unauth>
-          <h2>Admin tools</h2>
-          <p>Log in to manage protected features.</p>
-          <form data-admin-login>
-            <label class="field" style="flex:1 1 220px">
-              <span>Password</span>
-              <input type="password" data-admin-password autocomplete="current-password" required />
-            </label>
-            <button type="submit" class="link-button">Log in</button>
-          </form>
-          <div class="admin-errors" data-admin-login-error></div>
-        </div>
-        <div data-admin-auth hidden>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-            <div>
-              <h2 style="margin:0;">Admin tools</h2>
-              <div class="admin-profile" data-admin-profile></div>
-            </div>
-            <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+    </div>
+    <section class="admin-modal" data-admin-modal hidden>
+      <div class="admin-modal__dialog" data-admin-content>
+        <button type="button" class="admin-modal__close" title="Close" data-admin-close>&times;</button>
+        <div class="card admin-card" data-admin-section>
+          <div data-admin-unauth>
+            <h2>Admin tools</h2>
+            <p>Log in to manage protected features.</p>
+            <form data-admin-login>
+              <label class="field" style="flex:1 1 220px">
+                <span>Password</span>
+                <input type="password" data-admin-password autocomplete="current-password" required />
+              </label>
+              <button type="submit" class="link-button">Log in</button>
+            </form>
+            <div class="admin-errors" data-admin-login-error></div>
           </div>
-          <form data-admin-password-change>
-            <label class="field" style="flex:1 1 200px">
-              <span>Current password</span>
-              <input type="password" autocomplete="current-password" required data-admin-password-current />
-            </label>
+          <div data-admin-auth hidden>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <div>
+                <h2 style="margin:0;">Admin tools</h2>
+                <div class="admin-profile" data-admin-profile></div>
+              </div>
+              <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+            </div>
+            <form data-admin-password-change>
+              <label class="field" style="flex:1 1 200px">
+                <span>Current password</span>
+                <input type="password" autocomplete="current-password" required data-admin-password-current />
+              </label>
             <label class="field" style="flex:1 1 200px">
               <span>New password</span>
               <input type="password" autocomplete="new-password" required data-admin-password-new />
             </label>
             <button type="submit" class="link-button">Change password</button>
           </form>
+          <form data-admin-upload>
+            <label class="field" style="flex:1 1 260px">
+              <span>Upload new PDF</span>
+              <input type="file" accept="application/pdf" data-admin-upload-input required />
+            </label>
+            <button type="submit" class="link-button">Upload &amp; activate</button>
+          </form>
+          <div class="admin-templates" data-admin-template-list></div>
           <div class="admin-section__status" data-admin-status></div>
+          </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -1255,7 +1361,13 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
-        const adminSectionEl = document.querySelector('[data-admin-section]');
+        const adminModalEl = document.querySelector('[data-admin-modal]');
+        const adminOpenBtn = document.querySelector('[data-admin-open]');
+        const adminCloseButtons = adminModalEl
+          ? adminModalEl.querySelectorAll('[data-admin-close]')
+          : [];
+        const adminDialogEl = adminModalEl ? adminModalEl.querySelector('[data-admin-content]') : null;
+        const adminSectionEl = adminDialogEl ? adminDialogEl.querySelector('[data-admin-section]') : null;
         const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
         const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
         const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
@@ -1269,6 +1381,13 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminPasswordNewInput = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-password-new]')
           : null;
+        const adminUploadForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-upload]') : null;
+        const adminUploadInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-input]')
+          : null;
+        const adminTemplateListEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-template-list]')
+          : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
@@ -1278,6 +1397,16 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         } catch (err) {
           adminTokenStore = null;
         }
+        if (adminTemplateListEl) {
+          adminTemplateListEl.innerHTML =
+            '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+        }
+
+        const appBaseUrl = new URL('.', window.location.href);
+        const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };
 
         const readJsonPayload = async (response) => {
           try {
@@ -1292,6 +1421,49 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
         };
+
+        const setAdminModalVisible = (visible) => {
+          if (!adminModalEl) return;
+          adminModalEl.hidden = !visible;
+          if (visible) {
+            document.body.dataset.adminModal = 'open';
+            document.body.style.overflow = 'hidden';
+            if (adminState.token) {
+              loadAdminTemplates();
+            }
+          } else {
+            delete document.body.dataset.adminModal;
+            document.body.style.overflow = '';
+          }
+        };
+
+        if (adminOpenBtn) {
+          adminOpenBtn.addEventListener('click', () => {
+            setAdminModalVisible(true);
+          });
+        }
+
+        adminCloseButtons.forEach((btn) => {
+          btn.addEventListener('click', () => setAdminModalVisible(false));
+        });
+
+        if (adminModalEl) {
+          adminModalEl.addEventListener('click', (event) => {
+            if (event.target === adminModalEl) {
+              setAdminModalVisible(false);
+            }
+          });
+        }
+
+        if (adminDialogEl) {
+          adminDialogEl.addEventListener('click', (event) => event.stopPropagation());
+        }
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            setAdminModalVisible(false);
+          }
+        });
 
         const setAdminToken = (token) => {
           adminState.token = token || '';
@@ -1332,6 +1504,10 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           if (!isAuthed) {
             if (adminStatusEl) adminStatusEl.textContent = '';
             if (adminProfileEl) adminProfileEl.textContent = '';
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
           }
         };
 
@@ -1368,6 +1544,106 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             });
         };
 
+        const renderAdminTemplates = (payload) => {
+          if (!adminTemplateListEl) return;
+          if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
+            adminTemplateListEl.innerHTML =
+              '<div style="padding:0.75rem;color:#475569;">No templates uploaded yet.</div>';
+            return;
+          }
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          thead.innerHTML =
+            '<tr><th>Template</th><th>Status</th><th style="width:160px;">Actions</th></tr>';
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          payload.templates.forEach((tpl) => {
+            const row = document.createElement('tr');
+            const colInfo = document.createElement('td');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'admin-template__name';
+            nameSpan.textContent = tpl.label || tpl.relativePath;
+            const meta = document.createElement('span');
+            meta.className = 'admin-template__meta';
+            const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
+            const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
+            meta.textContent = size + ' • ' + uploaded;
+            colInfo.appendChild(nameSpan);
+            colInfo.appendChild(meta);
+
+            const colStatus = document.createElement('td');
+            if (tpl.id === payload.activeTemplateId) {
+              const badge = document.createElement('span');
+              badge.className = 'admin-badge';
+              badge.textContent = 'Active';
+              colStatus.appendChild(badge);
+            } else {
+              colStatus.textContent = 'Available';
+            }
+
+            const colActions = document.createElement('td');
+            colActions.className = 'admin-template__actions';
+            const downloadLink = document.createElement('a');
+            downloadLink.href = buildAppUrl(tpl.relativePath);
+            downloadLink.textContent = 'Download';
+            downloadLink.target = '_blank';
+            downloadLink.rel = 'noopener noreferrer';
+            colActions.appendChild(downloadLink);
+
+            const selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'link-button';
+            selectBtn.textContent = tpl.id === payload.activeTemplateId ? 'Current' : 'Activate';
+            selectBtn.disabled = tpl.id === payload.activeTemplateId;
+            if (tpl.id !== payload.activeTemplateId) {
+              selectBtn.addEventListener('click', () => selectAdminTemplate(tpl.id));
+            }
+            colActions.appendChild(selectBtn);
+
+            row.appendChild(colInfo);
+            row.appendChild(colStatus);
+            row.appendChild(colActions);
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+          adminTemplateListEl.innerHTML = '';
+          adminTemplateListEl.appendChild(table);
+        };
+
+        const loadAdminTemplates = () => {
+          if (!adminState.token) {
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
+            return;
+          }
+          adminFetch('admin/templates')
+            .then((payload) => {
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        const selectAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Activating template...');
+          adminFetch('admin/templates/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template activated.');
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
         if (adminLoginForm) {
           adminLoginForm.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -1397,6 +1673,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
                 } else {
                   refreshAdminProfile();
                 }
+                loadAdminTemplates();
               })
               .catch((err) => {
                 if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
@@ -1409,6 +1686,10 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           adminLogoutBtn.addEventListener('click', () => {
             setAdminToken('');
             showAdminStatus('Logged out.');
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
           });
         }
 
@@ -1440,9 +1721,35 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           });
         }
 
+        if (adminUploadForm) {
+          adminUploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminUploadInput || !adminUploadInput.files || !adminUploadInput.files[0]) {
+              showAdminStatus('Choose a PDF file to upload.', true);
+              return;
+            }
+            const formData = new FormData();
+            formData.append('file', adminUploadInput.files[0]);
+            showAdminStatus('Uploading template...');
+            adminFetch('admin/templates/upload', {
+              method: 'POST',
+              body: formData,
+            })
+              .then((payload) => {
+                adminUploadInput.value = '';
+                showAdminStatus('Template uploaded and activated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
         updateAdminVisibility();
         if (adminState.token) {
           refreshAdminProfile();
+          loadAdminTemplates();
         }
 
         const selectedFiles = new Map();
@@ -1456,11 +1763,6 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const endCustomerInput = document.getElementById('end-customer-name');
         const customerNameInput = document.getElementById('customer-name');
         const customerNameSync = { manual: false };
-        const appBaseUrl = new URL('.', window.location.href);
-        const buildAppUrl = (path) => {
-          const normalized = (path || '').replace(/^\/+/, '');
-          return new URL(normalized || '.', appBaseUrl).toString();
-        };
 
         const syncCustomerNameFromSite = () => {
           if (!endCustomerInput || !customerNameInput) return;

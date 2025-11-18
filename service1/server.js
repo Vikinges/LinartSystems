@@ -23,7 +23,11 @@ const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
 const ADMIN_CREDENTIALS_PATH = path.join(DATA_DIR, 'admin.json');
-const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template1.pdf');
+const ADMIN_LOG_PATH = path.join(DATA_DIR, 'admin.log');
+const TEMPLATE_STORAGE_DIR = path.join(PUBLIC_DIR, 'templates');
+const TEMPLATE_MANIFEST_PATH = path.join(DATA_DIR, 'templates.json');
+const DEFAULT_TEMPLATE_FILENAME = 'form-template1.pdf';
+const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, DEFAULT_TEMPLATE_FILENAME);
 const ADMIN_DEFAULT_USERNAME = 'admin';
 const ADMIN_DEFAULT_PASSWORD = 'admin';
 
@@ -36,6 +40,7 @@ const MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024;
 fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
 fsExtra.ensureDirSync(DATA_DIR);
+fsExtra.ensureDirSync(TEMPLATE_STORAGE_DIR);
 
 function formatBytesHuman(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -70,6 +75,156 @@ function loadJson(filePath, fallback = null) {
 
 const fieldsConfig = loadJson(FIELDS_PATH, { fields: [] }) || { fields: [] };
 const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
+let templatePath = null;
+
+function sanitizeRelativePath(relativePath) {
+  const normalized = path
+    .normalize(String(relativePath || ''))
+    .replace(/^[\\/]+/, '')
+    .replace(/\0/g, '');
+  if (normalized.includes('..')) {
+    return normalized
+      .split(path.sep)
+      .filter((segment) => segment && segment !== '..')
+      .join(path.sep);
+  }
+  return normalized;
+}
+
+function saveTemplateManifest(manifest) {
+  fsExtra.ensureFileSync(TEMPLATE_MANIFEST_PATH);
+  fs.writeFileSync(TEMPLATE_MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
+}
+
+function ensureBuiltinTemplate(manifest) {
+  const builtinId = 'builtin-form-template1';
+  let entry = manifest.templates.find((tpl) => tpl.id === builtinId);
+  const stats = fs.existsSync(DEFAULT_TEMPLATE) ? fs.statSync(DEFAULT_TEMPLATE) : null;
+  if (!entry) {
+    entry = {
+      id: builtinId,
+      label: 'Default template',
+      relativePath: DEFAULT_TEMPLATE_FILENAME,
+      uploadedAt: stats ? stats.mtime.toISOString() : null,
+      size: stats ? stats.size : null,
+      source: 'builtin',
+    };
+    manifest.templates.push(entry);
+  } else {
+    entry.relativePath = DEFAULT_TEMPLATE_FILENAME;
+    if (stats) {
+      entry.size = stats.size;
+      entry.uploadedAt = entry.uploadedAt || stats.mtime.toISOString();
+    }
+  }
+  if (!manifest.activeTemplateId) {
+    manifest.activeTemplateId = builtinId;
+  }
+}
+
+function loadTemplateManifest() {
+  let manifest = loadJson(TEMPLATE_MANIFEST_PATH, null);
+  if (!manifest || typeof manifest !== 'object') {
+    manifest = { activeTemplateId: null, templates: [] };
+  }
+  if (!Array.isArray(manifest.templates)) {
+    manifest.templates = [];
+  }
+  ensureBuiltinTemplate(manifest);
+  saveTemplateManifest(manifest);
+  return manifest;
+}
+
+function getActiveTemplateEntry(manifest) {
+  return manifest.templates.find((tpl) => tpl.id === manifest.activeTemplateId) || null;
+}
+
+function resolveManifestTemplatePath(manifest) {
+  const entry = getActiveTemplateEntry(manifest);
+  if (!entry) return null;
+  const safeRelative = sanitizeRelativePath(entry.relativePath || DEFAULT_TEMPLATE_FILENAME);
+  const absolute = path.join(PUBLIC_DIR, safeRelative);
+  return resolveTemplatePath(absolute);
+}
+
+function logAdminEvent(event, payload = {}) {
+  const entry = Object.assign(
+    {
+      at: new Date().toISOString(),
+      event,
+    },
+    payload,
+  );
+  fs.appendFile(ADMIN_LOG_PATH, JSON.stringify(entry) + '\n', (err) => {
+    if (err) {
+      console.warn('[server] Failed to write admin log:', err.message);
+    }
+  });
+}
+
+let templateManifest = loadTemplateManifest();
+
+function applyActiveTemplateEntry(entry) {
+  if (!entry) return null;
+  const safeRelative = sanitizeRelativePath(entry.relativePath || DEFAULT_TEMPLATE_FILENAME);
+  const absolute = path.join(PUBLIC_DIR, safeRelative);
+  const resolved = resolveTemplatePath(absolute);
+  if (resolved) {
+    templatePath = resolved;
+  }
+  return resolved;
+}
+
+function getTemplateEntryById(templateId) {
+  return templateManifest.templates.find((tpl) => tpl.id === templateId) || null;
+}
+
+function refreshTemplatePathFromManifest() {
+  const entry = getActiveTemplateEntry(templateManifest);
+  return applyActiveTemplateEntry(entry);
+}
+
+function setActiveTemplateById(templateId, options = {}) {
+  const entry = getTemplateEntryById(templateId);
+  if (!entry) {
+    throw new Error('Template not found.');
+  }
+  templateManifest.activeTemplateId = entry.id;
+  if (options.persist !== false) {
+    saveTemplateManifest(templateManifest);
+  }
+  const resolved = applyActiveTemplateEntry(entry);
+  if (!resolved) {
+    throw new Error('Template file missing on disk.');
+  }
+  return entry;
+}
+
+function buildTemplatesResponse() {
+  return {
+    ok: true,
+    activeTemplateId: templateManifest.activeTemplateId,
+    templates: templateManifest.templates
+      .slice()
+      .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
+      .map((entry) => ({
+        id: entry.id,
+        label: entry.label,
+        relativePath: entry.relativePath,
+        uploadedAt: entry.uploadedAt,
+        size: entry.size,
+        source: entry.source || 'managed',
+      })),
+  };
+}
+
+function slugifyFilename(name) {
+  return String(name || 'template')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64) || 'template';
+}
 
 function generateSalt(length = 16) {
   return crypto.randomBytes(length).toString('hex');
@@ -158,9 +313,9 @@ function resolveTemplatePath(candidate) {
 const templateCandidates = [
   TEMPLATE_PATH_ENV,
   fieldsConfig.templatePath,
+  resolveManifestTemplatePath(templateManifest),
   DEFAULT_TEMPLATE,
 ];
-let templatePath = null;
 for (const candidate of templateCandidates) {
   const resolved = resolveTemplatePath(candidate);
   if (resolved) {
@@ -2481,6 +2636,7 @@ ${rows.join('\n')}
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+        position: relative;
       }
       header h1 {
         margin: 0;
@@ -3101,6 +3257,97 @@ ${rows.join('\n')}
         opacity: 0.6;
         cursor: not-allowed;
       }
+      .admin-templates {
+        margin-top: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .admin-templates table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .admin-templates th,
+      .admin-templates td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+      }
+      .admin-templates tr:last-child td {
+        border-bottom: none;
+      }
+      .admin-template__name {
+        font-weight: 600;
+        display: block;
+      }
+      .admin-template__meta {
+        font-size: 0.8rem;
+        color: #475569;
+      }
+      .admin-template__actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .admin-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #e0e7ff;
+        color: #1e40af;
+      }
+      .admin-launch {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        border: none;
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        background: #0f172a;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .admin-launch:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+      }
+      .admin-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 40;
+      }
+      .admin-modal[hidden] {
+        display: none;
+      }
+      .admin-modal__dialog {
+        background: #fff;
+        border-radius: 16px;
+        padding: 1.5rem;
+        max-width: 460px;
+        width: 100%;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+      }
+      .admin-modal__close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #475569;
+      }
       #status {
         margin: 0;
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -3129,6 +3376,7 @@ ${rows.join('\n')}
   <body>
     <div class="container">
       <header>
+        <button type="button" class="admin-launch" data-admin-open>Admin</button>
         <h1>Preventative Maintenance Checklist</h1>
         <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
       </header>
@@ -3326,42 +3574,55 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           <pre id="status"></pre>
         </div>
       </form>
-      <section class="card admin-card" data-admin-section>
-        <div data-admin-unauth>
-          <h2>Admin tools</h2>
-          <p>Log in to manage protected features.</p>
-          <form data-admin-login>
-            <label class="field" style="flex:1 1 220px">
-              <span>Password</span>
-              <input type="password" data-admin-password autocomplete="current-password" required />
-            </label>
-            <button type="submit" class="link-button">Log in</button>
-          </form>
-          <div class="admin-errors" data-admin-login-error></div>
-        </div>
-        <div data-admin-auth hidden>
-          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
-            <div>
-              <h2 style="margin:0;">Admin tools</h2>
-              <div class="admin-profile" data-admin-profile></div>
-            </div>
-            <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+    </div>
+    <section class="admin-modal" data-admin-modal hidden>
+      <div class="admin-modal__dialog" data-admin-content>
+        <button type="button" class="admin-modal__close" title="Close" data-admin-close>&times;</button>
+        <div class="card admin-card" data-admin-section>
+          <div data-admin-unauth>
+            <h2>Admin tools</h2>
+            <p>Log in to manage protected features.</p>
+            <form data-admin-login>
+              <label class="field" style="flex:1 1 220px">
+                <span>Password</span>
+                <input type="password" data-admin-password autocomplete="current-password" required />
+              </label>
+              <button type="submit" class="link-button">Log in</button>
+            </form>
+            <div class="admin-errors" data-admin-login-error></div>
           </div>
-          <form data-admin-password-change>
-            <label class="field" style="flex:1 1 200px">
-              <span>Current password</span>
-              <input type="password" autocomplete="current-password" required data-admin-password-current />
-            </label>
+          <div data-admin-auth hidden>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <div>
+                <h2 style="margin:0;">Admin tools</h2>
+                <div class="admin-profile" data-admin-profile></div>
+              </div>
+              <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+            </div>
+            <form data-admin-password-change>
+              <label class="field" style="flex:1 1 200px">
+                <span>Current password</span>
+                <input type="password" autocomplete="current-password" required data-admin-password-current />
+              </label>
             <label class="field" style="flex:1 1 200px">
               <span>New password</span>
               <input type="password" autocomplete="new-password" required data-admin-password-new />
             </label>
             <button type="submit" class="link-button">Change password</button>
           </form>
+          <form data-admin-upload>
+            <label class="field" style="flex:1 1 260px">
+              <span>Upload new PDF</span>
+              <input type="file" accept="application/pdf" data-admin-upload-input required />
+            </label>
+            <button type="submit" class="link-button">Upload &amp; activate</button>
+          </form>
+          <div class="admin-templates" data-admin-template-list></div>
           <div class="admin-section__status" data-admin-status></div>
+          </div>
         </div>
-      </section>
-    </div>
+      </div>
+    </section>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -3377,7 +3638,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
-        const adminSectionEl = document.querySelector('[data-admin-section]');
+        const adminModalEl = document.querySelector('[data-admin-modal]');
+        const adminOpenBtn = document.querySelector('[data-admin-open]');
+        const adminCloseButtons = adminModalEl
+          ? adminModalEl.querySelectorAll('[data-admin-close]')
+          : [];
+        const adminDialogEl = adminModalEl ? adminModalEl.querySelector('[data-admin-content]') : null;
+        const adminSectionEl = adminDialogEl ? adminDialogEl.querySelector('[data-admin-section]') : null;
         const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
         const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
         const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
@@ -3391,6 +3658,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminPasswordNewInput = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-password-new]')
           : null;
+        const adminUploadForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-upload]') : null;
+        const adminUploadInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-input]')
+          : null;
+        const adminTemplateListEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-template-list]')
+          : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
@@ -3400,6 +3674,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         } catch (err) {
           adminTokenStore = null;
         }
+        if (adminTemplateListEl) {
+          adminTemplateListEl.innerHTML =
+            '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+        }
+
+        const appBaseUrl = new URL('.', window.location.href);
+        const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };
 
         const readJsonPayload = async (response) => {
           try {
@@ -3414,6 +3698,49 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
         };
+
+        const setAdminModalVisible = (visible) => {
+          if (!adminModalEl) return;
+          adminModalEl.hidden = !visible;
+          if (visible) {
+            document.body.dataset.adminModal = 'open';
+            document.body.style.overflow = 'hidden';
+            if (adminState.token) {
+              loadAdminTemplates();
+            }
+          } else {
+            delete document.body.dataset.adminModal;
+            document.body.style.overflow = '';
+          }
+        };
+
+        if (adminOpenBtn) {
+          adminOpenBtn.addEventListener('click', () => {
+            setAdminModalVisible(true);
+          });
+        }
+
+        adminCloseButtons.forEach((btn) => {
+          btn.addEventListener('click', () => setAdminModalVisible(false));
+        });
+
+        if (adminModalEl) {
+          adminModalEl.addEventListener('click', (event) => {
+            if (event.target === adminModalEl) {
+              setAdminModalVisible(false);
+            }
+          });
+        }
+
+        if (adminDialogEl) {
+          adminDialogEl.addEventListener('click', (event) => event.stopPropagation());
+        }
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            setAdminModalVisible(false);
+          }
+        });
 
         const setAdminToken = (token) => {
           adminState.token = token || '';
@@ -3454,6 +3781,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           if (!isAuthed) {
             if (adminStatusEl) adminStatusEl.textContent = '';
             if (adminProfileEl) adminProfileEl.textContent = '';
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
           }
         };
 
@@ -3490,6 +3821,106 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             });
         };
 
+        const renderAdminTemplates = (payload) => {
+          if (!adminTemplateListEl) return;
+          if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
+            adminTemplateListEl.innerHTML =
+              '<div style="padding:0.75rem;color:#475569;">No templates uploaded yet.</div>';
+            return;
+          }
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          thead.innerHTML =
+            '<tr><th>Template</th><th>Status</th><th style="width:160px;">Actions</th></tr>';
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          payload.templates.forEach((tpl) => {
+            const row = document.createElement('tr');
+            const colInfo = document.createElement('td');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'admin-template__name';
+            nameSpan.textContent = tpl.label || tpl.relativePath;
+            const meta = document.createElement('span');
+            meta.className = 'admin-template__meta';
+            const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
+            const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
+            meta.textContent = size + ' • ' + uploaded;
+            colInfo.appendChild(nameSpan);
+            colInfo.appendChild(meta);
+
+            const colStatus = document.createElement('td');
+            if (tpl.id === payload.activeTemplateId) {
+              const badge = document.createElement('span');
+              badge.className = 'admin-badge';
+              badge.textContent = 'Active';
+              colStatus.appendChild(badge);
+            } else {
+              colStatus.textContent = 'Available';
+            }
+
+            const colActions = document.createElement('td');
+            colActions.className = 'admin-template__actions';
+            const downloadLink = document.createElement('a');
+            downloadLink.href = buildAppUrl(tpl.relativePath);
+            downloadLink.textContent = 'Download';
+            downloadLink.target = '_blank';
+            downloadLink.rel = 'noopener noreferrer';
+            colActions.appendChild(downloadLink);
+
+            const selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'link-button';
+            selectBtn.textContent = tpl.id === payload.activeTemplateId ? 'Current' : 'Activate';
+            selectBtn.disabled = tpl.id === payload.activeTemplateId;
+            if (tpl.id !== payload.activeTemplateId) {
+              selectBtn.addEventListener('click', () => selectAdminTemplate(tpl.id));
+            }
+            colActions.appendChild(selectBtn);
+
+            row.appendChild(colInfo);
+            row.appendChild(colStatus);
+            row.appendChild(colActions);
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+          adminTemplateListEl.innerHTML = '';
+          adminTemplateListEl.appendChild(table);
+        };
+
+        const loadAdminTemplates = () => {
+          if (!adminState.token) {
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
+            return;
+          }
+          adminFetch('admin/templates')
+            .then((payload) => {
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        const selectAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Activating template...');
+          adminFetch('admin/templates/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template activated.');
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
         if (adminLoginForm) {
           adminLoginForm.addEventListener('submit', (event) => {
             event.preventDefault();
@@ -3519,6 +3950,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
                 } else {
                   refreshAdminProfile();
                 }
+                loadAdminTemplates();
               })
               .catch((err) => {
                 if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
@@ -3531,6 +3963,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           adminLogoutBtn.addEventListener('click', () => {
             setAdminToken('');
             showAdminStatus('Logged out.');
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
           });
         }
 
@@ -3562,9 +3998,35 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
         }
 
+        if (adminUploadForm) {
+          adminUploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminUploadInput || !adminUploadInput.files || !adminUploadInput.files[0]) {
+              showAdminStatus('Choose a PDF file to upload.', true);
+              return;
+            }
+            const formData = new FormData();
+            formData.append('file', adminUploadInput.files[0]);
+            showAdminStatus('Uploading template...');
+            adminFetch('admin/templates/upload', {
+              method: 'POST',
+              body: formData,
+            })
+              .then((payload) => {
+                adminUploadInput.value = '';
+                showAdminStatus('Template uploaded and activated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
         updateAdminVisibility();
         if (adminState.token) {
           refreshAdminProfile();
+          loadAdminTemplates();
         }
 
         const selectedFiles = new Map();
@@ -3578,11 +4040,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const endCustomerInput = document.getElementById('end-customer-name');
         const customerNameInput = document.getElementById('customer-name');
         const customerNameSync = { manual: false };
-        const appBaseUrl = new URL('.', window.location.href);
-        const buildAppUrl = (path) => {
-          const normalized = (path || '').replace(/^\\/+/, '');
-          return new URL(normalized || '.', appBaseUrl).toString();
-        };
 
         const syncCustomerNameFromSite = () => {
           if (!endCustomerInput || !customerNameInput) return;
@@ -5320,6 +5777,33 @@ const upload = multer({
   },
 });
 
+const templateUpload = multer({
+  storage: multer.diskStorage({
+    destination: TEMPLATE_STORAGE_DIR,
+    filename: (req, file, cb) => {
+      const ext = path.extname(file.originalname || '.pdf') || '.pdf';
+      const base = slugifyFilename(path.basename(file.originalname || 'template', ext));
+      const filename = `${Date.now()}-${base}${ext.toLowerCase() === '.pdf' ? '' : '.pdf'}`;
+      cb(null, filename);
+    },
+  }),
+  limits: {
+    fileSize: MAX_FILE_SIZE_BYTES,
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    const mimetype = (file.mimetype || '').toLowerCase();
+    const isPdf =
+      mimetype === 'application/pdf' || (file.originalname || '').toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      const err = new Error('Only PDF files are allowed.');
+      err.statusCode = 400;
+      return cb(err);
+    }
+    return cb(null, true);
+  },
+});
+
 const uploadFields = upload.fields([
   { name: 'photo_before', maxCount: 20 },
   { name: 'photo_after', maxCount: 20 },
@@ -5598,7 +6082,56 @@ app.post('/admin/password', requireAdmin, (req, res) => {
   updateAdminPassword(newPassword);
   adminTokens.clear();
   console.log('[server] Admin password updated.');
+  logAdminEvent('password.change');
   return res.json({ ok: true });
+});
+
+app.get('/admin/templates', requireAdmin, (req, res) => {
+  return res.json(buildTemplatesResponse());
+});
+
+app.post(
+  '/admin/templates/upload',
+  requireAdmin,
+  templateUpload.single('file'),
+  (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: 'PDF file is required.' });
+    }
+    const relativePath = sanitizeRelativePath(path.join('templates', req.file.filename));
+    const entry = {
+      id: `tpl-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+      label: req.file.originalname || req.file.filename,
+      relativePath,
+      uploadedAt: new Date().toISOString(),
+      size: req.file.size,
+      source: 'upload',
+    };
+    templateManifest.templates.push(entry);
+    templateManifest.activeTemplateId = entry.id;
+    saveTemplateManifest(templateManifest);
+    try {
+      applyActiveTemplateEntry(entry);
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message || 'Failed to activate template.' });
+    }
+    logAdminEvent('template.upload', { templateId: entry.id, label: entry.label, size: entry.size });
+    return res.json(buildTemplatesResponse());
+  },
+);
+
+app.post('/admin/templates/select', requireAdmin, (req, res) => {
+  const templateId = req.body && req.body.templateId;
+  if (!templateId) {
+    return res.status(400).json({ ok: false, error: 'templateId is required.' });
+  }
+  try {
+    const entry = setActiveTemplateById(templateId);
+    logAdminEvent('template.select', { templateId: entry.id, label: entry.label });
+    return res.json(buildTemplatesResponse());
+  } catch (err) {
+    return res.status(404).json({ ok: false, error: err.message || 'Template not found.' });
+  }
 });
 
 app.post('/submit', (req, res, next) => {
@@ -5981,6 +6514,11 @@ app.use((err, req, res, next) => {
       });
     }
     return res.status(400).json({ ok: false, error: err.message });
+  }
+  if (err && err.statusCode) {
+    return res
+      .status(err.statusCode)
+      .json({ ok: false, error: err.message || 'Request failed.' });
   }
   if (err) {
     console.error('[server] Unhandled error', err);
