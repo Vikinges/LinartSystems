@@ -5480,7 +5480,19 @@ app.post('/submit', (req, res, next) => {
 
     recordSuggestionsFromSubmission(req.body || {});
 
-    const hostUrl = HOST_URL_ENV || `${req.protocol}://${req.get('host')}`;
+    const forwardedHost = req.headers['x-forwarded-host'];
+    const forwardedProto = req.headers['x-forwarded-proto'];
+    let publicOrigin = null;
+    if (forwardedHost) {
+      const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
+      publicOrigin = `${proto}://${forwardedHost.split(',')[0].trim()}`;
+    } else if (req.get('host')) {
+      publicOrigin = `${req.protocol}://${req.get('host')}`;
+    }
+    const hostUrl =
+      HOST_URL_ENV ||
+      publicOrigin ||
+      `${req.protocol}://${req.hostname || req.get('host') || 'localhost'}`;
     const downloadUrl = `${hostUrl.replace(/\/$/, '')}/download/${encodeURIComponent(filename)}`;
 
     return res.json({
