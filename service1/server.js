@@ -21,7 +21,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
-const DEFAULT_TEMPLATE = '/mnt/data/SNDS-LED-Preventative-Maintenance-Checklist BER Blanko.pdf';
+const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, 'form-template.pdf');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;
@@ -67,7 +67,44 @@ function loadJson(filePath, fallback = null) {
 const fieldsConfig = loadJson(FIELDS_PATH, { fields: [] }) || { fields: [] };
 const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
 
-const templatePath = TEMPLATE_PATH_ENV || fieldsConfig.templatePath || DEFAULT_TEMPLATE;
+function resolveTemplatePath(candidate) {
+  if (!candidate || typeof candidate !== 'string') {
+    return null;
+  }
+  const normalized = candidate.replace(/^file:\/\//i, '').trim();
+  const unixified = normalized.replace(/\\/g, '/');
+  const absoluteCandidate = path.isAbsolute(unixified)
+    ? unixified
+    : path.resolve(ROOT_DIR, unixified);
+  if (fs.existsSync(absoluteCandidate)) {
+    return absoluteCandidate;
+  }
+  const fallbackInPublic = path.join(PUBLIC_DIR, path.basename(unixified));
+  if (fs.existsSync(fallbackInPublic)) {
+    console.warn(
+      `[server] Template path "${candidate}" not found. Using fallback ${fallbackInPublic}`
+    );
+    return fallbackInPublic;
+  }
+  return null;
+}
+
+const templateCandidates = [
+  TEMPLATE_PATH_ENV,
+  fieldsConfig.templatePath,
+  DEFAULT_TEMPLATE,
+];
+let templatePath = null;
+for (const candidate of templateCandidates) {
+  const resolved = resolveTemplatePath(candidate);
+  if (resolved) {
+    templatePath = resolved;
+    break;
+  }
+}
+if (!templatePath) {
+  templatePath = DEFAULT_TEMPLATE;
+}
 
 function toSingleValue(value) {
   if (Array.isArray(value)) {

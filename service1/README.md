@@ -6,7 +6,7 @@ A turnkey Node.js service that reads an AcroForm PDF template, generates a match
 
 - Node.js 20+ (for `node --watch` and modern ES features)
 - npm 8+
-- Access to the template PDF at `TEMPLATE_PATH` (defaults to `/mnt/data/SNDS-LED-Preventative-Maintenance-Checklist BER Blanko.pdf`)
+- Access to the template PDF at `TEMPLATE_PATH` (defaults to `./public/form-template.pdf`)
 
 ## Installation
 
@@ -20,6 +20,8 @@ Copy `.env.example` to `.env` and adjust paths and port if needed:
 cp .env.example .env
 # edit TEMPLATE_PATH if your PDF lives elsewhere
 ```
+
+> **Tip:** keep `TEMPLATE_PATH` relative (e.g. `./public/form-template.pdf`) or use a Linux path inside the container. If you accidentally point to a Windows drive (such as `C:/Code/...`), the server now falls back to the matching filename inside `public/`, but it is still better to configure the correct path explicitly.
 
 ## Extract AcroForm fields
 
@@ -147,4 +149,3 @@ test-start.sh       # Smoke test helper script
 ```
 
 Happy automating!
-
