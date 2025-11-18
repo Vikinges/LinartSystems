@@ -4899,8 +4899,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               setProgress(100, 'Upload complete');
               setTimeout(() => {
                 hideProgress();
-        const downloadUrl = new URL(payload.url, window.location.origin).toString();
-        window.location.href = downloadUrl;
+              const downloadUrl = new URL(payload.url || '', window.location.href).toString();
+              window.location.href = downloadUrl;
               }, 200);
             } else {
               submitButton.classList.add('is-error');
@@ -5481,20 +5481,13 @@ app.post('/submit', (req, res, next) => {
 
     recordSuggestionsFromSubmission(req.body || {});
 
-    const forwardedHost = req.headers['x-forwarded-host'];
-    const forwardedProto = req.headers['x-forwarded-proto'];
-    let publicOrigin = null;
-    if (forwardedHost) {
-      const proto = forwardedProto ? forwardedProto.split(',')[0].trim() : req.protocol;
-      publicOrigin = `${proto}://${forwardedHost.split(',')[0].trim()}`;
-    } else if (req.get('host')) {
-      publicOrigin = `${req.protocol}://${req.get('host')}`;
-    }
-    const hostUrl =
-      HOST_URL_ENV ||
-      publicOrigin ||
-      `${req.protocol}://${req.hostname || req.get('host') || 'localhost'}`;
-    const downloadUrl = `${hostUrl.replace(/\/$/, '')}/download/${encodeURIComponent(filename)}`;
+    const baseHost =
+      (HOST_URL_ENV && HOST_URL_ENV.trim()) ||
+      '';
+    const downloadPath = `download/${encodeURIComponent(filename)}`;
+    const downloadUrl = baseHost
+      ? `${baseHost.replace(/\/$/, '')}/${downloadPath}`
+      : downloadPath;
 
     return res.json({
       ok: true,
