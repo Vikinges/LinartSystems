@@ -4899,7 +4899,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               setProgress(100, 'Upload complete');
               setTimeout(() => {
                 hideProgress();
-                window.location.href = payload.url;
+        const downloadUrl = new URL(payload.url, window.location.origin).toString();
+        window.location.href = downloadUrl;
               }, 200);
             } else {
               submitButton.classList.add('is-error');
