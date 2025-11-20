@@ -60,6 +60,16 @@
         font-size: 1.3rem;
         color: #1f2a5b;
       }
+      .template-details {
+        font-size: 0.9rem;
+        color: #475569;
+      }
+      .template-description {
+        margin: 0.35rem 0;
+        font-size: 0.95rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
       .grid.two-col {
         display: grid;
         gap: 1rem;
@@ -77,12 +87,16 @@
       input[type="text"],
       input[type="date"],
       input[type="datetime-local"],
-      textarea {
+      textarea,
+      select {
         font: inherit;
         padding: 0.75rem;
         border: 1px solid #d8d8e5;
         border-radius: 10px;
         background: #fafafe;
+      }
+      select {
+        min-height: 48px;
       }
       textarea {
         resize: vertical;
@@ -683,6 +697,16 @@
         font-size: 0.8rem;
         color: #475569;
       }
+      .admin-template__slug {
+        font-size: 0.78rem;
+        color: #0f172a;
+      }
+      .admin-template__desc {
+        margin-top: 0.3rem;
+        font-size: 0.85rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
       .admin-template__actions {
         display: flex;
         gap: 0.5rem;
@@ -705,11 +729,56 @@
         font-size: 0.9rem;
         background: #fff;
       }
-      .admin-preview iframe {
+      .admin-preview__frame {
+        position: relative;
         flex: 1;
+        background: #fff;
+        min-height: 320px;
+      }
+      .admin-preview__frame iframe {
+        display: block;
         width: 100%;
+        height: 100%;
         border: none;
         background: #fff;
+      }
+      .admin-preview__overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .admin-preview__boundary {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: rgba(249, 115, 22, 0.9);
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.4);
+      }
+      .admin-preview__controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #e2e8f0;
+        background: #fff;
+      }
+      .admin-preview__controls label {
+        font-size: 0.85rem;
+        color: #475569;
+        font-weight: 600;
+      }
+      .admin-preview__controls input[type="range"] {
+        flex: 1 1 220px;
+      }
+      .admin-preview__controls input[type="number"] {
+        width: 110px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #cbd5f5;
+        border-radius: 6px;
+        font: inherit;
       }
       .admin-preview__empty {
         padding: 1rem;
@@ -808,6 +877,24 @@
         <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
+        <section class="card" data-template-selector>
+          <h2>Document template</h2>
+          <p>Pick the PDF header to merge with this report. Templates define the logo, header text, and footer copy.</p>
+          <div class="grid two-col">
+            <label class="field" style="max-width:360px">
+              <span>Template</span>
+              <select name="template_id" data-template-select required>
+                <option value="">Loading templates...</option>
+              </select>
+              <input type="hidden" name="template_slug" data-template-slug />
+            </label>
+            <div class="template-details" data-template-info>
+              <p data-template-status>Loading available templates...</p>
+              <p class="template-description" data-template-description hidden></p>
+              <a href="#" class="link-button" data-template-preview target="_blank" rel="noopener" hidden>Preview template</a>
+            </div>
+          </div>
+        </section>
         <section class="card">
           <h2>Site information</h2>
           <div class="grid two-col">
@@ -845,7 +932,7 @@
           <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
           <div class="employee-actions">
             <button type="button" class="button" data-action="employee-add">+ Add employee</button>
-            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or Â±30m shortcuts.</small>
           </div>
           <div class="employee-table-wrapper">
             <table class="employee-table">
@@ -1361,17 +1448,36 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             </label>
             <button type="submit" class="link-button">Change password</button>
           </form>
-          <form data-admin-upload>
-            <label class="field" style="flex:1 1 260px">
-              <span>Upload new PDF</span>
-              <input type="file" accept="application/pdf" data-admin-upload-input required />
+          <form data-admin-upload enctype="multipart/form-data">
+            <label class="field" style="flex:1 1 240px">
+              <span>Upload document PDF</span>
+              <input type="file" name="file" accept="application/pdf" data-admin-upload-input required />
+            </label>
+            <label class="field" style="flex:1 1 220px">
+              <span>Display name</span>
+              <input type="text" name="label" placeholder="e.g. Calibration Certificate" data-admin-upload-label />
+            </label>
+            <label class="field" style="flex:1 1 320px">
+              <span>Description / notes (optional)</span>
+              <textarea name="description" rows="3" data-admin-upload-description placeholder="Shown in the template picker."></textarea>
             </label>
             <button type="submit" class="link-button">Upload &amp; activate</button>
           </form>
           <div class="admin-templates" data-admin-template-list></div>
           <div class="admin-preview" data-admin-preview hidden>
             <header data-admin-preview-label>Template preview</header>
-            <iframe title="Template preview" data-admin-preview-frame></iframe>
+            <div class="admin-preview__frame" data-admin-preview-frame-wrapper>
+              <iframe title="Template preview" data-admin-preview-frame></iframe>
+              <div class="admin-preview__overlay" data-template-overlay hidden>
+                <div class="admin-preview__boundary" data-template-boundary-line></div>
+              </div>
+            </div>
+            <div class="admin-preview__controls" data-boundary-controls hidden>
+              <label for="boundary-range">Content starts after</label>
+              <input type="range" id="boundary-range" min="0" max="800" step="5" value="200" data-boundary-range />
+              <input type="number" min="0" max="800" step="1" value="200" data-boundary-input /> pt
+              <button type="button" class="link-button" data-boundary-save disabled>Save boundary</button>
+            </div>
             <div class="admin-preview__empty" data-admin-preview-empty>No template selected.</div>
           </div>
           <div class="admin-section__status" data-admin-status></div>
@@ -1394,6 +1500,14 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+        const templateSelectEl = document.querySelector('[data-template-select]');
+        const templateSlugInput = document.querySelector('[data-template-slug]');
+        const templateInfoEl = document.querySelector('[data-template-info]');
+        const templateStatusEl = templateInfoEl ? templateInfoEl.querySelector('[data-template-status]') : null;
+        const templateDescriptionEl = templateInfoEl
+          ? templateInfoEl.querySelector('[data-template-description]')
+          : null;
+        const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -1418,6 +1532,12 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminUploadInput = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-upload-input]')
           : null;
+        const adminUploadLabelInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-label]')
+          : null;
+        const adminUploadDescriptionInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-description]')
+          : null;
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
@@ -1425,14 +1545,61 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminPreviewLabelEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-label]')
           : null;
+        const adminPreviewFrameWrapper = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-frame-wrapper]')
+          : null;
         const adminPreviewFrame = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-frame]')
           : null;
         const adminPreviewEmptyEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-empty]')
           : null;
+        const adminPreviewOverlayEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-overlay]')
+          : null;
+        const adminPreviewBoundaryEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-boundary-line]')
+          : null;
+        const boundaryControlsEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-boundary-controls]')
+          : null;
+        const boundaryRangeInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-range]')
+          : null;
+        const boundaryNumberInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-input]')
+          : null;
+        const boundarySaveBtn = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-save]')
+          : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const BOUNDARY_DEFAULT_HEIGHT = 841.89;
+        const boundaryState = {
+          templateId: null,
+          pageHeight: BOUNDARY_DEFAULT_HEIGHT,
+          value: 0,
+          dirty: false,
+        };
+        let boundaryOverlayFrame = null;
+        const clampValue = (value, min, max) => {
+          const number = Number(value);
+          if (!Number.isFinite(number)) return min;
+          if (number < min) return min;
+          if (number > max) return max;
+          return number;
+        };
+        const defaultBoundaryFromHeight = (height) => {
+          const safeHeight = Number.isFinite(height) && height > 0 ? height : BOUNDARY_DEFAULT_HEIGHT;
+          return clampValue(safeHeight * 0.22, 0, Math.max(safeHeight - 40, 0));
+        };
+        const templateState = {
+          templates: [],
+          activeTemplateId: null,
+        };
+        const urlSearchParams = new URL(window.location.href).searchParams;
+        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
+        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
         let adminTokenStore = null;
         try {
@@ -1451,6 +1618,215 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           return new URL(normalized || '.', appBaseUrl).toString();
         };
 
+        const setTemplateStatus = (message, isError = false) => {
+          if (!templateStatusEl) return;
+          templateStatusEl.textContent = message || '';
+          templateStatusEl.style.color = isError ? '#b91c1c' : '#475569';
+        };
+
+        const updateBoundaryControls = () => {
+          if (!boundaryControlsEl) return;
+          if (!boundaryState.templateId) {
+            boundaryControlsEl.hidden = true;
+            if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+            if (adminPreviewOverlayEl) adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          boundaryControlsEl.hidden = false;
+          const maxValue = Math.max(0, Math.round(boundaryState.pageHeight));
+          if (boundaryRangeInput) {
+            boundaryRangeInput.min = '0';
+            boundaryRangeInput.max = String(maxValue);
+            boundaryRangeInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundaryNumberInput) {
+            boundaryNumberInput.min = '0';
+            boundaryNumberInput.max = String(maxValue);
+            boundaryNumberInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = !boundaryState.dirty;
+          }
+        };
+
+        const updateBoundaryOverlay = () => {
+          if (
+            !adminPreviewOverlayEl ||
+            !adminPreviewBoundaryEl ||
+            !adminPreviewFrameWrapper ||
+            !boundaryState.templateId
+          ) {
+            if (adminPreviewOverlayEl) {
+              adminPreviewOverlayEl.hidden = true;
+            }
+            return;
+          }
+          const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
+          if (!wrapperHeight || !Number.isFinite(boundaryState.pageHeight) || boundaryState.pageHeight <= 0) {
+            adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
+          const topPosition = wrapperHeight * ratio;
+          adminPreviewBoundaryEl.style.top = topPosition + 'px';
+          adminPreviewOverlayEl.hidden = false;
+        };
+
+        const scheduleBoundaryOverlay = () => {
+          if (boundaryOverlayFrame) {
+            cancelAnimationFrame(boundaryOverlayFrame);
+          }
+          boundaryOverlayFrame = requestAnimationFrame(updateBoundaryOverlay);
+        };
+
+        const setBoundaryTemplate = (template) => {
+          if (!template) {
+            boundaryState.templateId = null;
+            boundaryState.pageHeight = BOUNDARY_DEFAULT_HEIGHT;
+            boundaryState.value = 0;
+            boundaryState.dirty = false;
+            updateBoundaryControls();
+            scheduleBoundaryOverlay();
+            return;
+          }
+          boundaryState.templateId = template.id;
+          boundaryState.pageHeight =
+            Number.isFinite(template.pageHeight) && template.pageHeight > 0
+              ? Number(template.pageHeight)
+              : BOUNDARY_DEFAULT_HEIGHT;
+          const providedOffset =
+            Number.isFinite(template.bodyTopOffset) && template.bodyTopOffset >= 0
+              ? Number(template.bodyTopOffset)
+              : defaultBoundaryFromHeight(boundaryState.pageHeight);
+          boundaryState.value = clampValue(providedOffset, 0, boundaryState.pageHeight);
+          boundaryState.dirty = false;
+          updateBoundaryControls();
+          scheduleBoundaryOverlay();
+        };
+
+        const handleBoundaryValueChange = (nextValue, source) => {
+          if (!boundaryState.templateId) return;
+          const clamped = clampValue(nextValue, 0, boundaryState.pageHeight);
+          boundaryState.value = clamped;
+          boundaryState.dirty = true;
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = false;
+          }
+          if (boundaryRangeInput && source !== 'range') {
+            boundaryRangeInput.value = String(Math.round(clamped));
+          }
+          if (boundaryNumberInput && source !== 'number') {
+            boundaryNumberInput.value = String(Math.round(clamped));
+          }
+          scheduleBoundaryOverlay();
+        };
+
+        const applyTemplateSelection = () => {
+          if (!templateSelectEl) return;
+          const selectedId = templateSelectEl.value;
+          const selected =
+            templateState.templates.find((tpl) => tpl.id === selectedId) || null;
+          if (templateSlugInput) {
+            templateSlugInput.value = selected && selected.slug ? selected.slug : '';
+          }
+          if (templateDescriptionEl) {
+            if (selected && selected.description && selected.description.trim().length) {
+              templateDescriptionEl.hidden = false;
+              templateDescriptionEl.textContent = selected.description;
+            } else {
+              templateDescriptionEl.hidden = true;
+              templateDescriptionEl.textContent = '';
+            }
+          }
+          if (templatePreviewLink) {
+            if (selected && selected.previewUrl) {
+              const previewPath = selected.previewUrl.replace(/^\/+/, '');
+
+              templatePreviewLink.href = buildAppUrl(previewPath);
+              templatePreviewLink.hidden = false;
+            } else {
+              templatePreviewLink.hidden = true;
+              templatePreviewLink.href = '#';
+            }
+          }
+          if (selected) {
+            const slugDisplay = selected.slug ? ' Â· ' + selected.slug : '';
+            setTemplateStatus(
+              (selected.label || selected.slug || 'Template') +
+                slugDisplay +
+                (selected.isActive ? ' Â· Active by default' : ''),
+            );
+          } else {
+            setTemplateStatus('Select a template to continue.');
+          }
+        };
+
+        const loadTemplateOptions = () => {
+          if (!templateSelectEl) return;
+          setTemplateStatus('Loading available templates...');
+          templateSelectEl.disabled = true;
+          templateSelectEl.innerHTML = '<option value="">Loading...</option>';
+          fetch(buildAppUrl('api/templates'), { credentials: 'same-origin' })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error('Failed to load templates.');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (!payload || !Array.isArray(payload.templates)) {
+                throw new Error('Template response malformed.');
+              }
+              templateState.templates = payload.templates;
+              templateState.activeTemplateId = payload.activeTemplateId || '';
+              templateSelectEl.innerHTML = '';
+              if (!payload.templates.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No templates found';
+                templateSelectEl.appendChild(option);
+                templateSelectEl.disabled = true;
+                if (templateSlugInput) templateSlugInput.value = '';
+                if (templateDescriptionEl) {
+                  templateDescriptionEl.hidden = false;
+                  templateDescriptionEl.textContent = 'Upload a template in the admin panel to continue.';
+                }
+                setTemplateStatus('Templates are not configured yet.', true);
+                return;
+              }
+              payload.templates.forEach((tpl) => {
+                const option = document.createElement('option');
+                option.value = tpl.id;
+                option.textContent = tpl.label || tpl.slug || tpl.id;
+                templateSelectEl.appendChild(option);
+              });
+              let defaultTemplate = null;
+              if (requestedTemplateSlug) {
+                defaultTemplate = payload.templates.find(
+                  (tpl) => (tpl.slug || '').toLowerCase() === requestedTemplateSlug,
+                );
+              }
+              if (!defaultTemplate && requestedTemplateId) {
+                defaultTemplate = payload.templates.find((tpl) => tpl.id === requestedTemplateId);
+              }
+              if (!defaultTemplate) {
+                defaultTemplate =
+                  payload.templates.find((tpl) => tpl.isActive) || payload.templates[0];
+              }
+              templateSelectEl.disabled = false;
+              templateSelectEl.value = defaultTemplate ? defaultTemplate.id : payload.templates[0].id;
+              applyTemplateSelection();
+            })
+            .catch((err) => {
+              setTemplateStatus(err.message || 'Unable to load templates.', true);
+              templateSelectEl.innerHTML = '<option value="">Templates unavailable</option>';
+              templateSelectEl.disabled = true;
+              if (templateSlugInput) templateSlugInput.value = '';
+              if (templateDescriptionEl) templateDescriptionEl.hidden = true;
+              if (templatePreviewLink) templatePreviewLink.hidden = true;
+            });
+        };
+
         const readJsonPayload = async (response) => {
           try {
             const text = await response.text();
@@ -1467,6 +1843,53 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminUiState = {
           previewTemplateId: null,
         };
+        if (templateSelectEl) {
+          templateSelectEl.addEventListener('change', applyTemplateSelection);
+          loadTemplateOptions();
+        } else if (templateInfoEl) {
+          setTemplateStatus('Template selector unavailable.', true);
+        }
+
+        if (boundaryRangeInput) {
+          boundaryRangeInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'range');
+          });
+        }
+        if (boundaryNumberInput) {
+          boundaryNumberInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'number');
+          });
+        }
+        if (boundarySaveBtn) {
+          boundarySaveBtn.addEventListener('click', () => {
+            if (!boundaryState.templateId) return;
+            showAdminStatus('Saving boundary...');
+            adminFetch('admin/templates/boundary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                templateId: boundaryState.templateId,
+                bodyTopOffset: boundaryState.value,
+              }),
+            })
+              .then((payload) => {
+                boundaryState.dirty = false;
+                if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+                adminUiState.previewTemplateId = boundaryState.templateId;
+                showAdminStatus('Boundary updated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+        if (adminPreviewFrame) {
+          adminPreviewFrame.addEventListener('load', () => {
+            scheduleBoundaryOverlay();
+          });
+        }
+        window.addEventListener('resize', () => scheduleBoundaryOverlay());
 
         const setAdminModalVisible = (visible) => {
           if (!adminModalEl) return;
@@ -1550,15 +1973,20 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             adminPreviewFrame.hidden = true;
             adminPreviewEmptyEl.hidden = false;
             adminUiState.previewTemplateId = null;
+            setBoundaryTemplate(null);
             return;
           }
           adminPreviewEl.hidden = false;
-          adminPreviewLabelEl.textContent = 'Template preview: ' + (template.label || template.relativePath);
+          const previewLabel = template.label || template.relativePath || template.id;
+          adminPreviewLabelEl.textContent =
+            'Template preview: ' + previewLabel + (template.slug ? ' (' + template.slug + ')' : '');
           const previewUrl = buildAppUrl('admin/templates/' + encodeURIComponent(template.id) + '/preview');
           adminPreviewFrame.src = previewUrl + '#view=FitH&toolbar=0';
-           adminPreviewFrame.hidden = false;
+          adminPreviewFrame.hidden = false;
           adminPreviewEmptyEl.hidden = true;
           adminUiState.previewTemplateId = template.id;
+          setBoundaryTemplate(template);
+          scheduleBoundaryOverlay();
         };
 
         const updateAdminVisibility = () => {
@@ -1635,9 +2063,21 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             meta.className = 'admin-template__meta';
             const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
             const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
-            meta.textContent = size + ' • ' + uploaded;
+            meta.textContent = size + ' â€¢ ' + uploaded;
             colInfo.appendChild(nameSpan);
             colInfo.appendChild(meta);
+            if (tpl.slug) {
+              const slugInfo = document.createElement('span');
+              slugInfo.className = 'admin-template__slug';
+              slugInfo.textContent = 'Slug: ' + tpl.slug;
+              colInfo.appendChild(slugInfo);
+            }
+            if (tpl.description) {
+              const desc = document.createElement('p');
+              desc.className = 'admin-template__desc';
+              desc.textContent = tpl.description;
+              colInfo.appendChild(desc);
+            }
 
             const colStatus = document.createElement('td');
             if (tpl.id === payload.activeTemplateId) {
@@ -1652,7 +2092,8 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             const colActions = document.createElement('td');
             colActions.className = 'admin-template__actions';
             const downloadLink = document.createElement('a');
-            downloadLink.href = buildAppUrl(tpl.relativePath);
+            const relativeHref = (tpl.relativePath || '').replace(/\\/g, '/');
+            downloadLink.href = buildAppUrl(relativeHref);
             downloadLink.textContent = 'Download';
             downloadLink.target = '_blank';
             downloadLink.rel = 'noopener noreferrer';
@@ -1819,8 +2260,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
               showAdminStatus('Choose a PDF file to upload.', true);
               return;
             }
-            const formData = new FormData();
-            formData.append('file', adminUploadInput.files[0]);
+            const formData = new FormData(adminUploadForm);
             showAdminStatus('Uploading template...');
             adminFetch('admin/templates/upload', {
               method: 'POST',
@@ -1828,8 +2268,10 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             })
               .then((payload) => {
                 adminUploadInput.value = '';
+                if (adminUploadLabelInput) adminUploadLabelInput.value = '';
+                if (adminUploadDescriptionInput) adminUploadDescriptionInput.value = '';
                 showAdminStatus('Template uploaded and activated.');
-                 adminUiState.previewTemplateId = payload.activeTemplateId;
+                adminUiState.previewTemplateId = payload.activeTemplateId;
                 renderAdminTemplates(payload);
               })
               .catch((err) => {
@@ -3533,3 +3975,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
     </script>
   </body>
 </html>
+
+
+
+

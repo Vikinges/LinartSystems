@@ -30,6 +30,15 @@ const DEFAULT_TEMPLATE_FILENAME = 'form-template1.pdf';
 const DEFAULT_TEMPLATE = path.join(PUBLIC_DIR, DEFAULT_TEMPLATE_FILENAME);
 const ADMIN_DEFAULT_USERNAME = 'admin';
 const ADMIN_DEFAULT_PASSWORD = 'admin';
+const DEFAULT_PAGE_WIDTH = 595.28;
+const DEFAULT_PAGE_HEIGHT = 841.89;
+
+function clampNumber(value, min, max) {
+  if (!Number.isFinite(value)) return min;
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const HOST_URL_ENV = process.env.HOST_URL;
@@ -91,6 +100,39 @@ function sanitizeRelativePath(relativePath) {
   return normalized;
 }
 
+async function analyzeTemplatePdf(filePath) {
+  const fallback = {
+    pageWidth: DEFAULT_PAGE_WIDTH,
+    pageHeight: DEFAULT_PAGE_HEIGHT,
+  };
+  try {
+    if (!filePath || !fs.existsSync(filePath)) {
+      return fallback;
+    }
+    const pdfBytes = await fs.promises.readFile(filePath);
+    const pdfDoc = await PDFDocument.load(pdfBytes);
+    const firstPage = pdfDoc.getPage(0);
+    if (!firstPage) {
+      return fallback;
+    }
+    const { width, height } = firstPage.getSize();
+    return {
+      pageWidth: width || DEFAULT_PAGE_WIDTH,
+      pageHeight: height || DEFAULT_PAGE_HEIGHT,
+    };
+  } catch (err) {
+    console.warn('[server] Failed to analyze template PDF:', err.message);
+    return fallback;
+  }
+}
+
+function defaultBodyTopOffset(pageHeight) {
+  const height = Number.isFinite(pageHeight) ? pageHeight : DEFAULT_PAGE_HEIGHT;
+  const defaultRatio = 0.22;
+  const value = height * defaultRatio;
+  return clampNumber(value, 0, Math.max(height - 40, 0));
+}
+
 function saveTemplateManifest(manifest) {
   fsExtra.ensureFileSync(TEMPLATE_MANIFEST_PATH);
   fs.writeFileSync(TEMPLATE_MANIFEST_PATH, JSON.stringify(manifest, null, 2), 'utf8');
@@ -100,6 +142,7 @@ function ensureBuiltinTemplate(manifest) {
   const builtinId = 'builtin-form-template1';
   let entry = manifest.templates.find((tpl) => tpl.id === builtinId);
   const stats = fs.existsSync(DEFAULT_TEMPLATE) ? fs.statSync(DEFAULT_TEMPLATE) : null;
+  let changed = false;
   if (!entry) {
     entry = {
       id: builtinId,
@@ -110,16 +153,101 @@ function ensureBuiltinTemplate(manifest) {
       source: 'builtin',
     };
     manifest.templates.push(entry);
+    changed = true;
   } else {
-    entry.relativePath = DEFAULT_TEMPLATE_FILENAME;
+    if (entry.relativePath !== DEFAULT_TEMPLATE_FILENAME) {
+      entry.relativePath = DEFAULT_TEMPLATE_FILENAME;
+      changed = true;
+    }
     if (stats) {
       entry.size = stats.size;
-      entry.uploadedAt = entry.uploadedAt || stats.mtime.toISOString();
+      if (!entry.uploadedAt) {
+        entry.uploadedAt = stats.mtime.toISOString();
+        changed = true;
+      }
     }
+  }
+  if (!Number.isFinite(entry.pageWidth) || entry.pageWidth <= 0) {
+    entry.pageWidth = DEFAULT_PAGE_WIDTH;
+    changed = true;
+  }
+  if (!Number.isFinite(entry.pageHeight) || entry.pageHeight <= 0) {
+    entry.pageHeight = DEFAULT_PAGE_HEIGHT;
+    changed = true;
+  }
+  if (!Number.isFinite(entry.bodyTopOffset) || entry.bodyTopOffset < 0) {
+    entry.bodyTopOffset = defaultBodyTopOffset(entry.pageHeight);
+    changed = true;
   }
   if (!manifest.activeTemplateId) {
     manifest.activeTemplateId = builtinId;
+    changed = true;
   }
+  return changed;
+}
+
+function generateTemplateSlug(label, usedSlugs) {
+  const base =
+    String(label || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'template';
+  let candidate = base;
+  let counter = 1;
+  while (usedSlugs.has(candidate)) {
+    counter += 1;
+    candidate = `${base}-${counter}`;
+  }
+  usedSlugs.add(candidate);
+  return candidate;
+}
+
+function normalizeTemplateEntries(manifest) {
+  const usedSlugs = new Set();
+  let changed = false;
+  manifest.templates.forEach((entry, index) => {
+    if (!entry || typeof entry !== 'object') return;
+    if (!entry.label) {
+      entry.label = entry.relativePath ? path.basename(entry.relativePath) : `Template ${index + 1}`;
+      changed = true;
+    }
+    if (!entry.source) {
+      entry.source = 'managed';
+      changed = true;
+    }
+    if (!entry.description) {
+      entry.description = '';
+      changed = true;
+    }
+    const slug =
+      typeof entry.slug === 'string' && entry.slug.trim()
+        ? entry.slug.trim().toLowerCase()
+        : '';
+    if (!slug || usedSlugs.has(slug)) {
+      entry.slug = generateTemplateSlug(entry.label, usedSlugs);
+      changed = true;
+    } else {
+      entry.slug = slug;
+      usedSlugs.add(slug);
+    }
+    if (!Number.isFinite(entry.pageWidth) || entry.pageWidth <= 0) {
+      entry.pageWidth = DEFAULT_PAGE_WIDTH;
+      changed = true;
+    }
+    if (!Number.isFinite(entry.pageHeight) || entry.pageHeight <= 0) {
+      entry.pageHeight = DEFAULT_PAGE_HEIGHT;
+      changed = true;
+    }
+    if (!Number.isFinite(entry.bodyTopOffset) || entry.bodyTopOffset < 0) {
+      entry.bodyTopOffset = defaultBodyTopOffset(entry.pageHeight);
+      changed = true;
+    } else if (entry.bodyTopOffset > entry.pageHeight) {
+      entry.bodyTopOffset = entry.pageHeight;
+      changed = true;
+    }
+  });
+  return changed;
 }
 
 function loadTemplateManifest() {
@@ -130,8 +258,16 @@ function loadTemplateManifest() {
   if (!Array.isArray(manifest.templates)) {
     manifest.templates = [];
   }
-  ensureBuiltinTemplate(manifest);
-  saveTemplateManifest(manifest);
+  let dirty = false;
+  if (ensureBuiltinTemplate(manifest)) {
+    dirty = true;
+  }
+  if (normalizeTemplateEntries(manifest)) {
+    dirty = true;
+  }
+  if (dirty) {
+    saveTemplateManifest(manifest);
+  }
   return manifest;
 }
 
@@ -164,11 +300,15 @@ function logAdminEvent(event, payload = {}) {
 
 let templateManifest = loadTemplateManifest();
 
-function applyActiveTemplateEntry(entry) {
+function resolveTemplateFileFromEntry(entry) {
   if (!entry) return null;
   const safeRelative = sanitizeRelativePath(entry.relativePath || DEFAULT_TEMPLATE_FILENAME);
   const absolute = path.join(PUBLIC_DIR, safeRelative);
-  const resolved = resolveTemplatePath(absolute);
+  return resolveTemplatePath(absolute);
+}
+
+function applyActiveTemplateEntry(entry) {
+  const resolved = resolveTemplateFileFromEntry(entry);
   if (resolved) {
     templatePath = resolved;
   }
@@ -177,6 +317,17 @@ function applyActiveTemplateEntry(entry) {
 
 function getTemplateEntryById(templateId) {
   return templateManifest.templates.find((tpl) => tpl.id === templateId) || null;
+}
+
+function getTemplateEntryBySlug(slug) {
+  if (!slug) return null;
+  const normalized = String(slug).toLowerCase();
+  return templateManifest.templates.find((tpl) => tpl.slug === normalized) || null;
+}
+
+function getTemplateEntryByRef(ref) {
+  if (!ref) return null;
+  return getTemplateEntryById(ref) || getTemplateEntryBySlug(ref);
 }
 
 function refreshTemplatePathFromManifest() {
@@ -200,6 +351,13 @@ function setActiveTemplateById(templateId, options = {}) {
   return entry;
 }
 
+function resolveTemplateEntryForSubmission(ref) {
+  if (ref) {
+    return getTemplateEntryByRef(ref);
+  }
+  return getActiveTemplateEntry(templateManifest);
+}
+
 function buildTemplatesResponse() {
   return {
     ok: true,
@@ -209,12 +367,40 @@ function buildTemplatesResponse() {
       .sort((a, b) => new Date(b.uploadedAt || 0) - new Date(a.uploadedAt || 0))
       .map((entry) => ({
         id: entry.id,
+        slug: entry.slug,
         label: entry.label,
+        description: entry.description || '',
         relativePath: entry.relativePath,
         uploadedAt: entry.uploadedAt,
         size: entry.size,
         source: entry.source || 'managed',
+        isActive: entry.id === templateManifest.activeTemplateId,
+        pageWidth: entry.pageWidth,
+        pageHeight: entry.pageHeight,
+        bodyTopOffset: entry.bodyTopOffset,
       })),
+  };
+}
+
+function buildPublicTemplatesResponse() {
+  const { templates, activeTemplateId } = buildTemplatesResponse();
+  return {
+    ok: true,
+    activeTemplateId,
+    templates: templates.map((entry) => ({
+      id: entry.id,
+      slug: entry.slug,
+      label: entry.label,
+      description: entry.description,
+      uploadedAt: entry.uploadedAt,
+      size: entry.size,
+      source: entry.source,
+      isActive: entry.isActive,
+      previewUrl: `/admin/templates/${encodeURIComponent(entry.id)}/preview`,
+      pageWidth: entry.pageWidth,
+      pageHeight: entry.pageHeight,
+      bodyTopOffset: entry.bodyTopOffset,
+    })),
   };
 }
 
@@ -225,6 +411,7 @@ function slugifyFilename(name) {
     .replace(/^-+|-+$/g, '')
     .slice(0, 64) || 'template';
 }
+
 
 function generateSalt(length = 16) {
   return crypto.randomBytes(length).toString('hex');
@@ -2661,6 +2848,16 @@ ${rows.join('\n')}
         font-size: 1.3rem;
         color: #1f2a5b;
       }
+      .template-details {
+        font-size: 0.9rem;
+        color: #475569;
+      }
+      .template-description {
+        margin: 0.35rem 0;
+        font-size: 0.95rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
       .grid.two-col {
         display: grid;
         gap: 1rem;
@@ -2678,12 +2875,16 @@ ${rows.join('\n')}
       input[type="text"],
       input[type="date"],
       input[type="datetime-local"],
-      textarea {
+      textarea,
+      select {
         font: inherit;
         padding: 0.75rem;
         border: 1px solid #d8d8e5;
         border-radius: 10px;
         background: #fafafe;
+      }
+      select {
+        min-height: 48px;
       }
       textarea {
         resize: vertical;
@@ -3284,6 +3485,16 @@ ${rows.join('\n')}
         font-size: 0.8rem;
         color: #475569;
       }
+      .admin-template__slug {
+        font-size: 0.78rem;
+        color: #0f172a;
+      }
+      .admin-template__desc {
+        margin-top: 0.3rem;
+        font-size: 0.85rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
       .admin-template__actions {
         display: flex;
         gap: 0.5rem;
@@ -3306,11 +3517,56 @@ ${rows.join('\n')}
         font-size: 0.9rem;
         background: #fff;
       }
-      .admin-preview iframe {
+      .admin-preview__frame {
+        position: relative;
         flex: 1;
+        background: #fff;
+        min-height: 320px;
+      }
+      .admin-preview__frame iframe {
+        display: block;
         width: 100%;
+        height: 100%;
         border: none;
         background: #fff;
+      }
+      .admin-preview__overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .admin-preview__boundary {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: rgba(249, 115, 22, 0.9);
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.4);
+      }
+      .admin-preview__controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #e2e8f0;
+        background: #fff;
+      }
+      .admin-preview__controls label {
+        font-size: 0.85rem;
+        color: #475569;
+        font-weight: 600;
+      }
+      .admin-preview__controls input[type="range"] {
+        flex: 1 1 220px;
+      }
+      .admin-preview__controls input[type="number"] {
+        width: 110px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #cbd5f5;
+        border-radius: 6px;
+        font: inherit;
       }
       .admin-preview__empty {
         padding: 1rem;
@@ -3409,6 +3665,24 @@ ${rows.join('\n')}
         <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
+        <section class="card" data-template-selector>
+          <h2>Document template</h2>
+          <p>Pick the PDF header to merge with this report. Templates define the logo, header text, and footer copy.</p>
+          <div class="grid two-col">
+            <label class="field" style="max-width:360px">
+              <span>Template</span>
+              <select name="template_id" data-template-select required>
+                <option value="">Loading templates...</option>
+              </select>
+              <input type="hidden" name="template_slug" data-template-slug />
+            </label>
+            <div class="template-details" data-template-info>
+              <p data-template-status>Loading available templates...</p>
+              <p class="template-description" data-template-description hidden></p>
+              <a href="#" class="link-button" data-template-preview target="_blank" rel="noopener" hidden>Preview template</a>
+            </div>
+          </div>
+        </section>
         <section class="card">
           <h2>Site information</h2>
           <div class="grid two-col">
@@ -3578,8 +3852,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             ${renderTextInput('customer_name', 'Customer name')}
           </div>
           <div class="signature-row">
-            ${renderSignaturePad('engineer_signature', 'Engineer signature')}
-            ${renderSignaturePad('customer_signature', 'Customer signature')}
+            ${engineerSignatureMarkup}
+            ${customerSignatureMarkup}
           </div>
         </section>
         <div class="footer-actions">
@@ -3638,17 +3912,36 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             </label>
             <button type="submit" class="link-button">Change password</button>
           </form>
-          <form data-admin-upload>
-            <label class="field" style="flex:1 1 260px">
-              <span>Upload new PDF</span>
-              <input type="file" accept="application/pdf" data-admin-upload-input required />
+          <form data-admin-upload enctype="multipart/form-data">
+            <label class="field" style="flex:1 1 240px">
+              <span>Upload document PDF</span>
+              <input type="file" name="file" accept="application/pdf" data-admin-upload-input required />
+            </label>
+            <label class="field" style="flex:1 1 220px">
+              <span>Display name</span>
+              <input type="text" name="label" placeholder="e.g. Calibration Certificate" data-admin-upload-label />
+            </label>
+            <label class="field" style="flex:1 1 320px">
+              <span>Description / notes (optional)</span>
+              <textarea name="description" rows="3" data-admin-upload-description placeholder="Shown in the template picker."></textarea>
             </label>
             <button type="submit" class="link-button">Upload &amp; activate</button>
           </form>
           <div class="admin-templates" data-admin-template-list></div>
           <div class="admin-preview" data-admin-preview hidden>
             <header data-admin-preview-label>Template preview</header>
-            <iframe title="Template preview" data-admin-preview-frame></iframe>
+            <div class="admin-preview__frame" data-admin-preview-frame-wrapper>
+              <iframe title="Template preview" data-admin-preview-frame></iframe>
+              <div class="admin-preview__overlay" data-template-overlay hidden>
+                <div class="admin-preview__boundary" data-template-boundary-line></div>
+              </div>
+            </div>
+            <div class="admin-preview__controls" data-boundary-controls hidden>
+              <label for="boundary-range">Content starts after</label>
+              <input type="range" id="boundary-range" min="0" max="800" step="5" value="200" data-boundary-range />
+              <input type="number" min="0" max="800" step="1" value="200" data-boundary-input /> pt
+              <button type="button" class="link-button" data-boundary-save disabled>Save boundary</button>
+            </div>
             <div class="admin-preview__empty" data-admin-preview-empty>No template selected.</div>
           </div>
           <div class="admin-section__status" data-admin-status></div>
@@ -3671,6 +3964,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+        const templateSelectEl = document.querySelector('[data-template-select]');
+        const templateSlugInput = document.querySelector('[data-template-slug]');
+        const templateInfoEl = document.querySelector('[data-template-info]');
+        const templateStatusEl = templateInfoEl ? templateInfoEl.querySelector('[data-template-status]') : null;
+        const templateDescriptionEl = templateInfoEl
+          ? templateInfoEl.querySelector('[data-template-description]')
+          : null;
+        const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -3695,6 +3996,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminUploadInput = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-upload-input]')
           : null;
+        const adminUploadLabelInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-label]')
+          : null;
+        const adminUploadDescriptionInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-description]')
+          : null;
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
@@ -3702,14 +4009,61 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminPreviewLabelEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-label]')
           : null;
+        const adminPreviewFrameWrapper = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-frame-wrapper]')
+          : null;
         const adminPreviewFrame = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-frame]')
           : null;
         const adminPreviewEmptyEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-empty]')
           : null;
+        const adminPreviewOverlayEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-overlay]')
+          : null;
+        const adminPreviewBoundaryEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-boundary-line]')
+          : null;
+        const boundaryControlsEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-boundary-controls]')
+          : null;
+        const boundaryRangeInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-range]')
+          : null;
+        const boundaryNumberInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-input]')
+          : null;
+        const boundarySaveBtn = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-save]')
+          : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const BOUNDARY_DEFAULT_HEIGHT = 841.89;
+        const boundaryState = {
+          templateId: null,
+          pageHeight: BOUNDARY_DEFAULT_HEIGHT,
+          value: 0,
+          dirty: false,
+        };
+        let boundaryOverlayFrame = null;
+        const clampValue = (value, min, max) => {
+          const number = Number(value);
+          if (!Number.isFinite(number)) return min;
+          if (number < min) return min;
+          if (number > max) return max;
+          return number;
+        };
+        const defaultBoundaryFromHeight = (height) => {
+          const safeHeight = Number.isFinite(height) && height > 0 ? height : BOUNDARY_DEFAULT_HEIGHT;
+          return clampValue(safeHeight * 0.22, 0, Math.max(safeHeight - 40, 0));
+        };
+        const templateState = {
+          templates: [],
+          activeTemplateId: null,
+        };
+        const urlSearchParams = new URL(window.location.href).searchParams;
+        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
+        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
         let adminTokenStore = null;
         try {
@@ -3724,8 +4078,216 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         const appBaseUrl = new URL('.', window.location.href);
         const buildAppUrl = (path) => {
-          const normalized = (path || '').replace(/^\\/+/, '');
+          const normalized = (path || '').replace(/^\/+/, '');
           return new URL(normalized || '.', appBaseUrl).toString();
+        };
+
+        const setTemplateStatus = (message, isError = false) => {
+          if (!templateStatusEl) return;
+          templateStatusEl.textContent = message || '';
+          templateStatusEl.style.color = isError ? '#b91c1c' : '#475569';
+        };
+
+        const updateBoundaryControls = () => {
+          if (!boundaryControlsEl) return;
+          if (!boundaryState.templateId) {
+            boundaryControlsEl.hidden = true;
+            if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+            if (adminPreviewOverlayEl) adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          boundaryControlsEl.hidden = false;
+          const maxValue = Math.max(0, Math.round(boundaryState.pageHeight));
+          if (boundaryRangeInput) {
+            boundaryRangeInput.min = '0';
+            boundaryRangeInput.max = String(maxValue);
+            boundaryRangeInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundaryNumberInput) {
+            boundaryNumberInput.min = '0';
+            boundaryNumberInput.max = String(maxValue);
+            boundaryNumberInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = !boundaryState.dirty;
+          }
+        };
+
+        const updateBoundaryOverlay = () => {
+          if (
+            !adminPreviewOverlayEl ||
+            !adminPreviewBoundaryEl ||
+            !adminPreviewFrameWrapper ||
+            !boundaryState.templateId
+          ) {
+            if (adminPreviewOverlayEl) {
+              adminPreviewOverlayEl.hidden = true;
+            }
+            return;
+          }
+          const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
+          if (!wrapperHeight || !Number.isFinite(boundaryState.pageHeight) || boundaryState.pageHeight <= 0) {
+            adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
+          const topPosition = wrapperHeight * ratio;
+          adminPreviewBoundaryEl.style.top = topPosition + 'px';
+          adminPreviewOverlayEl.hidden = false;
+        };
+
+        const scheduleBoundaryOverlay = () => {
+          if (boundaryOverlayFrame) {
+            cancelAnimationFrame(boundaryOverlayFrame);
+          }
+          boundaryOverlayFrame = requestAnimationFrame(updateBoundaryOverlay);
+        };
+
+        const setBoundaryTemplate = (template) => {
+          if (!template) {
+            boundaryState.templateId = null;
+            boundaryState.pageHeight = BOUNDARY_DEFAULT_HEIGHT;
+            boundaryState.value = 0;
+            boundaryState.dirty = false;
+            updateBoundaryControls();
+            scheduleBoundaryOverlay();
+            return;
+          }
+          boundaryState.templateId = template.id;
+          boundaryState.pageHeight =
+            Number.isFinite(template.pageHeight) && template.pageHeight > 0
+              ? Number(template.pageHeight)
+              : BOUNDARY_DEFAULT_HEIGHT;
+          const providedOffset =
+            Number.isFinite(template.bodyTopOffset) && template.bodyTopOffset >= 0
+              ? Number(template.bodyTopOffset)
+              : defaultBoundaryFromHeight(boundaryState.pageHeight);
+          boundaryState.value = clampValue(providedOffset, 0, boundaryState.pageHeight);
+          boundaryState.dirty = false;
+          updateBoundaryControls();
+          scheduleBoundaryOverlay();
+        };
+
+        const handleBoundaryValueChange = (nextValue, source) => {
+          if (!boundaryState.templateId) return;
+          const clamped = clampValue(nextValue, 0, boundaryState.pageHeight);
+          boundaryState.value = clamped;
+          boundaryState.dirty = true;
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = false;
+          }
+          if (boundaryRangeInput && source !== 'range') {
+            boundaryRangeInput.value = String(Math.round(clamped));
+          }
+          if (boundaryNumberInput && source !== 'number') {
+            boundaryNumberInput.value = String(Math.round(clamped));
+          }
+          scheduleBoundaryOverlay();
+        };
+
+        const applyTemplateSelection = () => {
+          if (!templateSelectEl) return;
+          const selectedId = templateSelectEl.value;
+          const selected =
+            templateState.templates.find((tpl) => tpl.id === selectedId) || null;
+          if (templateSlugInput) {
+            templateSlugInput.value = selected && selected.slug ? selected.slug : '';
+          }
+          if (templateDescriptionEl) {
+            if (selected && selected.description && selected.description.trim().length) {
+              templateDescriptionEl.hidden = false;
+              templateDescriptionEl.textContent = selected.description;
+            } else {
+              templateDescriptionEl.hidden = true;
+              templateDescriptionEl.textContent = '';
+            }
+          }
+          if (templatePreviewLink) {
+            if (selected && selected.previewUrl) {
+              const previewPath = selected.previewUrl.replace(/^\/+/, '');
+              templatePreviewLink.href = buildAppUrl(previewPath);
+              templatePreviewLink.hidden = false;
+            } else {
+              templatePreviewLink.hidden = true;
+              templatePreviewLink.href = '#';
+            }
+          }
+          if (selected) {
+            const slugDisplay = selected.slug ? ' · ' + selected.slug : '';
+            setTemplateStatus(
+              (selected.label || selected.slug || 'Template') +
+                slugDisplay +
+                (selected.isActive ? ' · Active by default' : ''),
+            );
+          } else {
+            setTemplateStatus('Select a template to continue.');
+          }
+        };
+
+        const loadTemplateOptions = () => {
+          if (!templateSelectEl) return;
+          setTemplateStatus('Loading available templates...');
+          templateSelectEl.disabled = true;
+          templateSelectEl.innerHTML = '<option value="">Loading...</option>';
+          fetch(buildAppUrl('api/templates'), { credentials: 'same-origin' })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error('Failed to load templates.');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (!payload || !Array.isArray(payload.templates)) {
+                throw new Error('Template response malformed.');
+              }
+              templateState.templates = payload.templates;
+              templateState.activeTemplateId = payload.activeTemplateId || '';
+              templateSelectEl.innerHTML = '';
+              if (!payload.templates.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No templates found';
+                templateSelectEl.appendChild(option);
+                templateSelectEl.disabled = true;
+                if (templateSlugInput) templateSlugInput.value = '';
+                if (templateDescriptionEl) {
+                  templateDescriptionEl.hidden = false;
+                  templateDescriptionEl.textContent = 'Upload a template in the admin panel to continue.';
+                }
+                setTemplateStatus('Templates are not configured yet.', true);
+                return;
+              }
+              payload.templates.forEach((tpl) => {
+                const option = document.createElement('option');
+                option.value = tpl.id;
+                option.textContent = tpl.label || tpl.slug || tpl.id;
+                templateSelectEl.appendChild(option);
+              });
+              let defaultTemplate = null;
+              if (requestedTemplateSlug) {
+                defaultTemplate = payload.templates.find(
+                  (tpl) => (tpl.slug || '').toLowerCase() === requestedTemplateSlug,
+                );
+              }
+              if (!defaultTemplate && requestedTemplateId) {
+                defaultTemplate = payload.templates.find((tpl) => tpl.id === requestedTemplateId);
+              }
+              if (!defaultTemplate) {
+                defaultTemplate =
+                  payload.templates.find((tpl) => tpl.isActive) || payload.templates[0];
+              }
+              templateSelectEl.disabled = false;
+              templateSelectEl.value = defaultTemplate ? defaultTemplate.id : payload.templates[0].id;
+              applyTemplateSelection();
+            })
+            .catch((err) => {
+              setTemplateStatus(err.message || 'Unable to load templates.', true);
+              templateSelectEl.innerHTML = '<option value="">Templates unavailable</option>';
+              templateSelectEl.disabled = true;
+              if (templateSlugInput) templateSlugInput.value = '';
+              if (templateDescriptionEl) templateDescriptionEl.hidden = true;
+              if (templatePreviewLink) templatePreviewLink.hidden = true;
+            });
         };
 
         const readJsonPayload = async (response) => {
@@ -3744,6 +4306,53 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminUiState = {
           previewTemplateId: null,
         };
+        if (templateSelectEl) {
+          templateSelectEl.addEventListener('change', applyTemplateSelection);
+          loadTemplateOptions();
+        } else if (templateInfoEl) {
+          setTemplateStatus('Template selector unavailable.', true);
+        }
+
+        if (boundaryRangeInput) {
+          boundaryRangeInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'range');
+          });
+        }
+        if (boundaryNumberInput) {
+          boundaryNumberInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'number');
+          });
+        }
+        if (boundarySaveBtn) {
+          boundarySaveBtn.addEventListener('click', () => {
+            if (!boundaryState.templateId) return;
+            showAdminStatus('Saving boundary...');
+            adminFetch('admin/templates/boundary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                templateId: boundaryState.templateId,
+                bodyTopOffset: boundaryState.value,
+              }),
+            })
+              .then((payload) => {
+                boundaryState.dirty = false;
+                if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+                adminUiState.previewTemplateId = boundaryState.templateId;
+                showAdminStatus('Boundary updated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+        if (adminPreviewFrame) {
+          adminPreviewFrame.addEventListener('load', () => {
+            scheduleBoundaryOverlay();
+          });
+        }
+        window.addEventListener('resize', () => scheduleBoundaryOverlay());
 
         const setAdminModalVisible = (visible) => {
           if (!adminModalEl) return;
@@ -3827,15 +4436,20 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             adminPreviewFrame.hidden = true;
             adminPreviewEmptyEl.hidden = false;
             adminUiState.previewTemplateId = null;
+            setBoundaryTemplate(null);
             return;
           }
           adminPreviewEl.hidden = false;
-          adminPreviewLabelEl.textContent = 'Template preview: ' + (template.label || template.relativePath);
+          const previewLabel = template.label || template.relativePath || template.id;
+          adminPreviewLabelEl.textContent =
+            'Template preview: ' + previewLabel + (template.slug ? ' (' + template.slug + ')' : '');
           const previewUrl = buildAppUrl('admin/templates/' + encodeURIComponent(template.id) + '/preview');
           adminPreviewFrame.src = previewUrl + '#view=FitH&toolbar=0';
-           adminPreviewFrame.hidden = false;
+          adminPreviewFrame.hidden = false;
           adminPreviewEmptyEl.hidden = true;
           adminUiState.previewTemplateId = template.id;
+          setBoundaryTemplate(template);
+          scheduleBoundaryOverlay();
         };
 
         const updateAdminVisibility = () => {
@@ -3915,6 +4529,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             meta.textContent = size + ' • ' + uploaded;
             colInfo.appendChild(nameSpan);
             colInfo.appendChild(meta);
+            if (tpl.slug) {
+              const slugInfo = document.createElement('span');
+              slugInfo.className = 'admin-template__slug';
+              slugInfo.textContent = 'Slug: ' + tpl.slug;
+              colInfo.appendChild(slugInfo);
+            }
+            if (tpl.description) {
+              const desc = document.createElement('p');
+              desc.className = 'admin-template__desc';
+              desc.textContent = tpl.description;
+              colInfo.appendChild(desc);
+            }
 
             const colStatus = document.createElement('td');
             if (tpl.id === payload.activeTemplateId) {
@@ -3929,7 +4555,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const colActions = document.createElement('td');
             colActions.className = 'admin-template__actions';
             const downloadLink = document.createElement('a');
-            downloadLink.href = buildAppUrl(tpl.relativePath);
+            const relativeHref = (tpl.relativePath || '').replace(/\\/g, '/');
+            downloadLink.href = buildAppUrl(relativeHref);
             downloadLink.textContent = 'Download';
             downloadLink.target = '_blank';
             downloadLink.rel = 'noopener noreferrer';
@@ -4096,8 +4723,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               showAdminStatus('Choose a PDF file to upload.', true);
               return;
             }
-            const formData = new FormData();
-            formData.append('file', adminUploadInput.files[0]);
+            const formData = new FormData(adminUploadForm);
             showAdminStatus('Uploading template...');
             adminFetch('admin/templates/upload', {
               method: 'POST',
@@ -4105,8 +4731,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             })
               .then((payload) => {
                 adminUploadInput.value = '';
+                if (adminUploadLabelInput) adminUploadLabelInput.value = '';
+                if (adminUploadDescriptionInput) adminUploadDescriptionInput.value = '';
                 showAdminStatus('Template uploaded and activated.');
-                 adminUiState.previewTemplateId = payload.activeTemplateId;
+                adminUiState.previewTemplateId = payload.activeTemplateId;
                 renderAdminTemplates(payload);
               })
               .catch((err) => {
@@ -6186,29 +6814,55 @@ app.post(
   '/admin/templates/upload',
   requireAdmin,
   templateUpload.single('file'),
-  (req, res) => {
-    if (!req.file) {
-      return res.status(400).json({ ok: false, error: 'PDF file is required.' });
-    }
-    const relativePath = sanitizeRelativePath(path.join('templates', req.file.filename));
-    const entry = {
-      id: `tpl-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
-      label: req.file.originalname || req.file.filename,
-      relativePath,
-      uploadedAt: new Date().toISOString(),
-      size: req.file.size,
-      source: 'upload',
-    };
-    templateManifest.templates.push(entry);
-    templateManifest.activeTemplateId = entry.id;
-    saveTemplateManifest(templateManifest);
+  async (req, res) => {
     try {
-      applyActiveTemplateEntry(entry);
+      if (!req.file) {
+        return res.status(400).json({ ok: false, error: 'PDF file is required.' });
+      }
+      const relativePath = sanitizeRelativePath(path.join('templates', req.file.filename));
+      const absolutePath = path.join(PUBLIC_DIR, relativePath);
+      const labelInput =
+        req.body && typeof req.body.label === 'string' ? req.body.label.trim() : '';
+      const descriptionInput =
+        req.body && typeof req.body.description === 'string' ? req.body.description.trim() : '';
+      const rawLabel =
+        labelInput ||
+        (req.file.originalname && req.file.originalname.trim()) ||
+        req.file.filename;
+      const label = rawLabel ? rawLabel.slice(0, 120) : 'Template';
+      const description = descriptionInput ? descriptionInput.slice(0, 400) : '';
+      const usedSlugs = new Set(
+        templateManifest.templates.map((tpl) => (tpl.slug ? tpl.slug.toLowerCase() : '')).filter(Boolean),
+      );
+      const slug = generateTemplateSlug(label, usedSlugs);
+      const analysis = await analyzeTemplatePdf(absolutePath);
+      const entry = {
+        id: `tpl-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+        label,
+        description,
+        slug,
+        relativePath,
+        uploadedAt: new Date().toISOString(),
+        size: req.file.size,
+        source: 'upload',
+        pageWidth: analysis.pageWidth,
+        pageHeight: analysis.pageHeight,
+        bodyTopOffset: defaultBodyTopOffset(analysis.pageHeight),
+      };
+      templateManifest.templates.push(entry);
+      templateManifest.activeTemplateId = entry.id;
+      saveTemplateManifest(templateManifest);
+      try {
+        applyActiveTemplateEntry(entry);
+      } catch (err) {
+        return res.status(500).json({ ok: false, error: err.message || 'Failed to activate template.' });
+      }
+      logAdminEvent('template.upload', { templateId: entry.id, label: entry.label, size: entry.size });
+      return res.json(buildTemplatesResponse());
     } catch (err) {
-      return res.status(500).json({ ok: false, error: err.message || 'Failed to activate template.' });
+      console.error('[server] Template upload failed', err);
+      return res.status(500).json({ ok: false, error: err.message || 'Upload failed.' });
     }
-    logAdminEvent('template.upload', { templateId: entry.id, label: entry.label, size: entry.size });
-    return res.json(buildTemplatesResponse());
   },
 );
 
@@ -6224,6 +6878,34 @@ app.post('/admin/templates/select', requireAdmin, (req, res) => {
   } catch (err) {
     return res.status(404).json({ ok: false, error: err.message || 'Template not found.' });
   }
+});
+
+app.post('/admin/templates/boundary', requireAdmin, (req, res) => {
+  const templateId = req.body && req.body.templateId;
+  const rawOffset = req.body && req.body.bodyTopOffset;
+  if (!templateId) {
+    return res.status(400).json({ ok: false, error: 'templateId is required.' });
+  }
+  if (rawOffset === undefined || rawOffset === null) {
+    return res.status(400).json({ ok: false, error: 'bodyTopOffset is required.' });
+  }
+  const offsetNumber = Number(rawOffset);
+  if (!Number.isFinite(offsetNumber)) {
+    return res.status(400).json({ ok: false, error: 'bodyTopOffset must be a number.' });
+  }
+  const entry = getTemplateEntryById(templateId);
+  if (!entry) {
+    return res.status(404).json({ ok: false, error: 'Template not found.' });
+  }
+  const pageHeight = Number.isFinite(entry.pageHeight) && entry.pageHeight > 0 ? entry.pageHeight : DEFAULT_PAGE_HEIGHT;
+  entry.bodyTopOffset = clampNumber(offsetNumber, 0, pageHeight);
+  saveTemplateManifest(templateManifest);
+  logAdminEvent('template.boundary', {
+    templateId: entry.id,
+    bodyTopOffset: entry.bodyTopOffset,
+    pageHeight,
+  });
+  return res.json(buildTemplatesResponse());
 });
 
 app.get('/admin/templates/:templateId/preview', (req, res) => {
@@ -6243,6 +6925,10 @@ app.get('/admin/templates/:templateId/preview', (req, res) => {
     `inline; filename="${encodeURIComponent(path.basename(entry.relativePath || 'template.pdf'))}"`,
   );
   return res.sendFile(absolute);
+});
+
+app.get('/api/templates', (req, res) => {
+  return res.json(buildPublicTemplatesResponse());
 });
 
 app.post('/submit', (req, res, next) => {
@@ -6297,16 +6983,42 @@ app.post('/submit', (req, res, next) => {
     }
   }
 
+  const templateIdParam =
+    req.body && typeof req.body.template_id === 'string' ? req.body.template_id.trim() : '';
+  const templateSlugParam =
+    req.body && typeof req.body.template_slug === 'string' ? req.body.template_slug.trim() : '';
+  const requestedTemplateRef = templateIdParam || templateSlugParam || '';
+  let submissionTemplateEntry = null;
+  let submissionTemplatePath = null;
+
   try {
-    if (!templatePath) {
-      return res.status(500).json({ ok: false, error: 'Template path was not provided. Set TEMPLATE_PATH or update fields.json.' });
+    if (requestedTemplateRef) {
+      submissionTemplateEntry = resolveTemplateEntryForSubmission(requestedTemplateRef);
+      if (!submissionTemplateEntry) {
+        return res
+          .status(400)
+          .json({ ok: false, error: 'Selected document template is unavailable. Please refresh and try again.' });
+      }
+    } else {
+      submissionTemplateEntry = resolveTemplateEntryForSubmission(null);
     }
 
-    if (!fs.existsSync(templatePath)) {
-      return res.status(500).json({ ok: false, error: `Template PDF not found at ${templatePath}` });
+    if (!submissionTemplateEntry) {
+      return res
+        .status(500)
+        .json({ ok: false, error: 'No active document template is configured. Contact an administrator.' });
     }
 
-    const pdfBytes = await fs.promises.readFile(templatePath);
+    submissionTemplatePath = resolveTemplateFileFromEntry(submissionTemplateEntry);
+
+    if (!submissionTemplatePath || !fs.existsSync(submissionTemplatePath)) {
+      return res.status(500).json({
+        ok: false,
+        error: 'Template PDF could not be located on disk. Please contact an administrator.',
+      });
+    }
+
+    const pdfBytes = await fs.promises.readFile(submissionTemplatePath);
     const pdfDoc = await PDFDocument.load(pdfBytes);
     const form = pdfDoc.getForm();
 
@@ -6491,7 +7203,10 @@ app.post('/submit', (req, res, next) => {
     await fs.promises.writeFile(outputPath, pdfOutput);
 
     const metadata = {
-      templatePath,
+      templatePath: submissionTemplatePath,
+      templateId: submissionTemplateEntry.id,
+      templateSlug: submissionTemplateEntry.slug,
+      templateLabel: submissionTemplateEntry.label,
       createdAt: new Date().toISOString(),
       filename,
       requestBody: sanitizedBody,
@@ -6555,6 +7270,9 @@ app.post('/submit', (req, res, next) => {
     return res.json({
       ok: true,
       url: downloadUrl,
+      templateId: submissionTemplateEntry.id,
+      templateSlug: submissionTemplateEntry.slug,
+      templateLabel: submissionTemplateEntry.label,
       overflowCount: overflowTextEntries.length,
       partsRowsHidden: hiddenPartRows,
       partsRowsRendered,
