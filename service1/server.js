@@ -3613,6 +3613,23 @@ ${rows.join('\n')}
       .admin-modal[hidden] {
         display: none;
       }
+      body[data-admin-window='true'] .container {
+        display: none;
+      }
+      body[data-admin-window='true'] {
+        background: #e5e7fb;
+        overflow-y: auto;
+      }
+      body[data-admin-window='true'] .admin-modal {
+        position: static;
+        background: transparent;
+        padding: 2rem;
+      }
+      body[data-admin-window='true'] .admin-modal__dialog {
+        max-width: 960px;
+        width: 100%;
+        max-height: none;
+      }
       .admin-modal__dialog {
         background: #fff;
         border-radius: 16px;
@@ -4045,6 +4062,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           value: 0,
           dirty: false,
         };
+        let adminWindowOpened = requestedAdminWindow;
+        const openStandaloneAdminWindow = () => {
+          const adminUrl = new URL(window.location.href);
+          adminUrl.searchParams.set('adminWindow', '1');
+          adminUrl.hash = '';
+          window.open(adminUrl.toString(), '_blank', 'noopener');
+        };
         let boundaryOverlayFrame = null;
         const clampValue = (value, min, max) => {
           const number = Number(value);
@@ -4064,6 +4088,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const urlSearchParams = new URL(window.location.href).searchParams;
         const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
         const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
+        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
         let adminTokenStore = null;
         try {
@@ -4300,6 +4325,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           }
         };
 
+        if (requestedAdminWindow) {
+          document.body.dataset.adminWindow = 'true';
+        }
+
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
         };
@@ -4359,13 +4388,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           adminModalEl.hidden = !visible;
           if (visible) {
             document.body.dataset.adminModal = 'open';
-            document.body.style.overflow = 'hidden';
+            if (!requestedAdminWindow) {
+              document.body.style.overflow = 'hidden';
+            }
             if (adminState.token) {
               loadAdminTemplates();
             }
           } else {
             delete document.body.dataset.adminModal;
-            document.body.style.overflow = '';
+            if (!requestedAdminWindow) {
+              document.body.style.overflow = '';
+            }
           }
         };
 
@@ -4663,6 +4696,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
                 if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
                 setAdminToken(payload.token);
                 showAdminStatus('Logged in.');
+                if (!adminWindowOpened) {
+                  openStandaloneAdminWindow();
+                  adminWindowOpened = true;
+                }
                 if (payload.username) {
                   renderAdminProfile(payload);
                 } else {
@@ -4744,6 +4781,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         }
 
         updateAdminVisibility();
+        if (requestedAdminWindow) {
+          setAdminModalVisible(true);
+        }
         if (adminState.token) {
           refreshAdminProfile();
           loadAdminTemplates();
