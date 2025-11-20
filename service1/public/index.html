@@ -949,7 +949,7 @@
           <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
           <div class="employee-actions">
             <button type="button" class="button" data-action="employee-add">+ Add employee</button>
-            <small>Defaults use the moment you opened this form; fine-tune via manual input or Â±30m shortcuts.</small>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
           </div>
           <div class="employee-table-wrapper">
             <table class="employee-table">
@@ -1592,6 +1592,10 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
         const BOUNDARY_DEFAULT_HEIGHT = 841.89;
+        const urlSearchParams = new URL(window.location.href).searchParams;
+        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
+        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
+        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
         const boundaryState = {
           templateId: null,
           pageHeight: BOUNDARY_DEFAULT_HEIGHT,
@@ -1621,10 +1625,6 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           templates: [],
           activeTemplateId: null,
         };
-        const urlSearchParams = new URL(window.location.href).searchParams;
-        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
-        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
-        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
         let adminTokenStore = null;
         try {
@@ -1766,7 +1766,6 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
           if (templatePreviewLink) {
             if (selected && selected.previewUrl) {
               const previewPath = selected.previewUrl.replace(/^\/+/, '');
-
               templatePreviewLink.href = buildAppUrl(previewPath);
               templatePreviewLink.hidden = false;
             } else {
@@ -1775,11 +1774,11 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             }
           }
           if (selected) {
-            const slugDisplay = selected.slug ? ' Â· ' + selected.slug : '';
+            const slugDisplay = selected.slug ? ' · ' + selected.slug : '';
             setTemplateStatus(
               (selected.label || selected.slug || 'Template') +
                 slugDisplay +
-                (selected.isActive ? ' Â· Active by default' : ''),
+                (selected.isActive ? ' · Active by default' : ''),
             );
           } else {
             setTemplateStatus('Select a template to continue.');
@@ -2096,7 +2095,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
             meta.className = 'admin-template__meta';
             const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
             const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
-            meta.textContent = size + ' â€¢ ' + uploaded;
+            meta.textContent = size + ' • ' + uploaded;
             colInfo.appendChild(nameSpan);
             colInfo.appendChild(meta);
             if (tpl.slug) {
@@ -4015,7 +4014,3 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
     </script>
   </body>
 </html>
-
-
-
-
