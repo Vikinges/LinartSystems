@@ -10,7 +10,13 @@ const express = require('express');
 const multer = require('multer');
 const helmet = require('helmet');
 const cors = require('cors');
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const {
+  PDFDocument,
+  StandardFonts,
+  rgb,
+  EncryptedPDFError,
+  UnexpectedObjectTypeError,
+} = require('pdf-lib');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -121,6 +127,16 @@ async function analyzeTemplatePdf(filePath) {
       pageHeight: height || DEFAULT_PAGE_HEIGHT,
     };
   } catch (err) {
+    const isEncrypted =
+      err instanceof EncryptedPDFError ||
+      (err && typeof err.message === 'string' && /is encrypted/i.test(err.message || ''));
+    if (isEncrypted) {
+      const friendly = new Error(
+        'Template PDF appears to be password-protected. Remove restrictions and upload an unlocked copy.',
+      );
+      friendly.statusCode = 400;
+      throw friendly;
+    }
     console.warn('[server] Failed to analyze template PDF:', err.message);
     return fallback;
   }
@@ -3523,6 +3539,11 @@ ${rows.join('\n')}
         background: #fff;
         min-height: 320px;
       }
+      .admin-preview__frame canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
       .admin-preview__frame iframe {
         display: block;
         width: 100%;
@@ -3948,7 +3969,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           <div class="admin-preview" data-admin-preview hidden>
             <header data-admin-preview-label>Template preview</header>
             <div class="admin-preview__frame" data-admin-preview-frame-wrapper>
-              <iframe title="Template preview" data-admin-preview-frame></iframe>
+              <canvas data-admin-preview-canvas aria-label="Template preview"></canvas>
               <div class="admin-preview__overlay" data-template-overlay hidden>
                 <div class="admin-preview__boundary" data-template-boundary-line></div>
               </div>
@@ -3966,6 +3987,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
       </div>
     </div>
   </section>
+    <script src="/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -4029,8 +4051,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminPreviewFrameWrapper = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-frame-wrapper]')
           : null;
-        const adminPreviewFrame = adminSectionEl
-          ? adminSectionEl.querySelector('[data-admin-preview-frame]')
+        const adminPreviewCanvas = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-canvas]')
           : null;
         const adminPreviewEmptyEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-empty]')
@@ -4055,9 +4077,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           : null;
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const DEFAULT_PAGE_WIDTH = 595.28;
         const BOUNDARY_DEFAULT_HEIGHT = 841.89;
+        const urlSearchParams = new URL(window.location.href).searchParams;
+        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
+        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
+        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
         const boundaryState = {
           templateId: null,
+          pageWidth: DEFAULT_PAGE_WIDTH,
           pageHeight: BOUNDARY_DEFAULT_HEIGHT,
           value: 0,
           dirty: false,
@@ -4070,6 +4098,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           window.open(adminUrl.toString(), '_blank', 'noopener');
         };
         let boundaryOverlayFrame = null;
+        let previewResizeObserver = null;
         const clampValue = (value, min, max) => {
           const number = Number(value);
           if (!Number.isFinite(number)) return min;
@@ -4085,10 +4114,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           templates: [],
           activeTemplateId: null,
         };
-        const urlSearchParams = new URL(window.location.href).searchParams;
-        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
-        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
-        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
         const ADMIN_TOKEN_KEY = 'pm-admin-token';
         let adminTokenStore = null;
         try {
@@ -4151,12 +4176,23 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             return;
           }
           const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
-          if (!wrapperHeight || !Number.isFinite(boundaryState.pageHeight) || boundaryState.pageHeight <= 0) {
+          const wrapperWidth = adminPreviewFrameWrapper.clientWidth;
+          if (
+            !wrapperHeight ||
+            !wrapperWidth ||
+            !Number.isFinite(boundaryState.pageHeight) ||
+            boundaryState.pageHeight <= 0 ||
+            !Number.isFinite(boundaryState.pageWidth) ||
+            boundaryState.pageWidth <= 0
+          ) {
             adminPreviewOverlayEl.hidden = true;
             return;
           }
           const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
-          const topPosition = wrapperHeight * ratio;
+          const aspect = boundaryState.pageHeight / boundaryState.pageWidth;
+          const displayHeight = Math.min(wrapperWidth * aspect, wrapperHeight);
+          const offsetTop = (wrapperHeight - displayHeight) / 2;
+          const topPosition = offsetTop + displayHeight * ratio;
           adminPreviewBoundaryEl.style.top = topPosition + 'px';
           adminPreviewOverlayEl.hidden = false;
         };
@@ -4168,10 +4204,60 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           boundaryOverlayFrame = requestAnimationFrame(updateBoundaryOverlay);
         };
 
+        const attachPreviewResizeObserver = () => {
+          if (typeof ResizeObserver === 'undefined' || !adminPreviewFrameWrapper) {
+            return;
+          }
+          if (previewResizeObserver) {
+            previewResizeObserver.disconnect();
+          }
+          previewResizeObserver = new ResizeObserver(() => {
+            scheduleBoundaryOverlay();
+          });
+          previewResizeObserver.observe(adminPreviewFrameWrapper);
+        };
+        attachPreviewResizeObserver();
+        let previewRenderToken = 0;
+        const renderTemplatePreview = async (previewUrl, template) => {
+          if (!pdfjsLib || !adminPreviewCanvas) {
+            return;
+          }
+          const token = ++previewRenderToken;
+          try {
+            const loadingTask = pdfjsLib.getDocument({ url: previewUrl });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+            const wrapperWidth = adminPreviewFrameWrapper ? adminPreviewFrameWrapper.clientWidth : 640;
+            const viewport = page.getViewport({
+              scale: Math.max(wrapperWidth / page.getViewport({ scale: 1 }).width, 1),
+            });
+            if (token !== previewRenderToken) {
+              return;
+            }
+            const context = adminPreviewCanvas.getContext('2d');
+            adminPreviewCanvas.width = viewport.width;
+            adminPreviewCanvas.height = viewport.height;
+            context.clearRect(0, 0, adminPreviewCanvas.width, adminPreviewCanvas.height);
+            await page.render({ canvasContext: context, viewport }).promise;
+            if (token !== previewRenderToken) {
+              return;
+            }
+            boundaryState.pageWidth = viewport.width;
+            boundaryState.pageHeight = viewport.height;
+            scheduleBoundaryOverlay();
+          } catch (err) {
+            console.error('[admin] Failed to render preview', err);
+            if (token === previewRenderToken && adminPreviewEmptyEl) {
+              adminPreviewEmptyEl.hidden = false;
+            }
+          }
+        };
+
         const setBoundaryTemplate = (template) => {
           if (!template) {
             boundaryState.templateId = null;
             boundaryState.pageHeight = BOUNDARY_DEFAULT_HEIGHT;
+            boundaryState.pageWidth = DEFAULT_PAGE_WIDTH;
             boundaryState.value = 0;
             boundaryState.dirty = false;
             updateBoundaryControls();
@@ -4179,6 +4265,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             return;
           }
           boundaryState.templateId = template.id;
+          boundaryState.pageWidth =
+            Number.isFinite(template.pageWidth) && template.pageWidth > 0
+              ? Number(template.pageWidth)
+              : DEFAULT_PAGE_WIDTH;
           boundaryState.pageHeight =
             Number.isFinite(template.pageHeight) && template.pageHeight > 0
               ? Number(template.pageHeight)
@@ -4332,6 +4422,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
         };
+        const pdfjsLib =
+          (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
+        if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+        }
         const adminUiState = {
           previewTemplateId: null,
         };
@@ -4376,11 +4471,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               });
           });
         }
-        if (adminPreviewFrame) {
-          adminPreviewFrame.addEventListener('load', () => {
-            scheduleBoundaryOverlay();
-          });
-        }
         window.addEventListener('resize', () => scheduleBoundaryOverlay());
 
         const setAdminModalVisible = (visible) => {
@@ -4402,8 +4492,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           }
         };
 
+        const canUseStandaloneAdminWindow = () => {
+          return Boolean(adminState.token);
+        };
+
         if (adminOpenBtn) {
           adminOpenBtn.addEventListener('click', () => {
+            if (canUseStandaloneAdminWindow() && !requestedAdminWindow) {
+              openStandaloneAdminWindow();
+              return;
+            }
             setAdminModalVisible(true);
           });
         }
@@ -4461,12 +4559,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             'Logged in as ' + payload.username + '. Password updated ' + updated + '.';
         };
 
+        const clearPreviewCanvas = () => {
+          if (!adminPreviewCanvas) return;
+          const ctx = adminPreviewCanvas.getContext('2d');
+          ctx.clearRect(0, 0, adminPreviewCanvas.width, adminPreviewCanvas.height);
+          adminPreviewCanvas.width = 0;
+          adminPreviewCanvas.height = 0;
+        };
+
         const showAdminPreview = (template) => {
-          if (!adminPreviewEl || !adminPreviewLabelEl || !adminPreviewFrame || !adminPreviewEmptyEl) return;
+          if (!adminPreviewEl || !adminPreviewLabelEl || !adminPreviewEmptyEl) return;
           if (!template) {
             adminPreviewEl.hidden = true;
-            adminPreviewFrame.src = 'about:blank';
-            adminPreviewFrame.hidden = true;
+            clearPreviewCanvas();
             adminPreviewEmptyEl.hidden = false;
             adminUiState.previewTemplateId = null;
             setBoundaryTemplate(null);
@@ -4477,12 +4582,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           adminPreviewLabelEl.textContent =
             'Template preview: ' + previewLabel + (template.slug ? ' (' + template.slug + ')' : '');
           const previewUrl = buildAppUrl('admin/templates/' + encodeURIComponent(template.id) + '/preview');
-          adminPreviewFrame.src = previewUrl + '#view=FitH&toolbar=0';
-          adminPreviewFrame.hidden = false;
           adminPreviewEmptyEl.hidden = true;
           adminUiState.previewTemplateId = template.id;
+          attachPreviewResizeObserver();
           setBoundaryTemplate(template);
-          scheduleBoundaryOverlay();
+          renderTemplatePreview(previewUrl, template);
         };
 
         const updateAdminVisibility = () => {
@@ -4503,7 +4607,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         const adminFetch = (relativePath, options = {}) => {
           if (!adminState.token) {
-            return Promise.reject(new Error('Admin login required.'));
+            const err = new Error('AUTH_REQUIRED');
+            err.code = 'AUTH_REQUIRED';
+            return Promise.reject(err);
           }
           const init = Object.assign({ headers: {}, credentials: 'same-origin' }, options);
           init.headers = Object.assign({}, init.headers, {
@@ -4515,6 +4621,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (!response.ok) {
               if (response.status === 401) {
                 setAdminToken('');
+                const authErr = new Error('AUTH_REQUIRED');
+                authErr.code = 'AUTH_REQUIRED';
+                throw authErr;
               }
               const message = (payload && payload.error) || response.statusText || 'Request failed';
               throw new Error(message);
@@ -4530,6 +4639,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               renderAdminProfile(payload);
             })
             .catch((err) => {
+              if (err && err.code === 'AUTH_REQUIRED') {
+                showAdminStatus('Admin authentication required. Please log in.', true);
+                return;
+              }
               console.warn('[admin] profile refresh failed', err);
             });
         };
@@ -4650,6 +4763,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               renderAdminTemplates(payload);
             })
             .catch((err) => {
+              if (err && err.code === 'AUTH_REQUIRED') {
+                showAdminStatus('Admin authentication required. Please log in.', true);
+                return;
+              }
               showAdminStatus(err.message, true);
             });
         };
@@ -6901,7 +7018,8 @@ app.post(
       return res.json(buildTemplatesResponse());
     } catch (err) {
       console.error('[server] Template upload failed', err);
-      return res.status(500).json({ ok: false, error: err.message || 'Upload failed.' });
+      const status = Number.isInteger(err.statusCode) ? err.statusCode : 500;
+      return res.status(status).json({ ok: false, error: err.message || 'Upload failed.' });
     }
   },
 );
@@ -7059,7 +7177,25 @@ app.post('/submit', (req, res, next) => {
     }
 
     const pdfBytes = await fs.promises.readFile(submissionTemplatePath);
-    const pdfDoc = await PDFDocument.load(pdfBytes);
+    let pdfDoc;
+    try {
+      pdfDoc = await PDFDocument.load(pdfBytes);
+    } catch (err) {
+      const isEncrypted =
+        err instanceof EncryptedPDFError ||
+        (err && typeof err.message === 'string' && /is encrypted/i.test(err.message || ''));
+      const isUnsupported =
+        err instanceof UnexpectedObjectTypeError ||
+        (err && typeof err.message === 'string' && /expected instance of PDFDict/i.test(err.message || ''));
+      if (isEncrypted || isUnsupported) {
+        const friendly = new Error(
+          `Selected template "${submissionTemplateEntry.label || submissionTemplateEntry.id}" is password-protected or uses a restricted PDF format. Please export an unlocked PDF without editing restrictions and upload it again.`,
+        );
+        friendly.statusCode = 400;
+        throw friendly;
+      }
+      throw err;
+    }
     const form = pdfDoc.getForm();
 
     if (!form) {
