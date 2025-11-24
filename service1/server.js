@@ -2495,7 +2495,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
   ];
   const detailRows = engineerDetails.length;
-  const detailHeight = 38;
+  const detailHeight = 42;
   const detailHeading =
     ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
       ? 'Sign-off details (cont.)'
@@ -2510,14 +2510,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       width: columnWidth,
       height: detailHeight,
     };
-    const labelY = engineerRect.y + engineerRect.height + 6;
-    page.drawText(detail.label, {
-      x: engineerRect.x,
-      y: labelY,
-      size: 9,
-      font,
-      color: headingColor,
-    });
     page.drawRectangle({
       x: engineerRect.x,
       y: engineerRect.y,
@@ -2527,9 +2519,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
+    const engineerLabelY = engineerRect.y + engineerRect.height + 8;
+    page.drawText(detail.label, {
+      x: engineerRect.x,
+      y: engineerLabelY,
+      size: 9,
+      font,
+      color: headingColor,
+    });
     drawCenteredTextBlock(page, detail.value, font, engineerRect, {
       fontSize: 10,
-      paddingY: 10,
+      paddingY: 12,
       align: 'left',
     });
 
@@ -2540,14 +2540,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       width: columnWidth,
       height: detailHeight,
     };
-    const labelY = customerRect.y + customerRect.height + 6;
-    page.drawText(customer.label, {
-      x: customerRect.x,
-      y: labelY,
-      size: 9,
-      font,
-      color: headingColor,
-    });
     page.drawRectangle({
       x: customerRect.x,
       y: customerRect.y,
@@ -2557,9 +2549,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
+    const customerLabelY = customerRect.y + customerRect.height + 8;
+    page.drawText(customer.label, {
+      x: customerRect.x,
+      y: customerLabelY,
+      size: 9,
+      font,
+      color: headingColor,
+    });
     drawCenteredTextBlock(page, customer.value, font, customerRect, {
       fontSize: 10,
-      paddingY: 10,
+      paddingY: 12,
       align: 'left',
     });
   });
@@ -2588,7 +2588,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       font,
       color: headingColor,
     });
-    // убираем рамку, оставляем только подпись
+    // рамку убрали, оставляем только подпись и содержимое
     if (entry) {
       try {
         const decoded = decodeImageDataUrl(entry.data);
