@@ -6597,9 +6597,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 </html>`);
   const html = htmlParts.join('\n');
   // Safety net: ensure generated paths and regexes are correct even if cached templates slip in.
+  const fixedBuildAppUrl = `const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };`;
+
   const sanitizedHtml = html
-    .replace(/replace\(\s*\/\^\+\//g, 'replace(/^\\+/')
-    .replace(/src="\/vendor\/pdfjs\//g, 'src="/service1/vendor/pdfjs/');
+    .replace(/const buildAppUrl = \\(path\\) => \\{[\\s\\S]*?\\};/, fixedBuildAppUrl)
+    .replace(/selected\\.previewUrl\\.replace\\([^)]*\\)/g, "selected.previewUrl.replace(/^\\/+/, '')")
+    .replace(/src="\/vendor\/pdfjs\//g, 'src="/service1/vendor/pdfjs/')
+    .replace(/GlobalWorkerOptions\\.workerSrc = '\\/vendor\\/pdfjs\\/pdf.worker.min.js';/g, "GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';");
+
   fs.writeFileSync(path.join(PUBLIC_DIR, 'index.html'), sanitizedHtml, 'utf8');
 }
 
