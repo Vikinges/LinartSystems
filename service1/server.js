@@ -6407,7 +6407,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             document.body.style.overflow = 'hidden';
 
             const resizeOverlayCanvas = () => {
-              const rect = overlayCanvas.getBoundingClientRect();
               const w = Math.max(overlay.clientWidth - 32, 320);
               const h = Math.max(overlay.clientHeight - 96, 240);
               overlayCanvas.width = w * ratio;
@@ -6436,6 +6435,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             };
 
             resizeOverlayCanvas();
+            window.addEventListener('resize', resizeOverlayCanvas, { once: true });
           };
 
           const closeOverlay = () => {
@@ -6623,6 +6623,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             };
 
             canvas.addEventListener('pointerdown', (event) => {
+              if (window.matchMedia('(max-width: 768px)').matches) {
+                event.preventDefault();
+                openOverlay(pad, hiddenInput, sampleText);
+                return;
+              }
               event.preventDefault();
               canvas.setPointerCapture(event.pointerId);
               if (sampleActive) {
