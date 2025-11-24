@@ -2683,7 +2683,7 @@ function generateIndexHtml() {
     ['engineer_signature', 'Ivan Technician'],
     ['customer_signature', 'Anna Schneider'],
   ]);
-  demoValues.set('control_notes_3', 'Brightness aligned with preset 450 cd/m2.');
+  demoValues.set('control_notes_3', '');
 
   const demoChecked = new Set([
     'led_complete_1',
@@ -6161,16 +6161,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const arrivalValue =
               (data.arrival ? String(data.arrival) : '') ||
               options.prefillArrival ||
-              (isPrimary ? formSessionStartIso : primaryState?.arrival) ||
-              formSessionStartIso;
+              (isPrimary ? '' : primaryState?.arrival) ||
+              '';
 
             const departureValue =
               (data.departure ? String(data.departure) : '') ||
               options.prefillDeparture ||
-              (isPrimary
-                ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES)
-                : primaryState?.departure) ||
-              addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES);
+              (isPrimary ? '' : primaryState?.departure) ||
+              (arrivalValue ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES) : '');
 
             setDateTimeValue(row, 'arrival', arrivalValue);
             setDateTimeValue(row, 'departure', departureValue);
