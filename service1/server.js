@@ -2656,28 +2656,28 @@ function generateIndexHtml() {
   const descriptorByName = new Map(fieldDescriptors.map((d) => [d.requestName, d]));
 
   const demoValues = new Map([
-    ['end_customer_name', 'Mercedes-Benz AG'],
-    ['site_location', 'Flughafen Berlin Brandenburg, Melli-Beese Ring 1'],
-    ['led_display_model', 'FE 038i2 Highres / Stripes Lowres'],
-    ['batch_number', '2024-06-24-B'],
-    ['date_of_service', '2024-06-24'],
-    ['service_company_name', 'Sharp / NEC LED Solution Center'],
-    ['led_notes_1', 'Cleaned ventilation grilles.'],
-    ['led_notes_2', 'Pattern test passed on all colors.'],
-    ['led_notes_3', 'Replaced one Pixel card cabinet B2.'],
-    ['control_notes_1', 'Controllers reseated and firmware checked.'],
-    ['control_notes_3', 'Brightness aligned with preset 450 cd/mÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â².'],
-    ['spares_notes_1', 'Swapped in spare pixel card from inventory.'],
-    ['spares_notes_2', 'Inventory log updated for remaining spares.'],
-    ['general_notes', 'Updated monitoring agent and logged minor seam adjustment.\nPlease schedule follow-up for cabinet C4 fan swap.'],
-    ['parts_removed_desc_1', 'Pixel card cabinet B2'],
-    ['parts_removed_part_1', 'FE038-PCARD'],
-    ['parts_removed_serial_1', 'SN-34782'],
-    ['parts_used_part_1', 'FE038-PCARD'],
-    ['parts_used_serial_1', 'SN-99012'],
-    ['signoff_notes_1', 'All visual checks complete; system stable.'],
-    ['signoff_notes_2', 'Customer to monitor cabinet C4 fan speed.'],
-  ]);
+  ['end_customer_name', ''],
+  ['site_location', ''],
+  ['led_display_model', ''],
+  ['batch_number', ''],
+  ['date_of_service', ''],
+  ['service_company_name', ''],
+  ['led_notes_1', ''],
+  ['led_notes_2', ''],
+  ['led_notes_3', ''],
+  ['control_notes_1', ''],
+  ['control_notes_3', ''],
+  ['spares_notes_1', ''],
+  ['spares_notes_2', ''],
+  ['general_notes', ''],
+  ['parts_removed_desc_1', ''],
+  ['parts_removed_part_1', ''],
+  ['parts_removed_serial_1', ''],
+  ['parts_used_part_1', ''],
+  ['parts_used_serial_1', ''],
+  ['signoff_notes_1', ''],
+  ['signoff_notes_2', ''],
+]);
 
   const signatureSamples = new Map([
     ['engineer_signature', 'Ivan Technician'],
@@ -4366,7 +4366,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           }
           if (templatePreviewLink) {
             if (selected && selected.previewUrl) {
-              const previewPath = selected.previewUrl.replace(/^\/+/, '');
+              const previewPath = selected.previewUrl.replace(/^\/+/, '');
+
               templatePreviewLink.href = buildAppUrl(previewPath);
               templatePreviewLink.hidden = false;
             } else {
