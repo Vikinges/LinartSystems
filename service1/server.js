@@ -801,7 +801,6 @@ const PARTS_ROW_COUNT = 15;
 const PARTS_FIELD_PREFIXES = [
   'parts_removed_desc_',
   'parts_removed_part_',
-  'parts_removed_serial_',
   'parts_used_part_',
   'parts_used_serial_',
 ];
@@ -815,7 +814,7 @@ const PARTS_TABLE_LAYOUT = {
   topOffset: 150,
   rowHeight: 24,
   headerHeight: 24,
-  columnWidths: [160, 110, 110, 110, 110],
+  columnWidths: [190, 120, 120, 130],
 };
 
 const TABLE_BORDER_COLOR = rgb(0.1, 0.1, 0.4);
@@ -1570,7 +1569,7 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
     return { hiddenRows: rows.filter((row) => !row.hasData).map((row) => row.number), renderedRows: [] };
   }
 
-  const columnWidths = layout.columnWidths || [160, 110, 110, 110, 110];
+  const columnWidths = layout.columnWidths || [190, 120, 120, 130];
   const totalWidth = columnWidths.reduce((sum, width) => sum + width, 0);
   const pageWidth = page.getWidth();
   const pageHeight = page.getHeight();
@@ -1582,11 +1581,10 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
   const rowHeightBase = layout.rowHeight || 24;
 
   const headerLabels = [
-    'Part removed (description)',
+    'Part batch (description)',
     'Part number',
-    'Serial number (removed)',
     'Part used in display',
-    'Serial number (used)',
+    'Serial number',
   ];
 
   const usedRows = rows.filter((row) => row.hasData);
@@ -1648,7 +1646,6 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
     const cellValues = [
       row.fields[`parts_removed_desc_${row.number}`] || '',
       row.fields[`parts_removed_part_${row.number}`] || '',
-      row.fields[`parts_removed_serial_${row.number}`] || '',
       row.fields[`parts_used_part_${row.number}`] || '',
       row.fields[`parts_used_serial_${row.number}`] || '',
     ];
@@ -2529,9 +2526,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     drawCenteredTextBlock(page, detail.value, font, engineerRect, {
       fontSize: 10,
-      paddingY: 18,
+      paddingY: 22,
       align: 'left',
-      verticalAlign: 'top',
+      verticalAlign: 'middle',
     });
 
     const customer = customerDetails[index];
@@ -2560,9 +2557,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     drawCenteredTextBlock(page, customer.value, font, customerRect, {
       fontSize: 10,
-      paddingY: 18,
+      paddingY: 22,
       align: 'left',
-      verticalAlign: 'top',
+      verticalAlign: 'middle',
     });
   });
   cursorY -= detailHeight * detailRows + 20;
@@ -2796,7 +2793,6 @@ function generateIndexHtml() {
       rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
               <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
               <td>${renderInlineInput(`parts_removed_part_${i}`)}</td>
-              <td>${renderInlineInput(`parts_removed_serial_${i}`)}</td>
               <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
               <td>${renderInlineInput(`parts_used_serial_${i}`)}</td>
             </tr>`);
@@ -2806,11 +2802,10 @@ function generateIndexHtml() {
         <table class="parts-table" data-parts-table>
           <thead>
             <tr>
-              <th>Part removed (description)</th>
+              <th>Part batch (description)</th>
               <th>Part number</th>
-              <th>Serial number (removed)</th>
               <th>Part used in display</th>
-              <th>Serial number (used)</th>
+              <th>Serial number</th>
             </tr>
           </thead>
           <tbody>
