@@ -2495,7 +2495,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
   ];
   const detailRows = engineerDetails.length;
-  const detailHeight = 42;
+  const detailHeight = 46;
   const detailHeading =
     ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
       ? 'Sign-off details (cont.)'
@@ -2519,7 +2519,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
-    const engineerLabelY = engineerRect.y + engineerRect.height + 8;
+    const engineerLabelY = engineerRect.y + engineerRect.height + 10;
     page.drawText(detail.label, {
       x: engineerRect.x,
       y: engineerLabelY,
@@ -2529,8 +2529,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     drawCenteredTextBlock(page, detail.value, font, engineerRect, {
       fontSize: 10,
-      paddingY: 12,
+      paddingY: 14,
       align: 'left',
+      verticalAlign: 'top',
     });
 
     const customer = customerDetails[index];
@@ -2549,7 +2550,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
-    const customerLabelY = customerRect.y + customerRect.height + 8;
+    const customerLabelY = customerRect.y + customerRect.height + 10;
     page.drawText(customer.label, {
       x: customerRect.x,
       y: customerLabelY,
@@ -2559,8 +2560,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     drawCenteredTextBlock(page, customer.value, font, customerRect, {
       fontSize: 10,
-      paddingY: 12,
+      paddingY: 14,
       align: 'left',
+      verticalAlign: 'top',
     });
   });
   cursorY -= detailHeight * detailRows + 20;
