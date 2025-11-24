@@ -46,7 +46,7 @@ function clampNumber(value, min, max) {
   return value;
 }
 
-const PORT = parseInt(process.env.PORT, 10) || 3001;
+const PORT = parseInt(process.env.SERVICE2_PORT || process.env.PORT, 10) || 3001;
 const HOST_URL_ENV = process.env.HOST_URL;
 const TEMPLATE_PATH_ENV = process.env.TEMPLATE_PATH;
 const MAX_FILE_SIZE_BYTES = 128 * 1024 * 1024;
