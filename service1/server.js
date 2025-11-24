@@ -6605,6 +6605,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
   const sanitizedHtml = html
     .replace(/const buildAppUrl = \(path\) => \{[\s\S]*?};/, fixedBuildAppUrl)
     .replace(/selected\.previewUrl\.replace\([^)]*\)/g, "selected.previewUrl.replace(/^\\/+/, '')")
+    .replace(/\(tpl\.relativePath \|\| ''\)\.replace\([^)]*\)/g, "(tpl.relativePath || '').replace(/\\\\/g, '/')")
     .replace('src="/vendor/pdfjs/pdf.min.js"', 'src="/service1/vendor/pdfjs/pdf.min.js"')
     .replace(
       "GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';",
