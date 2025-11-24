@@ -6598,7 +6598,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
   const html = htmlParts.join('\n');
   // Safety net: ensure generated paths and regexes are correct even if cached templates slip in.
   const sanitizedHtml = html
-    .replace(/replace\(\s*\/\^\+\/,\s*''\)/g, "replace(/^\\/+/, '')")
+    .replace(/replace\(\s*\/\^\+\//g, 'replace(/^\\+/')
     .replace(/src="\/vendor\/pdfjs\//g, 'src="/service1/vendor/pdfjs/');
   fs.writeFileSync(path.join(PUBLIC_DIR, 'index.html'), sanitizedHtml, 'utf8');
 }
