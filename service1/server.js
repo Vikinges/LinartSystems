@@ -3987,7 +3987,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
       </div>
     </div>
   </section>
-    <script src="/vendor/pdfjs/pdf.min.js"></script>
+   <script src="/service1/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -4422,10 +4422,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminState = {
           token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
         };
-        const pdfjsLib =
+         const pdfjsLib =
           (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';
         }
         const adminUiState = {
           previewTemplateId: null,
