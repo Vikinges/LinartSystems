@@ -3802,6 +3802,42 @@ ${rows.join('\n')}
           height: 150px;
         }
       }
+      @media (max-width: 768px) {
+        .employee-table-wrapper {
+          overflow-x: visible;
+        }
+        .employee-table {
+          min-width: 100%;
+          table-layout: fixed;
+        }
+        .employee-table thead {
+          display: none;
+        }
+        .employee-table tr {
+          display: block;
+          border: 1px solid #d9def8;
+          border-radius: 10px;
+          margin-bottom: 0.75rem;
+          overflow: hidden;
+        }
+        .employee-table td {
+          display: block;
+          width: 100%;
+          box-sizing: border-box;
+          border: none;
+          border-top: 1px solid #d9def8;
+        }
+        .employee-table td:first-child {
+          border-top: none;
+        }
+        .employee-index-cell {
+          width: 100%;
+          min-width: 0;
+        }
+        .employee-person-fields {
+          gap: 0.5rem;
+        }
+      }
     </style>
   </head>
   <body>
