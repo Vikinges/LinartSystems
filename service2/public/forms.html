@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Select a Service Form</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f5fb;
+        color: #1c1c1e;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 2rem;
+        color: #1f2a5b;
+      }
+      header p {
+        margin: 0;
+        color: #4a4a4a;
+      }
+      .cards {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+      }
+      .card {
+        background: #fff;
+        border-radius: 16px;
+        box-shadow: 0 12px 24px rgba(31, 58, 134, 0.12);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        border: 1px solid rgba(37, 99, 235, 0.08);
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 1.3rem;
+      }
+      .card p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: #4a4a4a;
+      }
+      .card-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .card small {
+        color: #64748b;
+      }
+      .card a {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.65rem 1.5rem;
+        background: #2563eb;
+        color: white;
+        text-decoration: none;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .card a:hover {
+        background: #1d4ed8;
+      }
+      .card span.disabled {
+        font-size: 0.9rem;
+        color: #9333ea;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Select a Service Form</h1>
+        <p>Each template includes the company header, description, and footer text. Pick the document you want to fill out and we will reuse your saved autofill data.</p>
+      </header>
+      <ul class="cards" data-template-cards>
+        <li class="card" data-placeholder>
+          <h2>Loading templates...</h2>
+          <p>This list will update in a moment.</p>
+          <div class="card-actions">
+            <span class="disabled">Please wait</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+    <script>
+      (function () {
+        const cardsEl = document.querySelector('[data-template-cards]');
+        if (!cardsEl) return;
+
+        const renderMessageCard = (title, body) => {
+          cardsEl.innerHTML = '';
+          const card = document.createElement('li');
+          card.className = 'card';
+          const heading = document.createElement('h2');
+          heading.textContent = title;
+          const paragraph = document.createElement('p');
+          paragraph.textContent = body;
+          card.appendChild(heading);
+          card.appendChild(paragraph);
+          cardsEl.appendChild(card);
+        };
+
+        const createTemplateCard = (template) => {
+          const card = document.createElement('li');
+          card.className = 'card';
+          const heading = document.createElement('h2');
+          heading.textContent = template.label || template.slug || template.id;
+          const description = document.createElement('p');
+          description.textContent =
+            template.description && template.description.trim().length
+              ? template.description
+              : 'Use this layout to capture maintenance data with the chosen branded header.';
+          const meta = document.createElement('small');
+          meta.textContent = template.isActive
+            ? 'Currently active by default'
+            : 'Available on demand';
+          const actions = document.createElement('div');
+          actions.className = 'card-actions';
+          const link = document.createElement('a');
+          const targetUrl = new URL('index.html', window.location.href);
+          const slug = (template.slug || '').trim();
+          if (slug) {
+            targetUrl.searchParams.set('template', slug);
+          } else {
+            targetUrl.searchParams.set('templateId', template.id);
+          }
+          link.href = targetUrl.toString();
+          link.textContent = 'Open form';
+          link.rel = 'noopener noreferrer';
+          actions.appendChild(link);
+          card.appendChild(heading);
+          card.appendChild(description);
+          card.appendChild(meta);
+          card.appendChild(actions);
+          return card;
+        };
+
+        fetch('/api/templates', { credentials: 'same-origin' })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error('Template list unavailable.');
+            }
+            return response.json();
+          })
+          .then((payload) => {
+            if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
+              renderMessageCard('No templates available', 'Upload a template in the admin panel to unlock this page.');
+              return;
+            }
+            cardsEl.innerHTML = '';
+            payload.templates.forEach((tpl) => {
+              cardsEl.appendChild(createTemplateCard(tpl));
+            });
+          })
+          .catch(() => {
+            renderMessageCard('Unable to load templates', 'Please check your connection or try refreshing the page.');
+          });
+      })();
+    </script>
+  </body>
+</html>

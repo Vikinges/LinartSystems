@@ -1,0 +1,4470 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Preventative Maintenance Checklist</title>
+    <link
+      rel="icon"
+      type="image/gif"
+      href="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #f5f5fb;
+        color: #1c1c1e;
+      }
+      body {
+        margin: 0;
+        padding: 1.5rem;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+      }
+      header {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        position: relative;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 1.75rem;
+      }
+      header p {
+        margin: 0;
+        color: #4a4a4a;
+        line-height: 1.4;
+      }
+      .card {
+        background: white;
+        padding: 1.5rem;
+        border-radius: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 1.3rem;
+        color: #1f2a5b;
+      }
+      .template-details {
+        font-size: 0.9rem;
+        color: #475569;
+      }
+      .template-description {
+        margin: 0.35rem 0;
+        font-size: 0.95rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
+      .grid.two-col {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.45rem;
+        font-weight: 600;
+      }
+      .field > span {
+        color: #2f2f37;
+      }
+      input[type="text"],
+      input[type="date"],
+      input[type="datetime-local"],
+      textarea,
+      select {
+        font: inherit;
+        padding: 0.75rem;
+        border: 1px solid #d8d8e5;
+        border-radius: 10px;
+        background: #fafafe;
+      }
+      select {
+        min-height: 48px;
+      }
+      textarea {
+        resize: vertical;
+        min-height: 120px;
+      }
+      input[type="time"],
+      input[type="datetime-local"] {
+        min-width: 120px;
+      }
+      input[type="time"]::-webkit-datetime-edit-ampm-field,
+      input[type="datetime-local"]::-webkit-datetime-edit-ampm-field {
+        display: none;
+      }
+      input.is-invalid {
+        border-color: #dc2626;
+        background: #fee2e2;
+      }
+      input[type="checkbox"] {
+        width: 26px;
+        height: 26px;
+        accent-color: #2563eb;
+      }
+      .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 0.8rem;
+        font-weight: 600;
+      }
+      .checklist-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .checklist-table th,
+      .checklist-table td {
+        border: 1px solid #d8d8e5;
+        padding: 0.75rem;
+        vertical-align: middle;
+        background: white;
+      }
+      .checklist-table th {
+        background: #eef1fb;
+        text-align: left;
+        font-size: 0.95rem;
+      }
+      .checklist-table td input[type="text"] {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+      }
+      .checklist-table td textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.55rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+        resize: vertical;
+        min-height: 2.75rem;
+        line-height: 1.35;
+        font: inherit;
+      }
+      .check-wrapper {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+      }
+      .check-wrapper input {
+        width: 26px;
+        height: 26px;
+      }
+      .parts-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .parts-table th,
+      .parts-table td {
+        border: 1px solid #d8d8e5;
+        padding: 0.6rem;
+        background: white;
+      }
+      .parts-table th {
+        background: #eef1fb;
+        font-size: 0.9rem;
+      }
+      .parts-table td input,
+      .parts-table td textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 0.5rem;
+        border-radius: 8px;
+        border: 1px solid #d8d8e5;
+        background: #fafafe;
+      }
+      .parts-table td textarea {
+        resize: vertical;
+        min-height: 2.75rem;
+        font: inherit;
+      }
+      .parts-table .is-hidden-row {
+        display: none;
+      }
+      .parts-table-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .parts-table-actions .button {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 0.65rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .parts-table-actions .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .parts-table-hint {
+        margin: 0;
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+      .employee-card p {
+        margin: 0 0 0.35rem 0;
+        color: #4c4f63;
+      }
+      .employee-card small {
+        color: #6b7280;
+      }
+      .employee-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .employee-actions .button {
+        background: #2563eb;
+        color: #ffffff;
+        border: none;
+        border-radius: 999px;
+        padding: 0.6rem 1.2rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .employee-actions .button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .employee-table-wrapper {
+        margin-top: 1rem;
+        border: 1px solid #c7d2fe;
+        border-radius: 16px;
+        background: #eef2ff;
+        padding: 0.75rem;
+        overflow-x: auto;
+      }
+      .employee-table {
+        width: 100%;
+        min-width: 640px;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .employee-table th,
+      .employee-table td {
+        border: 1px solid #d9def8;
+        padding: 0.55rem 0.65rem;
+        vertical-align: top;
+        background: #f8f9ff;
+      }
+      .employee-table thead th {
+        background: #dfe6ff;
+        color: #1f2a5b;
+        font-weight: 600;
+        font-size: 0.82rem;
+        text-transform: uppercase;
+        letter-spacing: 0.02em;
+      }
+      .employee-table tbody tr:nth-child(even) td {
+        background: #fdfdff;
+      }
+      .employee-index-cell {
+        min-width: 95px;
+        width: 14%;
+      }
+      .employee-index-header {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.35rem;
+        font-weight: 600;
+        color: #1f2a5b;
+        margin-bottom: 0.35rem;
+      }
+      .employee-person-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .employee-person-fields .field,
+      .employee-table td .field {
+        margin: 0;
+      }
+      .employee-table td .field > span,
+      .field-datetime > span {
+        font-size: 0.82rem;
+        color: #4b5563;
+      }
+      .field-datetime {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .field-datetime .datetime-inputs {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+      }
+      .field-datetime .datetime-inputs input {
+        padding: 0.55rem;
+        border: 1px solid #c7cbef;
+        border-radius: 8px;
+        background: #ffffff;
+        font: inherit;
+      }
+      .time-input-wrapper {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        align-items: center;
+      }
+      .time-input-wrapper input {
+        flex: 0 1 120px;
+        min-width: 110px;
+      }
+      .time-shortcut {
+        border: 1px solid #c7cbef;
+        border-radius: 6px;
+        background: #f0f4ff;
+        color: #1f2a5b;
+        font-size: 0.75rem;
+        font-weight: 600;
+        padding: 0.4rem 0.7rem;
+        min-width: 3rem;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+      .time-shortcut:hover,
+      .time-shortcut:focus-visible {
+        background: #e0e7ff;
+        border-color: #94a3f2;
+        outline: none;
+      }
+      .time-shortcut:active {
+        background: #c7d2fe;
+      }
+      .time-shortcut:disabled {
+        cursor: not-allowed;
+        opacity: 0.65;
+      }
+      .employee-duration {
+        font-weight: 600;
+        color: #1d4ed8;
+        white-space: pre-line;
+        font-size: 0.85rem;
+      }
+      .employee-remove-button {
+        border: 1px dashed #c7cbef;
+        border-radius: 999px;
+        padding: 0.45rem 0.75rem;
+        background: #ffffff;
+        color: #b91c1c;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .employee-remove-button:hover,
+      .employee-remove-button:focus-visible {
+        border-color: #ef4444;
+        color: #ef4444;
+        outline: none;
+      }
+      .employee-remove-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .employee-summary {
+        display: grid;
+        gap: 0.4rem;
+        font-weight: 600;
+        color: #1f2a5b;
+      }
+      .employee-summary span {
+        display: block;
+      }
+      .employee-summary [data-employee-total] {
+        white-space: pre-line;
+      }
+      @media (min-width: 640px) {
+        .employee-summary {
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+      }
+      @media (max-width: 720px) {
+        .employee-table {
+          min-width: 560px;
+        }
+      }
+      .photos-card {
+        display: grid;
+        gap: 1rem;
+      }
+      .photo-slot {
+        border: 1px dashed #a0a3c2;
+        border-radius: 12px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        background: #fafbff;
+      }
+      .photo-slot span {
+        font-weight: 600;
+      }
+      .photo-slot small {
+        color: #6b7280;
+      }
+      .upload-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.65rem 1.25rem;
+        border-radius: 999px;
+        background: #2563eb;
+        color: #ffffff;
+        font-weight: 600;
+        cursor: pointer;
+        width: fit-content;
+      }
+      .upload-button input {
+        display: none;
+      }
+      .photo-preview {
+        display: grid;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 10px;
+        border: 1px solid #d8ddf0;
+        background: rgba(59, 130, 246, 0.05);
+      }
+      .photo-preview[data-state="empty"] {
+        color: #6b7280;
+        font-style: italic;
+        border-style: dashed;
+      }
+      .photo-preview-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 0.75rem;
+      }
+      .photo-preview-item {
+        display: flex;
+        flex-direction: column;
+        gap: 0.4rem;
+        background: #ffffff;
+        border: 1px solid #e0e3f5;
+        border-radius: 10px;
+        padding: 0.5rem;
+        box-shadow: 0 4px 12px rgba(30, 64, 175, 0.08);
+      }
+      .photo-preview-item img {
+        width: 100%;
+        height: 100px;
+        object-fit: cover;
+        border-radius: 8px;
+        background: #f3f4f6;
+      }
+      .photo-preview-item span {
+        font-size: 0.8rem;
+        word-break: break-word;
+      }
+      .signature-info {
+        margin-bottom: 0.5rem;
+      }
+      .signature-row {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      }
+      .signature-pad {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .signature-pad__label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+        color: #2f2f37;
+      }
+      .signature-clear {
+        appearance: none;
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .signature-canvas-wrapper {
+        border: 1px solid #d8d8e5;
+        border-radius: 12px;
+        padding: 0.5rem;
+        background: white;
+      }
+      .signature-pad canvas {
+        width: 100%;
+        height: 180px;
+        touch-action: none;
+        background: white;
+        border-radius: 8px;
+      }
+      .signature-fullscreen {
+        margin-left: 0.5rem;
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .signature-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 2000;
+      }
+      .signature-overlay[hidden] {
+        display: none;
+      }
+      .signature-overlay__panel {
+        width: min(960px, 100%);
+        height: min(80vh, 700px);
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        padding: 0.75rem;
+      }
+      .signature-overlay__actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #1f2a5b;
+      }
+      .signature-overlay__actions .spacer {
+        flex: 1;
+      }
+      .signature-overlay__actions button {
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signature-overlay__actions .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+      .signature-overlay__actions .primary {
+        background: #2563eb;
+        color: #fff;
+      }
+      .signature-overlay canvas {
+        flex: 1;
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        background: #fff;
+        touch-action: none;
+      }
+      .footer-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      button[type="submit"] {
+        background: #2563eb;
+        color: white;
+        border: none;
+        border-radius: 999px;
+        padding: 1rem;
+        font-size: 1.05rem;
+        font-weight: 600;
+      }
+      button[type="submit"]:hover:not(.is-disabled) {
+        background: #1d4ed8;
+      }
+      button[type="submit"].is-disabled {
+        opacity: 0.7;
+        cursor: wait;
+      }
+      button[type="submit"].is-success {
+        background: #16a34a;
+      }
+      button[type="submit"].is-error {
+        background: #dc2626;
+      }
+      .upload-progress {
+        display: none;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+      .upload-progress.is-visible {
+        display: flex;
+      }
+      .upload-progress-bar {
+        position: relative;
+        height: 8px;
+        border-radius: 999px;
+        background: #e0e7ff;
+        overflow: hidden;
+      }
+      .upload-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: var(--progress, 0%);
+        height: 100%;
+        background: linear-gradient(90deg, #2563eb, #7c3aed);
+      }
+      .upload-progress-label {
+        font-size: 0.9rem;
+        color: #1f2937;
+      }
+      .upload-files-summary {
+        display: grid;
+        gap: 0.25rem;
+        font-size: 0.9rem;
+        color: #374151;
+      }
+      .upload-files-summary strong {
+        font-weight: 600;
+      }
+      .debug-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+      .debug-controls .checkbox {
+        margin: 0;
+      }
+      .debug-hint {
+        font-size: 0.85rem;
+        color: #6b7280;
+      }
+      .debug-panel {
+        display: none;
+        margin-top: 0.75rem;
+        padding: 1rem;
+        background: #f3f4ff;
+        border-radius: 12px;
+        border: 1px solid #c7d2fe;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .debug-panel.is-visible {
+        display: block;
+      }
+      .debug-panel pre {
+        margin: 0;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .admin-card {
+        margin-top: 1.5rem;
+      }
+      .admin-card[hidden] {
+        display: none !important;
+      }
+      .admin-card form {
+        display: flex;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        margin-top: 0.75rem;
+      }
+      .admin-card input[type="password"] {
+        font: inherit;
+        border: 1px solid #d8d8e5;
+        border-radius: 8px;
+        padding: 0.5rem 0.65rem;
+        min-width: 220px;
+      }
+      .admin-errors {
+        margin-top: 0.5rem;
+        color: #b91c1c;
+        font-size: 0.85rem;
+      }
+      .admin-section__status {
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+        color: #0f172a;
+      }
+      .admin-profile {
+        font-size: 0.85rem;
+        color: #475569;
+      }
+      .link-button {
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .link-button.secondary {
+        color: #1e293b;
+      }
+      .link-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .admin-templates {
+        margin-top: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .admin-templates table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .admin-templates th,
+      .admin-templates td {
+        padding: 0.65rem 0.75rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.9rem;
+      }
+      .admin-templates tr:last-child td {
+        border-bottom: none;
+      }
+      .admin-template__name {
+        font-weight: 600;
+        display: block;
+      }
+      .admin-template__meta {
+        font-size: 0.8rem;
+        color: #475569;
+      }
+      .admin-template__slug {
+        font-size: 0.78rem;
+        color: #0f172a;
+      }
+      .admin-template__desc {
+        margin-top: 0.3rem;
+        font-size: 0.85rem;
+        color: #1e293b;
+        white-space: pre-wrap;
+      }
+      .admin-template__actions {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+      }
+      .admin-preview {
+        margin-top: 1rem;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        overflow: hidden;
+        min-height: 320px;
+        background: #f8fafc;
+        display: flex;
+        flex-direction: column;
+      }
+      .admin-preview header {
+        padding: 0.65rem 1rem;
+        border-bottom: 1px solid #e2e8f0;
+        font-weight: 600;
+        font-size: 0.9rem;
+        background: #fff;
+      }
+      .admin-preview__frame {
+        position: relative;
+        flex: 1;
+        background: #fff;
+        min-height: 320px;
+      }
+      .admin-preview__frame canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+      .admin-preview__frame iframe {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: #fff;
+      }
+      .admin-preview__overlay {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 2;
+      }
+      .admin-preview__boundary {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: rgba(249, 115, 22, 0.9);
+        box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.4);
+      }
+      .admin-preview__controls {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        border-top: 1px solid #e2e8f0;
+        background: #fff;
+      }
+      .admin-preview__controls label {
+        font-size: 0.85rem;
+        color: #475569;
+        font-weight: 600;
+      }
+      .admin-preview__controls input[type="range"] {
+        flex: 1 1 220px;
+      }
+      .admin-preview__controls input[type="number"] {
+        width: 110px;
+        padding: 0.35rem 0.5rem;
+        border: 1px solid #cbd5f5;
+        border-radius: 6px;
+        font: inherit;
+      }
+      .admin-preview__empty {
+        padding: 1rem;
+        font-size: 0.9rem;
+        color: #475569;
+      }
+      .admin-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.15rem 0.65rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: #e0e7ff;
+        color: #1e40af;
+      }
+      .admin-launch {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        border: none;
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        background: #0f172a;
+        color: white;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.9rem;
+      }
+      .admin-launch:focus-visible {
+        outline: 2px solid #2563eb;
+        outline-offset: 2px;
+      }
+      .admin-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 40;
+      }
+      .admin-modal[hidden] {
+        display: none;
+      }
+      body[data-admin-window='true'] .container {
+        display: none;
+      }
+      body[data-admin-window='true'] {
+        background: #e5e7fb;
+        overflow-y: auto;
+      }
+      body[data-admin-window='true'] .admin-modal {
+        position: static;
+        background: transparent;
+        padding: 2rem;
+      }
+      body[data-admin-window='true'] .admin-modal__dialog {
+        max-width: 960px;
+        width: 100%;
+        max-height: none;
+      }
+      .admin-modal__dialog {
+        background: #fff;
+        border-radius: 16px;
+        padding: 1.5rem;
+        max-width: 460px;
+        width: 100%;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.35);
+      }
+      .admin-modal__close {
+        position: absolute;
+        top: 0.75rem;
+        right: 0.75rem;
+        background: none;
+        border: none;
+        font-size: 1.2rem;
+        cursor: pointer;
+        color: #475569;
+      }
+      #status {
+        margin: 0;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.85rem;
+        color: #3d3d5c;
+        white-space: pre-wrap;
+      }
+      .missing {
+        color: #b91c1c;
+        font-size: 0.85rem;
+        font-weight: 600;
+      }
+      @media (max-width: 680px) {
+        .checklist-table td {
+          padding: 0.6rem;
+        }
+        .checklist-table td textarea {
+          min-height: 2.2rem;
+        }
+        .signature-pad canvas {
+          height: 150px;
+        }
+      }
+      @media (max-width: 768px) {
+        .employee-table-wrapper {
+          overflow-x: visible;
+        }
+        .employee-table {
+          min-width: 100%;
+          table-layout: fixed;
+        }
+        .employee-table thead {
+          display: none;
+        }
+        .employee-table tr {
+          display: block;
+          border: 1px solid #d9def8;
+          border-radius: 10px;
+          margin-bottom: 0.75rem;
+          overflow: hidden;
+        }
+        .employee-table td {
+          display: block;
+          width: 100%;
+          box-sizing: border-box;
+          border: none;
+          border-top: 1px solid #d9def8;
+        }
+        .employee-table td:first-child {
+          border-top: none;
+        }
+        .employee-index-cell {
+          width: 100%;
+          min-width: 0;
+        }
+        .employee-person-fields {
+          gap: 0.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <button type="button" class="admin-launch" data-admin-open>Admin</button>
+        <h1>Preventative Maintenance Checklist</h1>
+        <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
+      </header>
+      <form id="pm-form" enctype="multipart/form-data">
+        <section class="card" data-template-selector>
+          <h2>Document template</h2>
+          <p>Pick the PDF header to merge with this report. Templates define the logo, header text, and footer copy.</p>
+          <div class="grid two-col">
+            <label class="field" style="max-width:360px">
+              <span>Template</span>
+              <select name="template_id" data-template-select required>
+                <option value="">Loading templates...</option>
+              </select>
+              <input type="hidden" name="template_slug" data-template-slug />
+            </label>
+            <div class="template-details" data-template-info>
+              <p data-template-status>Loading available templates...</p>
+              <p class="template-description" data-template-description hidden></p>
+              <a href="#" class="link-button" data-template-preview target="_blank" rel="noopener" hidden>Preview template</a>
+            </div>
+          </div>
+        </section>
+        <section class="card">
+          <h2>Site information</h2>
+          <div class="grid two-col">
+        <label class="field" for="end-customer-name">
+          <span>End customer name</span>
+          <input type="text" id="end-customer-name" name="end_customer_name" placeholder="End customer name" data-suggest-field="end_customer_name" list="suggest-end-customer-name" autocomplete="off" />
+          <datalist id="suggest-end-customer-name" data-suggest-list="end_customer_name"></datalist>
+        </label>
+        <label class="field" for="site-location">
+          <span>Site location</span>
+          <input type="text" id="site-location" name="site_location" placeholder="Site location" data-suggest-field="site_location" list="suggest-site-location" autocomplete="off" />
+          <datalist id="suggest-site-location" data-suggest-list="site_location"></datalist>
+        </label>
+        <label class="field" for="led-display-model">
+          <span>LED display model</span>
+          <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model" />
+        </label>
+        <label class="field" for="batch-number">
+          <span>Batch number</span>
+          <input type="text" id="batch-number" name="batch_number" placeholder="Batch number" />
+        </label>
+        <label class="field" for="date-of-service">
+          <span>Date of service</span>
+          <input type="date" id="date-of-service" name="date_of_service" placeholder="Date of service" />
+        </label>
+        <label class="field" for="service-company-name">
+          <span>Service company name</span>
+          <input type="text" id="service-company-name" name="service_company_name" placeholder="Service company name" data-suggest-field="service_company_name" list="suggest-service-company-name" autocomplete="off" />
+          <datalist id="suggest-service-company-name" data-suggest-list="service_company_name"></datalist>
+        </label>
+          </div>
+        </section>
+        <section class="card employee-card" data-employees-section data-employee-max="20">
+          <h2>On-site team time sheet</h2>
+          <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
+          <div class="employee-actions">
+            <button type="button" class="button" data-action="employee-add">+ Add employee</button>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
+          </div>
+          <div class="employee-table-wrapper">
+            <table class="employee-table">
+              <thead>
+                <tr>
+                  <th scope="col">Employee</th>
+                  <th scope="col">Name & role</th>
+                  <th scope="col">Arrival</th>
+                  <th scope="col">Departure</th>
+                </tr>
+              </thead>
+              <tbody data-employee-list></tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7">
+                    <div class="employee-summary" data-employee-summary>
+                      <span data-employee-total>Working time: 0m | Required breaks: pending</span>
+                      <span data-employee-count>No employees added yet.</span>
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <template id="employee-row-template">
+            <tr class="employee-row" data-employee-row>
+              <td class="employee-index-cell">
+                <div class="employee-index-header">
+                  <span data-employee-title>Employee #1</span>
+                  <button type="button" class="employee-remove-button" data-action="employee-remove">Remove</button>
+                </div>
+                <div class="employee-duration" data-employee-duration>Working time: 0m | Break: pending</div>
+              </td>
+              <td>
+                <div class="employee-person-fields">
+                  <label class="field" data-field-wrapper="name">
+                    <span>Employee name</span>
+                    <input type="text" data-field="name" placeholder="Full name" autocomplete="off" data-suggest-field="employee_name" list="suggest-employee-name" />
+                  </label>
+                  <label class="field" data-field-wrapper="role">
+                    <span>Role / position</span>
+                    <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" data-suggest-field="employee_role" list="suggest-employee-role" />
+                  </label>
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="arrival">
+                  <span>Arrival (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="arrival" />
+                </div>
+              </td>
+              <td>
+                <div class="field field-datetime" data-datetime-field="departure">
+                  <span>Departure (24h)</span>
+                  <div class="datetime-inputs">
+                    <input type="date" data-datetime-part="date" />
+                    <div class="time-input-wrapper" data-time-input-wrapper>
+                      <input
+                        type="text"
+                        data-datetime-part="time"
+                        placeholder="HH:MM"
+                        inputmode="numeric"
+                        autocomplete="off"
+                        pattern="[0-2][0-9]:[0-5][0-9]"
+                        title="Use 24-hour format HH:MM"
+                      />
+                      <button type="button" class="time-shortcut" data-action="time-now" title="Set current time">Now</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
+                      <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                    </div>
+                  </div>
+                  <input type="hidden" data-field="departure" />
+                </div>
+              </td>
+            </tr>
+          </template>
+          <datalist id="suggest-employee-name" data-suggest-list="employee_name"></datalist>
+          <datalist id="suggest-employee-role" data-suggest-list="employee_role"></datalist>
+        </section>
+      <section class="card">
+        <h2>LED display checks</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Check for any visible issues. Resolve as necessary.</td>
+              <td><label class="check-wrapper" for="led-complete-1"><input type="checkbox" id="led-complete-1" name="led_complete_1" checked /></label></td>
+              <td><textarea name="led_notes_1" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Apply test pattern on full red, green, blue and white. Identify faults.</td>
+              <td><label class="check-wrapper" for="led-complete-2"><input type="checkbox" id="led-complete-2" name="led_complete_2" checked /></label></td>
+              <td><textarea name="led_notes_2" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Replace any pixel cards with dead or non-functioning pixels.</td>
+              <td><label class="check-wrapper" for="led-complete-3"><input type="checkbox" id="led-complete-3" name="led_complete_3" checked /></label></td>
+              <td><textarea name="led_notes_3" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check power and data cables between cabinets for secure connections.</td>
+              <td><label class="check-wrapper" for="led-complete-4"><input type="checkbox" id="led-complete-4" name="led_complete_4" /></label></td>
+              <td><textarea name="led_notes_4" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Inspect for damage and replace any damaged or broken cables.</td>
+              <td><label class="check-wrapper" for="led-complete-5"><input type="checkbox" id="led-complete-5" name="led_complete_5" /></label></td>
+              <td><textarea name="led_notes_5" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check monitoring feature for issues. Resolve as necessary.</td>
+              <td><label class="check-wrapper" for="led-complete-6"><input type="checkbox" id="led-complete-6" name="led_complete_6" /></label></td>
+              <td><textarea name="led_notes_6" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check brightness levels in configurator and note levels down.</td>
+              <td><label class="check-wrapper" for="led-complete-7"><input type="checkbox" id="led-complete-7" name="led_complete_7" /></label></td>
+              <td><textarea name="led_notes_7" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2>Control equipment</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Check controllers are connected and cables seated correctly.</td>
+              <td><label class="check-wrapper" for="control-complete-1"><input type="checkbox" id="control-complete-1" name="control_complete_1" checked /></label></td>
+              <td><textarea name="control_notes_1" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check controller redundancy; resolve issues where necessary.</td>
+              <td><label class="check-wrapper" for="control-complete-2"><input type="checkbox" id="control-complete-2" name="control_complete_2" /></label></td>
+              <td><textarea name="control_notes_2" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check brightness levels on controllers and note levels.</td>
+              <td><label class="check-wrapper" for="control-complete-3"><input type="checkbox" id="control-complete-3" name="control_complete_3" checked /></label></td>
+              <td><textarea name="control_notes_3" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Check fans on controllers are working.</td>
+              <td><label class="check-wrapper" for="control-complete-4"><input type="checkbox" id="control-complete-4" name="control_complete_4" /></label></td>
+              <td><textarea name="control_notes_4" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Carefully wipe clean controllers.</td>
+              <td><label class="check-wrapper" for="control-complete-5"><input type="checkbox" id="control-complete-5" name="control_complete_5" /></label></td>
+              <td><textarea name="control_notes_5" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+      <section class="card">
+        <h2>Spare parts</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Replace pixel cards in display with spare cards (ensure zero failures).</td>
+              <td><label class="check-wrapper" for="spares-complete-1"><input type="checkbox" id="spares-complete-1" name="spares_complete_1" checked /></label></td>
+              <td><textarea name="spares_notes_1" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Complete inventory log of spare parts.</td>
+              <td><label class="check-wrapper" for="spares-complete-2"><input type="checkbox" id="spares-complete-2" name="spares_complete_2" /></label></td>
+              <td><textarea name="spares_notes_2" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+        <section class="card">
+          <h2>Additional notes</h2>
+        <label class="field" for="general-notes">
+          <span>Overall notes</span>
+          <textarea id="general-notes" name="general_notes" rows="8" placeholder="Record any observations or follow-up actions" data-auto-resize></textarea>
+        </label>
+        </section>
+        <section class="card photos-card">
+          <h2>Photos</h2>
+          <div class="photo-slot" data-photo-slot="photo_before">
+            <span>Photos before maintenance</span>
+            <p>Select up to 20 images that show the equipment before work started.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_before" accept="image/*" multiple data-photo-input="photo_before" />
+              Upload before photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_before" data-photo-mode="multi" data-photo-label="Before photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photo_after">
+            <span>Photos after maintenance</span>
+            <p>Select up to 20 images that show the completed work.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_after" accept="image/*" multiple data-photo-input="photo_after" />
+              Upload after photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_after" data-photo-mode="multi" data-photo-label="After photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photos">
+            <span>Supporting photos (optional)</span>
+            <p>Attach up to 20 additional images that document this visit.</p>
+            <label class="upload-button">
+              <input type="file" name="photos" accept="image/*" multiple data-photo-input="photos" />
+              Upload supporting photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photos" data-photo-mode="multi" data-photo-label="Supporting photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+        </section>
+      <section class="card">
+        <h2>Parts record</h2>
+        <table class="parts-table" data-parts-table>
+          <thead>
+            <tr>
+              <th>Part batch (description)</th>
+              <th>Part number</th>
+              <th>Part used in display</th>
+              <th>Serial number</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="parts-row" data-row-index="1">
+              <td><input type="text" name="parts_removed_desc_1" /></td>
+              <td><input type="text" name="parts_removed_part_1" /></td>
+              <td><input type="text" name="parts_used_part_1" /></td>
+              <td><input type="text" name="parts_used_serial_1" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="2">
+              <td><input type="text" name="parts_removed_desc_2" /></td>
+              <td><input type="text" name="parts_removed_part_2" /></td>
+              <td><input type="text" name="parts_used_part_2" /></td>
+              <td><input type="text" name="parts_used_serial_2" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="3">
+              <td><input type="text" name="parts_removed_desc_3" /></td>
+              <td><input type="text" name="parts_removed_part_3" /></td>
+              <td><input type="text" name="parts_used_part_3" /></td>
+              <td><input type="text" name="parts_used_serial_3" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="4">
+              <td><input type="text" name="parts_removed_desc_4" /></td>
+              <td><input type="text" name="parts_removed_part_4" /></td>
+              <td><input type="text" name="parts_used_part_4" /></td>
+              <td><input type="text" name="parts_used_serial_4" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="5">
+              <td><input type="text" name="parts_removed_desc_5" /></td>
+              <td><input type="text" name="parts_removed_part_5" /></td>
+              <td><input type="text" name="parts_used_part_5" /></td>
+              <td><input type="text" name="parts_used_serial_5" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="6">
+              <td><input type="text" name="parts_removed_desc_6" /></td>
+              <td><input type="text" name="parts_removed_part_6" /></td>
+              <td><input type="text" name="parts_used_part_6" /></td>
+              <td><input type="text" name="parts_used_serial_6" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="7">
+              <td><input type="text" name="parts_removed_desc_7" /></td>
+              <td><input type="text" name="parts_removed_part_7" /></td>
+              <td><input type="text" name="parts_used_part_7" /></td>
+              <td><input type="text" name="parts_used_serial_7" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="8">
+              <td><input type="text" name="parts_removed_desc_8" /></td>
+              <td><input type="text" name="parts_removed_part_8" /></td>
+              <td><input type="text" name="parts_used_part_8" /></td>
+              <td><input type="text" name="parts_used_serial_8" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="9">
+              <td><input type="text" name="parts_removed_desc_9" /></td>
+              <td><input type="text" name="parts_removed_part_9" /></td>
+              <td><input type="text" name="parts_used_part_9" /></td>
+              <td><input type="text" name="parts_used_serial_9" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="10">
+              <td><input type="text" name="parts_removed_desc_10" /></td>
+              <td><input type="text" name="parts_removed_part_10" /></td>
+              <td><input type="text" name="parts_used_part_10" /></td>
+              <td><input type="text" name="parts_used_serial_10" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="11">
+              <td><input type="text" name="parts_removed_desc_11" /></td>
+              <td><input type="text" name="parts_removed_part_11" /></td>
+              <td><input type="text" name="parts_used_part_11" /></td>
+              <td><input type="text" name="parts_used_serial_11" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="12">
+              <td><input type="text" name="parts_removed_desc_12" /></td>
+              <td><input type="text" name="parts_removed_part_12" /></td>
+              <td><input type="text" name="parts_used_part_12" /></td>
+              <td><input type="text" name="parts_used_serial_12" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="13">
+              <td><input type="text" name="parts_removed_desc_13" /></td>
+              <td><input type="text" name="parts_removed_part_13" /></td>
+              <td><input type="text" name="parts_used_part_13" /></td>
+              <td><input type="text" name="parts_used_serial_13" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="14">
+              <td><input type="text" name="parts_removed_desc_14" /></td>
+              <td><input type="text" name="parts_removed_part_14" /></td>
+              <td><input type="text" name="parts_used_part_14" /></td>
+              <td><input type="text" name="parts_used_serial_14" /></td>
+            </tr>
+            <tr class="parts-row is-hidden-row" data-row-index="15">
+              <td><input type="text" name="parts_removed_desc_15" /></td>
+              <td><input type="text" name="parts_removed_part_15" /></td>
+              <td><input type="text" name="parts_used_part_15" /></td>
+              <td><input type="text" name="parts_used_serial_15" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="parts-table-actions">
+          <button type="button" class="button" data-action="parts-add-row">+ Add another part</button>
+          <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <p class="parts-table-hint">Maximum of 15 rows.</p>
+        </div>
+      </section>
+      <section class="card">
+        <h2>Sign off checklist</h2>
+        <table class="checklist-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Complete</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>LED equipment maintained and preventative work completed.</td>
+              <td><label class="check-wrapper" for="signoff-complete-1"><input type="checkbox" id="signoff-complete-1" name="signoff_complete_1" checked /></label></td>
+              <td><textarea name="signoff_notes_1" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+            <tr>
+              <td>Outstanding actions noted for customer follow-up.</td>
+              <td><label class="check-wrapper" for="signoff-complete-2"><input type="checkbox" id="signoff-complete-2" name="signoff_complete_2" /></label></td>
+              <td><textarea name="signoff_notes_2" data-auto-resize rows="1" placeholder="Add notes"></textarea></td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+        <section class="card">
+          <h2>Signatures</h2>
+          <div class="grid two-col signature-info">
+                    <label class="field" for="engineer-company">
+          <span>On-site engineer company</span>
+          <input type="text" id="engineer-company" name="engineer_company" placeholder="On-site engineer company" data-suggest-field="engineer_company" list="suggest-engineer-company" autocomplete="off" />
+          <datalist id="suggest-engineer-company" data-suggest-list="engineer_company"></datalist>
+        </label>
+                    <label class="field" for="engineer-datetime">
+          <span>Engineer date &amp; time</span>
+          <input type="text" id="engineer-datetime" name="engineer_datetime" placeholder="YYYY-MM-DD HH:MM" data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM" />
+        </label>
+                    <label class="field" for="engineer-name">
+          <span>Engineer name</span>
+          <input type="text" id="engineer-name" name="engineer_name" placeholder="Engineer name" data-suggest-field="engineer_name" list="suggest-engineer-name" autocomplete="off" />
+          <datalist id="suggest-engineer-name" data-suggest-list="engineer_name"></datalist>
+        </label>
+                    <label class="field" for="customer-company">
+          <span>Customer company</span>
+          <input type="text" id="customer-company" name="customer_company" placeholder="Customer company" data-suggest-field="customer_company" list="suggest-customer-company" autocomplete="off" />
+          <datalist id="suggest-customer-company" data-suggest-list="customer_company"></datalist>
+        </label>
+                    <label class="field" for="customer-datetime">
+          <span>Customer date &amp; time</span>
+          <input type="text" id="customer-datetime" name="customer_datetime" placeholder="YYYY-MM-DD HH:MM" data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM" />
+        </label>
+                    <label class="field" for="customer-name">
+          <span>Customer name</span>
+          <input type="text" id="customer-name" name="customer_name" placeholder="Customer name" data-suggest-field="customer_name" list="suggest-customer-name" autocomplete="off" />
+          <datalist id="suggest-customer-name" data-suggest-list="customer_name"></datalist>
+        </label>
+          </div>
+          <div class="signature-row">
+                    <div class="signature-pad" data-field="engineer_signature" data-sample="">
+          <div class="signature-pad__label">
+            <span>Engineer signature</span>
+            <div class="signature-pad__actions">
+              <button type="button" class="signature-fullscreen">Fullscreen</button>
+              <button type="button" class="signature-clear">Clear</button>
+            </div>
+          </div>
+          <div class="signature-canvas-wrapper">
+            <canvas aria-label="Engineer signature signature area"></canvas>
+          </div>
+          <input type="hidden" name="engineer_signature" value="" />
+        </div>
+                    <div class="signature-pad" data-field="customer_signature" data-sample="">
+          <div class="signature-pad__label">
+            <span>Customer signature</span>
+            <div class="signature-pad__actions">
+              <button type="button" class="signature-fullscreen">Fullscreen</button>
+              <button type="button" class="signature-clear">Clear</button>
+            </div>
+          </div>
+          <div class="signature-canvas-wrapper">
+            <canvas aria-label="Customer signature signature area"></canvas>
+          </div>
+          <input type="hidden" name="customer_signature" value="" />
+        </div>
+          </div>
+        </section>
+        <div class="footer-actions">
+          <button type="submit">Submit checklist</button>
+          <div class="upload-progress" data-upload-progress>
+            <div class="upload-progress-bar" data-upload-progress-bar></div>
+            <span class="upload-progress-label" data-upload-progress-label>Preparing upload...</span>
+          </div>
+          <div class="upload-files-summary" data-upload-files></div>
+          <div class="debug-controls">
+            <label class="checkbox">
+              <input type="checkbox" data-debug-toggle />
+              <span>Enable debug feedback</span>
+            </label>
+            <span class="debug-hint">Toggle to capture request details for troubleshooting.</span>
+          </div>
+          <div class="debug-panel" data-debug-panel>
+            <pre data-debug-log>Debug output will appear here once enabled.</pre>
+          </div>
+          <pre id="status"></pre>
+        </div>
+      </form>
+    </div>
+    <section class="admin-modal" data-admin-modal hidden>
+      <div class="admin-modal__dialog" data-admin-content>
+        <button type="button" class="admin-modal__close" title="Close" data-admin-close>&times;</button>
+        <div class="card admin-card" data-admin-section>
+          <div data-admin-unauth>
+            <h2>Admin tools</h2>
+            <p>Log in to manage protected features.</p>
+            <form data-admin-login>
+              <label class="field" style="flex:1 1 220px">
+                <span>Password</span>
+                <input type="password" data-admin-password autocomplete="current-password" required />
+              </label>
+              <button type="submit" class="link-button">Log in</button>
+            </form>
+            <div class="admin-errors" data-admin-login-error></div>
+          </div>
+          <div data-admin-auth hidden>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+              <div>
+                <h2 style="margin:0;">Admin tools</h2>
+                <div class="admin-profile" data-admin-profile></div>
+              </div>
+              <button type="button" class="link-button secondary" data-admin-logout>Log out</button>
+            </div>
+            <form data-admin-password-change>
+              <label class="field" style="flex:1 1 200px">
+                <span>Current password</span>
+                <input type="password" autocomplete="current-password" required data-admin-password-current />
+              </label>
+            <label class="field" style="flex:1 1 200px">
+              <span>New password</span>
+              <input type="password" autocomplete="new-password" required data-admin-password-new />
+            </label>
+            <button type="submit" class="link-button">Change password</button>
+          </form>
+          <form data-admin-upload enctype="multipart/form-data">
+            <label class="field" style="flex:1 1 240px">
+              <span>Upload document PDF</span>
+              <input type="file" name="file" accept="application/pdf" data-admin-upload-input required />
+            </label>
+            <label class="field" style="flex:1 1 220px">
+              <span>Display name</span>
+              <input type="text" name="label" placeholder="e.g. Calibration Certificate" data-admin-upload-label />
+            </label>
+            <label class="field" style="flex:1 1 320px">
+              <span>Description / notes (optional)</span>
+              <textarea name="description" rows="3" data-admin-upload-description placeholder="Shown in the template picker."></textarea>
+            </label>
+            <button type="submit" class="link-button">Upload &amp; activate</button>
+          </form>
+          <div class="admin-templates" data-admin-template-list></div>
+          <div class="admin-preview" data-admin-preview hidden>
+            <header data-admin-preview-label>Template preview</header>
+            <div class="admin-preview__frame" data-admin-preview-frame-wrapper>
+              <canvas data-admin-preview-canvas aria-label="Template preview"></canvas>
+              <div class="admin-preview__overlay" data-template-overlay hidden>
+                <div class="admin-preview__boundary" data-template-boundary-line></div>
+              </div>
+            </div>
+            <div class="admin-preview__controls" data-boundary-controls hidden>
+              <label for="boundary-range">Content starts after</label>
+              <input type="range" id="boundary-range" min="0" max="800" step="5" value="200" data-boundary-range />
+              <input type="number" min="0" max="800" step="1" value="200" data-boundary-input /> pt
+              <button type="button" class="link-button" data-boundary-save disabled>Save boundary</button>
+            </div>
+            <div class="admin-preview__empty" data-admin-preview-empty>No template selected.</div>
+          </div>
+          <div class="admin-section__status" data-admin-status></div>
+        </div>
+      </div>
+    </div>
+  </section>
+   <script src="/service1/vendor/pdfjs/pdf.min.js"></script>
+    <script>
+      (function () {
+        const formEl = document.getElementById('pm-form');
+        if (!formEl) return;
+
+        const statusEl = document.getElementById('status');
+        const submitButton = formEl.querySelector('button[type="submit"]');
+        const uploadProgressEl = document.querySelector('[data-upload-progress]');
+        const uploadProgressBarEl = document.querySelector('[data-upload-progress-bar]');
+        const uploadProgressLabelEl = document.querySelector('[data-upload-progress-label]');
+        const uploadFilesSummaryEl = document.querySelector('[data-upload-files]');
+        const debugToggleEl = document.querySelector('[data-debug-toggle]');
+        const debugPanelEl = document.querySelector('[data-debug-panel]');
+        const debugLogEl = document.querySelector('[data-debug-log]');
+        const DEBUG_KEY = 'pm-form-debug-enabled';
+        const templateSelectEl = document.querySelector('[data-template-select]');
+        const templateSlugInput = document.querySelector('[data-template-slug]');
+        const templateInfoEl = document.querySelector('[data-template-info]');
+        const templateStatusEl = templateInfoEl ? templateInfoEl.querySelector('[data-template-status]') : null;
+        const templateDescriptionEl = templateInfoEl
+          ? templateInfoEl.querySelector('[data-template-description]')
+          : null;
+        const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
+        const adminModalEl = document.querySelector('[data-admin-modal]');
+        const adminOpenBtn = document.querySelector('[data-admin-open]');
+        const adminCloseButtons = adminModalEl
+          ? adminModalEl.querySelectorAll('[data-admin-close]')
+          : [];
+        const adminDialogEl = adminModalEl ? adminModalEl.querySelector('[data-admin-content]') : null;
+        const adminSectionEl = adminDialogEl ? adminDialogEl.querySelector('[data-admin-section]') : null;
+        const adminUnauthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-unauth]') : null;
+        const adminAuthEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-auth]') : null;
+        const adminLoginForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login]') : null;
+        const adminPasswordInput = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password]') : null;
+        const adminLoginErrorEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-login-error]') : null;
+        const adminLogoutBtn = adminSectionEl ? adminSectionEl.querySelector('[data-admin-logout]') : null;
+        const adminPasswordForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-password-change]') : null;
+        const adminPasswordCurrentInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-current]')
+          : null;
+        const adminPasswordNewInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-password-new]')
+          : null;
+        const adminUploadForm = adminSectionEl ? adminSectionEl.querySelector('[data-admin-upload]') : null;
+        const adminUploadInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-input]')
+          : null;
+        const adminUploadLabelInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-label]')
+          : null;
+        const adminUploadDescriptionInput = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-upload-description]')
+          : null;
+        const adminTemplateListEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-template-list]')
+          : null;
+        const adminPreviewEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-preview]') : null;
+        const adminPreviewLabelEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-label]')
+          : null;
+        const adminPreviewFrameWrapper = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-frame-wrapper]')
+          : null;
+        const adminPreviewCanvas = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-canvas]')
+          : null;
+        const adminPreviewEmptyEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-admin-preview-empty]')
+          : null;
+        const adminPreviewOverlayEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-overlay]')
+          : null;
+        const adminPreviewBoundaryEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-template-boundary-line]')
+          : null;
+        const boundaryControlsEl = adminSectionEl
+          ? adminSectionEl.querySelector('[data-boundary-controls]')
+          : null;
+        const boundaryRangeInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-range]')
+          : null;
+        const boundaryNumberInput = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-input]')
+          : null;
+        const boundarySaveBtn = boundaryControlsEl
+          ? boundaryControlsEl.querySelector('[data-boundary-save]')
+          : null;
+        const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
+        const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
+        const DEFAULT_PAGE_WIDTH = 595.28;
+        const BOUNDARY_DEFAULT_HEIGHT = 841.89;
+        const urlSearchParams = new URL(window.location.href).searchParams;
+        const requestedTemplateSlug = (urlSearchParams.get('template') || '').trim().toLowerCase();
+        const requestedTemplateId = (urlSearchParams.get('templateId') || '').trim();
+        const requestedAdminWindow = urlSearchParams.get('adminWindow') === '1';
+        const boundaryState = {
+          templateId: null,
+          pageWidth: DEFAULT_PAGE_WIDTH,
+          pageHeight: BOUNDARY_DEFAULT_HEIGHT,
+          value: 0,
+          dirty: false,
+        };
+        let adminWindowOpened = requestedAdminWindow;
+        const openStandaloneAdminWindow = () => {
+          const adminUrl = new URL(window.location.href);
+          adminUrl.searchParams.set('adminWindow', '1');
+          adminUrl.hash = '';
+          window.open(adminUrl.toString(), '_blank', 'noopener');
+        };
+        let boundaryOverlayFrame = null;
+        let previewResizeObserver = null;
+        const clampValue = (value, min, max) => {
+          const number = Number(value);
+          if (!Number.isFinite(number)) return min;
+          if (number < min) return min;
+          if (number > max) return max;
+          return number;
+        };
+        const defaultBoundaryFromHeight = (height) => {
+          const safeHeight = Number.isFinite(height) && height > 0 ? height : BOUNDARY_DEFAULT_HEIGHT;
+          return clampValue(safeHeight * 0.22, 0, Math.max(safeHeight - 40, 0));
+        };
+        const templateState = {
+          templates: [],
+          activeTemplateId: null,
+        };
+        const ADMIN_TOKEN_KEY = 'pm-admin-token';
+        let adminTokenStore = null;
+        try {
+          adminTokenStore = window.localStorage;
+        } catch (err) {
+          adminTokenStore = null;
+        }
+        if (adminTemplateListEl) {
+          adminTemplateListEl.innerHTML =
+            '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+        }
+
+        const appBaseUrl = new URL('.', window.location.href);
+        const buildAppUrl = (path) => {
+          const normalized = (path || '').replace(/^\/+/, '');
+          return new URL(normalized || '.', appBaseUrl).toString();
+        };
+
+        const setTemplateStatus = (message, isError = false) => {
+          if (!templateStatusEl) return;
+          templateStatusEl.textContent = message || '';
+          templateStatusEl.style.color = isError ? '#b91c1c' : '#475569';
+        };
+
+        const updateBoundaryControls = () => {
+          if (!boundaryControlsEl) return;
+          if (!boundaryState.templateId) {
+            boundaryControlsEl.hidden = true;
+            if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+            if (adminPreviewOverlayEl) adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          boundaryControlsEl.hidden = false;
+          const maxValue = Math.max(0, Math.round(boundaryState.pageHeight));
+          if (boundaryRangeInput) {
+            boundaryRangeInput.min = '0';
+            boundaryRangeInput.max = String(maxValue);
+            boundaryRangeInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundaryNumberInput) {
+            boundaryNumberInput.min = '0';
+            boundaryNumberInput.max = String(maxValue);
+            boundaryNumberInput.value = String(Math.round(boundaryState.value));
+          }
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = !boundaryState.dirty;
+          }
+        };
+
+        const updateBoundaryOverlay = () => {
+          if (
+            !adminPreviewOverlayEl ||
+            !adminPreviewBoundaryEl ||
+            !adminPreviewFrameWrapper ||
+            !boundaryState.templateId
+          ) {
+            if (adminPreviewOverlayEl) {
+              adminPreviewOverlayEl.hidden = true;
+            }
+            return;
+          }
+          const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
+          const wrapperWidth = adminPreviewFrameWrapper.clientWidth;
+          if (
+            !wrapperHeight ||
+            !wrapperWidth ||
+            !Number.isFinite(boundaryState.pageHeight) ||
+            boundaryState.pageHeight <= 0 ||
+            !Number.isFinite(boundaryState.pageWidth) ||
+            boundaryState.pageWidth <= 0
+          ) {
+            adminPreviewOverlayEl.hidden = true;
+            return;
+          }
+          const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
+          const aspect = boundaryState.pageHeight / boundaryState.pageWidth;
+          const displayHeight = Math.min(wrapperWidth * aspect, wrapperHeight);
+          const offsetTop = (wrapperHeight - displayHeight) / 2;
+          const topPosition = offsetTop + displayHeight * ratio;
+          adminPreviewBoundaryEl.style.top = topPosition + 'px';
+          adminPreviewOverlayEl.hidden = false;
+        };
+
+        const scheduleBoundaryOverlay = () => {
+          if (boundaryOverlayFrame) {
+            cancelAnimationFrame(boundaryOverlayFrame);
+          }
+          boundaryOverlayFrame = requestAnimationFrame(updateBoundaryOverlay);
+        };
+
+        const attachPreviewResizeObserver = () => {
+          if (typeof ResizeObserver === 'undefined' || !adminPreviewFrameWrapper) {
+            return;
+          }
+          if (previewResizeObserver) {
+            previewResizeObserver.disconnect();
+          }
+          previewResizeObserver = new ResizeObserver(() => {
+            scheduleBoundaryOverlay();
+          });
+          previewResizeObserver.observe(adminPreviewFrameWrapper);
+        };
+        attachPreviewResizeObserver();
+        let previewRenderToken = 0;
+        const renderTemplatePreview = async (previewUrl, template) => {
+          if (!pdfjsLib || !adminPreviewCanvas) {
+            return;
+          }
+          const token = ++previewRenderToken;
+          try {
+            const loadingTask = pdfjsLib.getDocument({ url: previewUrl });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(1);
+            const wrapperWidth = adminPreviewFrameWrapper ? adminPreviewFrameWrapper.clientWidth : 640;
+            const viewport = page.getViewport({
+              scale: Math.max(wrapperWidth / page.getViewport({ scale: 1 }).width, 1),
+            });
+            if (token !== previewRenderToken) {
+              return;
+            }
+            const context = adminPreviewCanvas.getContext('2d');
+            adminPreviewCanvas.width = viewport.width;
+            adminPreviewCanvas.height = viewport.height;
+            context.clearRect(0, 0, adminPreviewCanvas.width, adminPreviewCanvas.height);
+            await page.render({ canvasContext: context, viewport }).promise;
+            if (token !== previewRenderToken) {
+              return;
+            }
+            boundaryState.pageWidth = viewport.width;
+            boundaryState.pageHeight = viewport.height;
+            scheduleBoundaryOverlay();
+          } catch (err) {
+            console.error('[admin] Failed to render preview', err);
+            if (token === previewRenderToken && adminPreviewEmptyEl) {
+              adminPreviewEmptyEl.hidden = false;
+            }
+          }
+        };
+
+        const setBoundaryTemplate = (template) => {
+          if (!template) {
+            boundaryState.templateId = null;
+            boundaryState.pageHeight = BOUNDARY_DEFAULT_HEIGHT;
+            boundaryState.pageWidth = DEFAULT_PAGE_WIDTH;
+            boundaryState.value = 0;
+            boundaryState.dirty = false;
+            updateBoundaryControls();
+            scheduleBoundaryOverlay();
+            return;
+          }
+          boundaryState.templateId = template.id;
+          boundaryState.pageWidth =
+            Number.isFinite(template.pageWidth) && template.pageWidth > 0
+              ? Number(template.pageWidth)
+              : DEFAULT_PAGE_WIDTH;
+          boundaryState.pageHeight =
+            Number.isFinite(template.pageHeight) && template.pageHeight > 0
+              ? Number(template.pageHeight)
+              : BOUNDARY_DEFAULT_HEIGHT;
+          const providedOffset =
+            Number.isFinite(template.bodyTopOffset) && template.bodyTopOffset >= 0
+              ? Number(template.bodyTopOffset)
+              : defaultBoundaryFromHeight(boundaryState.pageHeight);
+          boundaryState.value = clampValue(providedOffset, 0, boundaryState.pageHeight);
+          boundaryState.dirty = false;
+          updateBoundaryControls();
+          scheduleBoundaryOverlay();
+        };
+
+        const handleBoundaryValueChange = (nextValue, source) => {
+          if (!boundaryState.templateId) return;
+          const clamped = clampValue(nextValue, 0, boundaryState.pageHeight);
+          boundaryState.value = clamped;
+          boundaryState.dirty = true;
+          if (boundarySaveBtn) {
+            boundarySaveBtn.disabled = false;
+          }
+          if (boundaryRangeInput && source !== 'range') {
+            boundaryRangeInput.value = String(Math.round(clamped));
+          }
+          if (boundaryNumberInput && source !== 'number') {
+            boundaryNumberInput.value = String(Math.round(clamped));
+          }
+          scheduleBoundaryOverlay();
+        };
+
+        const applyTemplateSelection = () => {
+          if (!templateSelectEl) return;
+          const selectedId = templateSelectEl.value;
+          const selected =
+            templateState.templates.find((tpl) => tpl.id === selectedId) || null;
+          if (templateSlugInput) {
+            templateSlugInput.value = selected && selected.slug ? selected.slug : '';
+          }
+          if (templateDescriptionEl) {
+            if (selected && selected.description && selected.description.trim().length) {
+              templateDescriptionEl.hidden = false;
+              templateDescriptionEl.textContent = selected.description;
+            } else {
+              templateDescriptionEl.hidden = true;
+              templateDescriptionEl.textContent = '';
+            }
+          }
+          if (templatePreviewLink) {
+            if (selected && selected.previewUrl) {
+              const previewPath = selected.previewUrl.replace(/^\/+/, '');
+
+              templatePreviewLink.href = buildAppUrl(previewPath);
+              templatePreviewLink.hidden = false;
+            } else {
+              templatePreviewLink.hidden = true;
+              templatePreviewLink.href = '#';
+            }
+          }
+          if (selected) {
+            const slugDisplay = selected.slug ? ' · ' + selected.slug : '';
+            setTemplateStatus(
+              (selected.label || selected.slug || 'Template') +
+                slugDisplay +
+                (selected.isActive ? ' · Active by default' : ''),
+            );
+          } else {
+            setTemplateStatus('Select a template to continue.');
+          }
+        };
+
+        const loadTemplateOptions = () => {
+          if (!templateSelectEl) return;
+          setTemplateStatus('Loading available templates...');
+          templateSelectEl.disabled = true;
+          templateSelectEl.innerHTML = '<option value="">Loading...</option>';
+          fetch(buildAppUrl('api/templates'), { credentials: 'same-origin' })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error('Failed to load templates.');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (!payload || !Array.isArray(payload.templates)) {
+                throw new Error('Template response malformed.');
+              }
+              templateState.templates = payload.templates;
+              templateState.activeTemplateId = payload.activeTemplateId || '';
+              templateSelectEl.innerHTML = '';
+              if (!payload.templates.length) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No templates found';
+                templateSelectEl.appendChild(option);
+                templateSelectEl.disabled = true;
+                if (templateSlugInput) templateSlugInput.value = '';
+                if (templateDescriptionEl) {
+                  templateDescriptionEl.hidden = false;
+                  templateDescriptionEl.textContent = 'Upload a template in the admin panel to continue.';
+                }
+                setTemplateStatus('Templates are not configured yet.', true);
+                return;
+              }
+              payload.templates.forEach((tpl) => {
+                const option = document.createElement('option');
+                option.value = tpl.id;
+                option.textContent = tpl.label || tpl.slug || tpl.id;
+                templateSelectEl.appendChild(option);
+              });
+              let defaultTemplate = null;
+              if (requestedTemplateSlug) {
+                defaultTemplate = payload.templates.find(
+                  (tpl) => (tpl.slug || '').toLowerCase() === requestedTemplateSlug,
+                );
+              }
+              if (!defaultTemplate && requestedTemplateId) {
+                defaultTemplate = payload.templates.find((tpl) => tpl.id === requestedTemplateId);
+              }
+              if (!defaultTemplate) {
+                defaultTemplate =
+                  payload.templates.find((tpl) => tpl.isActive) || payload.templates[0];
+              }
+              templateSelectEl.disabled = false;
+              templateSelectEl.value = defaultTemplate ? defaultTemplate.id : payload.templates[0].id;
+              applyTemplateSelection();
+            })
+            .catch((err) => {
+              setTemplateStatus(err.message || 'Unable to load templates.', true);
+              templateSelectEl.innerHTML = '<option value="">Templates unavailable</option>';
+              templateSelectEl.disabled = true;
+              if (templateSlugInput) templateSlugInput.value = '';
+              if (templateDescriptionEl) templateDescriptionEl.hidden = true;
+              if (templatePreviewLink) templatePreviewLink.hidden = true;
+            });
+        };
+
+        const readJsonPayload = async (response) => {
+          try {
+            const text = await response.text();
+            if (!text) return null;
+            return JSON.parse(text);
+          } catch (err) {
+            return null;
+          }
+        };
+
+        if (requestedAdminWindow) {
+          document.body.dataset.adminWindow = 'true';
+        }
+
+        const adminState = {
+          token: adminTokenStore ? adminTokenStore.getItem(ADMIN_TOKEN_KEY) || '' : '',
+        };
+         const pdfjsLib =
+          (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
+        if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';
+        }
+        const adminUiState = {
+          previewTemplateId: null,
+        };
+        if (templateSelectEl) {
+          templateSelectEl.addEventListener('change', applyTemplateSelection);
+          loadTemplateOptions();
+        } else if (templateInfoEl) {
+          setTemplateStatus('Template selector unavailable.', true);
+        }
+
+        if (boundaryRangeInput) {
+          boundaryRangeInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'range');
+          });
+        }
+        if (boundaryNumberInput) {
+          boundaryNumberInput.addEventListener('input', (event) => {
+            handleBoundaryValueChange(Number(event.target.value), 'number');
+          });
+        }
+        if (boundarySaveBtn) {
+          boundarySaveBtn.addEventListener('click', () => {
+            if (!boundaryState.templateId) return;
+            showAdminStatus('Saving boundary...');
+            adminFetch('admin/templates/boundary', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                templateId: boundaryState.templateId,
+                bodyTopOffset: boundaryState.value,
+              }),
+            })
+              .then((payload) => {
+                boundaryState.dirty = false;
+                if (boundarySaveBtn) boundarySaveBtn.disabled = true;
+                adminUiState.previewTemplateId = boundaryState.templateId;
+                showAdminStatus('Boundary updated.');
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+        window.addEventListener('resize', () => scheduleBoundaryOverlay());
+
+        const setAdminModalVisible = (visible) => {
+          if (!adminModalEl) return;
+          adminModalEl.hidden = !visible;
+          if (visible) {
+            document.body.dataset.adminModal = 'open';
+            if (!requestedAdminWindow) {
+              document.body.style.overflow = 'hidden';
+            }
+            if (adminState.token) {
+              loadAdminTemplates();
+            }
+          } else {
+            delete document.body.dataset.adminModal;
+            if (!requestedAdminWindow) {
+              document.body.style.overflow = '';
+            }
+          }
+        };
+
+        const canUseStandaloneAdminWindow = () => {
+          return Boolean(adminState.token);
+        };
+
+        if (adminOpenBtn) {
+          adminOpenBtn.addEventListener('click', () => {
+            if (canUseStandaloneAdminWindow() && !requestedAdminWindow) {
+              openStandaloneAdminWindow();
+              return;
+            }
+            setAdminModalVisible(true);
+          });
+        }
+
+        adminCloseButtons.forEach((btn) => {
+          btn.addEventListener('click', () => setAdminModalVisible(false));
+        });
+
+        if (adminModalEl) {
+          adminModalEl.addEventListener('click', (event) => {
+            if (event.target === adminModalEl) {
+              setAdminModalVisible(false);
+            }
+          });
+        }
+
+        if (adminDialogEl) {
+          adminDialogEl.addEventListener('click', (event) => event.stopPropagation());
+        }
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            setAdminModalVisible(false);
+          }
+        });
+
+        const setAdminToken = (token) => {
+          adminState.token = token || '';
+          if (adminTokenStore) {
+            if (adminState.token) {
+              adminTokenStore.setItem(ADMIN_TOKEN_KEY, adminState.token);
+            } else {
+              adminTokenStore.removeItem(ADMIN_TOKEN_KEY);
+            }
+          }
+          updateAdminVisibility();
+        };
+
+        const showAdminStatus = (message, isError = false) => {
+          if (!adminStatusEl) return;
+          adminStatusEl.style.color = isError ? '#b91c1c' : '#0f172a';
+          adminStatusEl.textContent = message || '';
+        };
+
+        const renderAdminProfile = (payload) => {
+          if (!adminProfileEl) return;
+          if (!payload || !payload.username) {
+            adminProfileEl.textContent = '';
+            return;
+          }
+          const updated = payload.passwordUpdatedAt
+            ? new Date(payload.passwordUpdatedAt).toLocaleString()
+            : 'unknown';
+          adminProfileEl.textContent =
+            'Logged in as ' + payload.username + '. Password updated ' + updated + '.';
+        };
+
+        const clearPreviewCanvas = () => {
+          if (!adminPreviewCanvas) return;
+          const ctx = adminPreviewCanvas.getContext('2d');
+          ctx.clearRect(0, 0, adminPreviewCanvas.width, adminPreviewCanvas.height);
+          adminPreviewCanvas.width = 0;
+          adminPreviewCanvas.height = 0;
+        };
+
+        const showAdminPreview = (template) => {
+          if (!adminPreviewEl || !adminPreviewLabelEl || !adminPreviewEmptyEl) return;
+          if (!template) {
+            adminPreviewEl.hidden = true;
+            clearPreviewCanvas();
+            adminPreviewEmptyEl.hidden = false;
+            adminUiState.previewTemplateId = null;
+            setBoundaryTemplate(null);
+            return;
+          }
+          adminPreviewEl.hidden = false;
+          const previewLabel = template.label || template.relativePath || template.id;
+          adminPreviewLabelEl.textContent =
+            'Template preview: ' + previewLabel + (template.slug ? ' (' + template.slug + ')' : '');
+          const previewUrl = buildAppUrl('admin/templates/' + encodeURIComponent(template.id) + '/preview');
+          adminPreviewEmptyEl.hidden = true;
+          adminUiState.previewTemplateId = template.id;
+          attachPreviewResizeObserver();
+          setBoundaryTemplate(template);
+          renderTemplatePreview(previewUrl, template);
+        };
+
+        const updateAdminVisibility = () => {
+          if (!adminSectionEl) return;
+          const isAuthed = Boolean(adminState.token);
+          if (adminUnauthEl) adminUnauthEl.hidden = isAuthed;
+          if (adminAuthEl) adminAuthEl.hidden = !isAuthed;
+          if (!isAuthed) {
+            if (adminStatusEl) adminStatusEl.textContent = '';
+            if (adminProfileEl) adminProfileEl.textContent = '';
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
+            showAdminPreview(null);
+          }
+        };
+
+        const adminFetch = (relativePath, options = {}) => {
+          if (!adminState.token) {
+            const err = new Error('AUTH_REQUIRED');
+            err.code = 'AUTH_REQUIRED';
+            return Promise.reject(err);
+          }
+          const init = Object.assign({ headers: {}, credentials: 'same-origin' }, options);
+          init.headers = Object.assign({}, init.headers, {
+            Authorization: 'Bearer ' + adminState.token,
+          });
+          const targetUrl = buildAppUrl(relativePath || '');
+          return fetch(targetUrl, init).then(async (response) => {
+            const payload = await readJsonPayload(response);
+            if (!response.ok) {
+              if (response.status === 401) {
+                setAdminToken('');
+                const authErr = new Error('AUTH_REQUIRED');
+                authErr.code = 'AUTH_REQUIRED';
+                throw authErr;
+              }
+              const message = (payload && payload.error) || response.statusText || 'Request failed';
+              throw new Error(message);
+            }
+            return payload;
+          });
+        };
+
+        const refreshAdminProfile = () => {
+          if (!adminState.token) return;
+          adminFetch('admin/profile')
+            .then((payload) => {
+              renderAdminProfile(payload);
+            })
+            .catch((err) => {
+              if (err && err.code === 'AUTH_REQUIRED') {
+                showAdminStatus('Admin authentication required. Please log in.', true);
+                return;
+              }
+              console.warn('[admin] profile refresh failed', err);
+            });
+        };
+
+        const renderAdminTemplates = (payload) => {
+          if (!adminTemplateListEl) return;
+          if (!payload || !Array.isArray(payload.templates) || !payload.templates.length) {
+            adminTemplateListEl.innerHTML =
+              '<div style="padding:0.75rem;color:#475569;">No templates uploaded yet.</div>';
+            showAdminPreview(null);
+            return;
+          }
+          const table = document.createElement('table');
+          const thead = document.createElement('thead');
+          thead.innerHTML =
+            '<tr><th>Template</th><th>Status</th><th style="width:160px;">Actions</th></tr>';
+          table.appendChild(thead);
+          const tbody = document.createElement('tbody');
+          let previewCandidate = null;
+          payload.templates.forEach((tpl) => {
+            const row = document.createElement('tr');
+            const colInfo = document.createElement('td');
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'admin-template__name';
+            nameSpan.textContent = tpl.label || tpl.relativePath;
+            const meta = document.createElement('span');
+            meta.className = 'admin-template__meta';
+            const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
+            const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
+            meta.textContent = size + ' • ' + uploaded;
+            colInfo.appendChild(nameSpan);
+            colInfo.appendChild(meta);
+            if (tpl.slug) {
+              const slugInfo = document.createElement('span');
+              slugInfo.className = 'admin-template__slug';
+              slugInfo.textContent = 'Slug: ' + tpl.slug;
+              colInfo.appendChild(slugInfo);
+            }
+            if (tpl.description) {
+              const desc = document.createElement('p');
+              desc.className = 'admin-template__desc';
+              desc.textContent = tpl.description;
+              colInfo.appendChild(desc);
+            }
+
+            const colStatus = document.createElement('td');
+            if (tpl.id === payload.activeTemplateId) {
+              const badge = document.createElement('span');
+              badge.className = 'admin-badge';
+              badge.textContent = 'Active';
+              colStatus.appendChild(badge);
+            } else {
+              colStatus.textContent = 'Available';
+            }
+
+            const colActions = document.createElement('td');
+            colActions.className = 'admin-template__actions';
+            const downloadLink = document.createElement('a');
+            const relativeHref = (tpl.relativePath || '').replace(/\\/g, '/');
+            downloadLink.href = buildAppUrl(relativeHref);
+            downloadLink.textContent = 'Download';
+            downloadLink.target = '_blank';
+            downloadLink.rel = 'noopener noreferrer';
+            colActions.appendChild(downloadLink);
+
+            const previewBtn = document.createElement('button');
+            previewBtn.type = 'button';
+            previewBtn.className = 'link-button';
+            previewBtn.textContent = 'Preview';
+            previewBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              showAdminPreview(tpl);
+            });
+            colActions.appendChild(previewBtn);
+
+            const selectBtn = document.createElement('button');
+            selectBtn.type = 'button';
+            selectBtn.className = 'link-button';
+            selectBtn.textContent = tpl.id === payload.activeTemplateId ? 'Current' : 'Activate';
+            selectBtn.disabled = tpl.id === payload.activeTemplateId;
+            if (tpl.id !== payload.activeTemplateId) {
+              selectBtn.addEventListener('click', () => selectAdminTemplate(tpl.id));
+            }
+            colActions.appendChild(selectBtn);
+
+            row.appendChild(colInfo);
+            row.appendChild(colStatus);
+            row.appendChild(colActions);
+            tbody.appendChild(row);
+
+            if (!previewCandidate) {
+              if (adminUiState.previewTemplateId && adminUiState.previewTemplateId === tpl.id) {
+                previewCandidate = tpl;
+              } else if (tpl.id === payload.activeTemplateId) {
+                previewCandidate = tpl;
+              }
+            }
+          });
+          table.appendChild(tbody);
+          adminTemplateListEl.innerHTML = '';
+          adminTemplateListEl.appendChild(table);
+          if (!previewCandidate) {
+            previewCandidate = payload.templates[0];
+          }
+          showAdminPreview(previewCandidate);
+        };
+
+        const loadAdminTemplates = () => {
+          if (!adminState.token) {
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
+            return;
+          }
+          adminFetch('admin/templates')
+            .then((payload) => {
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              if (err && err.code === 'AUTH_REQUIRED') {
+                showAdminStatus('Admin authentication required. Please log in.', true);
+                return;
+              }
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        const selectAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Activating template...');
+          adminFetch('admin/templates/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template activated.');
+              adminUiState.previewTemplateId = payload.activeTemplateId || templateId;
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message, true);
+            });
+        };
+
+        if (adminLoginForm) {
+          adminLoginForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordInput || !adminPasswordInput.value) {
+              showAdminStatus('Enter the admin password.', true);
+              return;
+            }
+            const password = adminPasswordInput.value;
+            showAdminStatus('Signing in...');
+            fetch(buildAppUrl('admin/login'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ password }),
+            })
+              .then(readJsonPayload)
+              .then((payload) => {
+                if (!payload || !payload.token) {
+                  throw new Error('Unexpected response.');
+                }
+                adminPasswordInput.value = '';
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+                setAdminToken(payload.token);
+                showAdminStatus('Logged in.');
+                if (!adminWindowOpened) {
+                  openStandaloneAdminWindow();
+                  adminWindowOpened = true;
+                }
+                if (payload.username) {
+                  renderAdminProfile(payload);
+                } else {
+                  refreshAdminProfile();
+                }
+                loadAdminTemplates();
+              })
+              .catch((err) => {
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
+                showAdminStatus(err.message || 'Login failed.', true);
+              });
+          });
+        }
+
+        if (adminLogoutBtn) {
+          adminLogoutBtn.addEventListener('click', () => {
+            setAdminToken('');
+            showAdminStatus('Logged out.');
+            if (adminTemplateListEl) {
+              adminTemplateListEl.innerHTML =
+                '<div style="padding:0.75rem;color:#475569;">Log in to manage templates.</div>';
+            }
+          });
+        }
+
+        if (adminPasswordForm) {
+          adminPasswordForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminPasswordCurrentInput || !adminPasswordNewInput) return;
+            const currentPassword = adminPasswordCurrentInput.value;
+            const newPassword = adminPasswordNewInput.value;
+            if (!newPassword || newPassword.length < 4) {
+              showAdminStatus('New password must be at least 4 characters.', true);
+              return;
+            }
+            showAdminStatus('Updating password...');
+            adminFetch('admin/password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ currentPassword, newPassword }),
+            })
+              .then(() => {
+                adminPasswordCurrentInput.value = '';
+                adminPasswordNewInput.value = '';
+                setAdminToken('');
+                showAdminStatus('Password updated. Please log in again.');
+              })
+              .catch((err) => {
+                showAdminStatus(err.message || 'Password update failed.', true);
+              });
+          });
+        }
+
+        if (adminUploadForm) {
+          adminUploadForm.addEventListener('submit', (event) => {
+            event.preventDefault();
+            if (!adminUploadInput || !adminUploadInput.files || !adminUploadInput.files[0]) {
+              showAdminStatus('Choose a PDF file to upload.', true);
+              return;
+            }
+            const formData = new FormData(adminUploadForm);
+            showAdminStatus('Uploading template...');
+            adminFetch('admin/templates/upload', {
+              method: 'POST',
+              body: formData,
+            })
+              .then((payload) => {
+                adminUploadInput.value = '';
+                if (adminUploadLabelInput) adminUploadLabelInput.value = '';
+                if (adminUploadDescriptionInput) adminUploadDescriptionInput.value = '';
+                showAdminStatus('Template uploaded and activated.');
+                adminUiState.previewTemplateId = payload.activeTemplateId;
+                renderAdminTemplates(payload);
+              })
+              .catch((err) => {
+                showAdminStatus(err.message, true);
+              });
+          });
+        }
+
+        updateAdminVisibility();
+        if (requestedAdminWindow) {
+          setAdminModalVisible(true);
+        }
+        if (adminState.token) {
+          refreshAdminProfile();
+          loadAdminTemplates();
+        }
+
+        const selectedFiles = new Map();
+        const previewUrls = new Map();
+        const debugState = { enabled: false, timeline: [] };
+        const DATETIME_TEXT_SELECTOR = '[data-datetime-text]';
+        const TIME_INPUT_SELECTOR = 'input[data-datetime-part="time"]';
+        const TIME_PRESET_LIST_ID = 'time-presets';
+        const TIME_PRESET_STEP_MINUTES = 15;
+        const TIME_VALUE_REGEX = /^([01]\d|2[0-3]):([0-5]\d)$/;
+        const endCustomerInput = document.getElementById('end-customer-name');
+        const customerNameInput = document.getElementById('customer-name');
+        const customerNameSync = { manual: false };
+        const serviceCompanyInput = document.getElementById('service-company-name');
+        const engineerCompanyInput = document.getElementById('engineer-company');
+        const customerCompanyInput = document.getElementById('customer-company');
+        const signatureCompanySync = { engineerManual: false, customerManual: false };
+
+        const syncCustomerNameFromSite = () => {
+          if (!endCustomerInput || !customerNameInput) return;
+          if (customerNameSync.manual) {
+            return;
+          }
+          customerNameInput.value = endCustomerInput.value.trim();
+        };
+
+        if (endCustomerInput && customerNameInput) {
+          syncCustomerNameFromSite();
+          ['input', 'change'].forEach((eventName) => {
+            endCustomerInput.addEventListener(eventName, () => {
+              if (!customerNameSync.manual || !customerNameInput.value.trim()) {
+                if (!customerNameInput.value.trim()) {
+                  customerNameSync.manual = false;
+                }
+                syncCustomerNameFromSite();
+              }
+            });
+          });
+          customerNameInput.addEventListener('input', () => {
+            const current = customerNameInput.value.trim();
+            const source = endCustomerInput.value.trim();
+            if (!current) {
+              customerNameSync.manual = false;
+              syncCustomerNameFromSite();
+              return;
+            }
+            customerNameSync.manual = current !== source;
+          });
+        }
+
+        const syncEngineerCompanyFromService = () => {
+          if (!serviceCompanyInput || !engineerCompanyInput) return;
+          if (signatureCompanySync.engineerManual) return;
+          engineerCompanyInput.value = serviceCompanyInput.value.trim();
+        };
+
+        const syncCustomerCompanyFromHeader = () => {
+          if (!endCustomerInput || !customerCompanyInput) return;
+          if (signatureCompanySync.customerManual) return;
+          customerCompanyInput.value = endCustomerInput.value.trim();
+        };
+
+        if (serviceCompanyInput && engineerCompanyInput) {
+          syncEngineerCompanyFromService();
+          ['input', 'change'].forEach((eventName) => {
+            serviceCompanyInput.addEventListener(eventName, () => {
+              if (!signatureCompanySync.engineerManual || !engineerCompanyInput.value.trim()) {
+                if (!engineerCompanyInput.value.trim()) {
+                  signatureCompanySync.engineerManual = false;
+                }
+                syncEngineerCompanyFromService();
+              }
+            });
+          });
+          engineerCompanyInput.addEventListener('input', () => {
+            const current = engineerCompanyInput.value.trim();
+            const source = serviceCompanyInput.value.trim();
+            if (!current) {
+              signatureCompanySync.engineerManual = false;
+              syncEngineerCompanyFromService();
+              return;
+            }
+            signatureCompanySync.engineerManual = current !== source;
+          });
+        }
+
+        if (endCustomerInput && customerCompanyInput) {
+          syncCustomerCompanyFromHeader();
+          ['input', 'change'].forEach((eventName) => {
+            endCustomerInput.addEventListener(eventName, () => {
+              if (!signatureCompanySync.customerManual || !customerCompanyInput.value.trim()) {
+                if (!customerCompanyInput.value.trim()) {
+                  signatureCompanySync.customerManual = false;
+                }
+                syncCustomerCompanyFromHeader();
+              }
+            });
+          });
+          customerCompanyInput.addEventListener('input', () => {
+            const current = customerCompanyInput.value.trim();
+            const source = endCustomerInput.value.trim();
+            if (!current) {
+              signatureCompanySync.customerManual = false;
+              syncCustomerCompanyFromHeader();
+              return;
+            }
+            signatureCompanySync.customerManual = current !== source;
+          });
+        }
+
+        const clampNumber = (value, min, max) => {
+          if (!Number.isFinite(value)) return min;
+          return Math.min(max, Math.max(min, value));
+        };
+
+        const pad2 = (value) => {
+          const numeric = Number.isFinite(value) ? Math.trunc(value) : 0;
+          const clamped = clampNumber(numeric, 0, 99);
+          return String(clamped).padStart(2, '0');
+        };
+
+        const ensureTimePresetList = () => {
+          let listEl = document.getElementById(TIME_PRESET_LIST_ID);
+          if (listEl) {
+            return TIME_PRESET_LIST_ID;
+          }
+          listEl = document.createElement('datalist');
+          listEl.id = TIME_PRESET_LIST_ID;
+          for (let hour = 0; hour < 24; hour += 1) {
+            for (let minute = 0; minute < 60; minute += TIME_PRESET_STEP_MINUTES) {
+              const option = document.createElement('option');
+              option.value = pad2(hour) + ':' + pad2(minute);
+              listEl.appendChild(option);
+            }
+          }
+          if (formEl && formEl.parentNode) {
+            formEl.parentNode.insertBefore(listEl, formEl.nextSibling);
+          } else {
+            document.body.appendChild(listEl);
+          }
+          return TIME_PRESET_LIST_ID;
+        };
+
+        const formatTimeDraft = (raw) => {
+          if (typeof raw !== 'string') return '';
+          const digits = raw.replace(/\D/g, '').slice(0, 4);
+          if (!digits) return '';
+          if (digits.length <= 2) {
+            return digits;
+          }
+          if (digits.length === 3) {
+            return digits.slice(0, 1) + ':' + digits.slice(1);
+          }
+          return digits.slice(0, 2) + ':' + digits.slice(2);
+        };
+
+        const normalizeTimeInputValue = (raw) => {
+          if (typeof raw !== 'string') return '';
+          const digits = raw.replace(/\D/g, '').slice(0, 4);
+          if (!digits) return '';
+          let hours = '';
+          let minutes = '';
+          if (digits.length === 1) {
+            hours = '0' + digits;
+            minutes = '00';
+          } else if (digits.length === 2) {
+            hours = digits;
+            minutes = '00';
+          } else if (digits.length === 3) {
+            hours = digits.slice(0, 1);
+            minutes = digits.slice(1);
+          } else {
+            hours = digits.slice(0, 2);
+            minutes = digits.slice(2);
+          }
+          const hourNum = clampNumber(Number(hours), 0, 23);
+          const minuteNum = clampNumber(Number(minutes), 0, 59);
+          return pad2(hourNum) + ':' + pad2(minuteNum);
+        };
+
+        const applyTimeInputBehavior = (input) => {
+          if (!input || input.dataset.timeFormatterApplied === '1') return;
+          input.dataset.timeFormatterApplied = '1';
+          input.type = 'text';
+          input.setAttribute('inputmode', 'numeric');
+          input.setAttribute('pattern', '[0-2][0-9]:[0-5][0-9]');
+          input.setAttribute('title', 'Use 24-hour format HH:MM');
+          if (!input.getAttribute('placeholder')) {
+            input.setAttribute('placeholder', 'HH:MM');
+          }
+          input.setAttribute('autocomplete', 'off');
+          const listId = ensureTimePresetList();
+          if (listId) {
+            input.setAttribute('list', listId);
+          }
+          const commitIfChanged = () => {
+            const current = input.value.trim();
+            if (input.dataset.timeCommittedValue === current) return;
+            input.dataset.timeCommittedValue = current;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          };
+          const enforce = () => {
+            const trimmed = input.value.trim();
+            if (!trimmed) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              input.value = '';
+              commitIfChanged();
+              return;
+            }
+            const normalized = normalizeTimeInputValue(trimmed);
+            if (!TIME_VALUE_REGEX.test(normalized)) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use 24-hour format HH:MM');
+              input.value = normalized;
+            } else {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              input.value = normalized;
+              commitIfChanged();
+            }
+          };
+          input.addEventListener('input', () => {
+            const draft = formatTimeDraft(input.value);
+            input.value = draft;
+            if (!draft) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              commitIfChanged();
+              return;
+            }
+            if (TIME_VALUE_REGEX.test(draft)) {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+              commitIfChanged();
+            }
+          });
+          input.addEventListener('blur', () => {
+            enforce();
+          });
+          input.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              enforce();
+            }
+          });
+          input.addEventListener('focus', () => {
+            requestAnimationFrame(() => {
+              try {
+                input.select();
+              } catch (err) {
+                /* ignore selection failures */
+              }
+            });
+          });
+          const initial = normalizeTimeInputValue(input.value || '');
+          if (initial && TIME_VALUE_REGEX.test(initial)) {
+            input.value = initial;
+            input.dataset.timeCommittedValue = initial;
+          } else {
+            input.dataset.timeCommittedValue = (input.value || '').trim();
+          }
+        };
+
+        const normalizeDateTimeText = (raw) => {
+          if (typeof raw !== 'string') return { iso: '', display: '' };
+          const trimmed = raw.trim();
+          if (!trimmed) return { iso: '', display: '' };
+          let cleaned = trimmed
+            .replace(/[/.]/g, '-')
+            .replace(/[tT]/, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+          let match = /(\d{4})-(\d{1,2})-(\d{1,2})\s+([0-2]?\d):([0-5]?\d)$/.exec(cleaned);
+          if (!match) {
+            const digitsOnly = cleaned.replace(/\D/g, '');
+            if (digitsOnly.length === 12) {
+              match = [
+                '',
+                digitsOnly.slice(0, 4),
+                digitsOnly.slice(4, 6),
+                digitsOnly.slice(6, 8),
+                digitsOnly.slice(8, 10),
+                digitsOnly.slice(10, 12),
+              ];
+            } else {
+              return { iso: '', display: cleaned };
+            }
+          }
+
+          const year = clampNumber(Number(match[1]), 1970, 9999);
+          const month = clampNumber(Number(match[2]), 1, 12);
+          const day = clampNumber(Number(match[3]), 1, 31);
+          const hours = clampNumber(Number(match[4]), 0, 23);
+          const minutes = clampNumber(Number(match[5]), 0, 59);
+          const iso =
+            String(year).padStart(4, '0') +
+            '-' +
+            String(month).padStart(2, '0') +
+            '-' +
+            String(day).padStart(2, '0') +
+            'T' +
+            String(hours).padStart(2, '0') +
+            ':' +
+            String(minutes).padStart(2, '0');
+          const display = iso.slice(0, 10) + ' ' + iso.slice(11, 16);
+          return { iso, display };
+        };
+
+        const applyDateTimeTextBehavior = (input) => {
+          if (!input || input.dataset.datetimeFormatterApplied === '1') return;
+          input.dataset.datetimeFormatterApplied = '1';
+          const enforce = () => {
+            const normalized = normalizeDateTimeText(input.value);
+            if (input.value.trim() && !normalized.iso) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+            } else {
+              input.classList.remove('is-invalid');
+              input.setCustomValidity('');
+            }
+            input.value = normalized.display;
+          };
+          input.addEventListener('input', () => {
+            input.value = input.value.replace(/[^0-9 T:-]/g, '');
+          });
+          input.addEventListener('blur', enforce);
+          enforce();
+        };
+
+        function formatBytes(bytes) {
+          if (!Number.isFinite(bytes) || bytes <= 0) {
+            return '0 B';
+          }
+          const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+          let value = bytes;
+          let index = 0;
+          while (value >= 1024 && index < units.length - 1) {
+            value /= 1024;
+            index += 1;
+          }
+          const decimals = value < 10 && index > 0 ? 1 : 0;
+          return value.toFixed(decimals) + ' ' + units[index];
+        }
+
+        function setProgress(percent, label) {
+          if (uploadProgressBarEl) {
+            const clamped = Math.max(0, Math.min(100, Number(percent) || 0));
+            uploadProgressBarEl.style.setProperty('--progress', clamped + '%');
+          }
+          if (uploadProgressLabelEl && label !== undefined) {
+            uploadProgressLabelEl.textContent = label;
+          }
+        }
+
+        function showProgress(totalBytes) {
+          if (uploadProgressEl) {
+            uploadProgressEl.classList.add('is-visible');
+          }
+          const label = totalBytes
+            ? 'Preparing upload (' + formatBytes(totalBytes) + ')'
+            : 'Preparing upload...';
+          setProgress(0, label);
+        }
+
+        function hideProgress() {
+          if (uploadProgressEl) {
+            uploadProgressEl.classList.remove('is-visible');
+          }
+          setProgress(0, '');
+        }
+
+        function emitDebug() {
+          if (!debugState.enabled || !debugLogEl) return;
+          debugLogEl.textContent = JSON.stringify(debugState.timeline, null, 2);
+        }
+
+        function recordDebug(eventName, data) {
+          if (!debugState.enabled) return;
+          debugState.timeline.push(
+            Object.assign({ event: eventName, at: new Date().toISOString() }, data || {})
+          );
+          if (debugState.timeline.length > 120) {
+            debugState.timeline.shift();
+          }
+          emitDebug();
+        }
+
+        function applyDebugState(enabled) {
+          debugState.enabled = !!enabled;
+          if (debugToggleEl) {
+            debugToggleEl.checked = debugState.enabled;
+          }
+          if (debugPanelEl) {
+            if (debugState.enabled) {
+              debugPanelEl.classList.add('is-visible');
+            } else {
+              debugPanelEl.classList.remove('is-visible');
+            }
+          }
+          if (!debugState.enabled && debugLogEl) {
+            debugLogEl.textContent = 'Debug output will appear here once enabled.';
+          } else if (debugState.enabled) {
+            emitDebug();
+          }
+          try {
+            window.localStorage.setItem(DEBUG_KEY, debugState.enabled ? '1' : '0');
+          } catch (err) {
+            // ignore storage failures
+          }
+        }
+
+        function getPhotoLabel(fieldName) {
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          if (!container) return fieldName;
+          return container.dataset.photoLabel || fieldName;
+        }
+
+        function updateFilesSummary() {
+          if (!uploadFilesSummaryEl) return;
+          uploadFilesSummaryEl.innerHTML = '';
+          let hasEntries = false;
+          selectedFiles.forEach((files, fieldName) => {
+            if (!files || !files.length) {
+              return;
+            }
+            hasEntries = true;
+            const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0);
+            const item = document.createElement('div');
+            const label = getPhotoLabel(fieldName);
+            const countText = files.length === 1 ? '1 file' : files.length + ' files';
+            item.innerHTML =
+              '<strong>' +
+              label +
+              ':</strong> ' +
+              countText +
+              ' (' +
+              formatBytes(totalBytes) +
+              ')';
+            uploadFilesSummaryEl.appendChild(item);
+          });
+          if (!hasEntries) {
+            const emptyRow = document.createElement('div');
+            emptyRow.textContent = 'No photos selected yet.';
+            uploadFilesSummaryEl.appendChild(emptyRow);
+          }
+        }
+
+        function revokePreviewUrls(fieldName) {
+          const urls = previewUrls.get(fieldName);
+          if (urls) {
+            urls.forEach((url) => URL.revokeObjectURL(url));
+          }
+          previewUrls.delete(fieldName);
+        }
+
+        function renderPreview(fieldName, files, mode) {
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          if (!container) return;
+          revokePreviewUrls(fieldName);
+          container.innerHTML = '';
+          if (!files || !files.length) {
+            container.dataset.state = 'empty';
+            const span = document.createElement('span');
+            span.textContent = mode === 'multi' ? 'No files selected yet.' : 'No file selected yet.';
+            container.appendChild(span);
+            return;
+          }
+          container.dataset.state = 'filled';
+          const urls = [];
+          if (mode === 'multi') {
+            const list = document.createElement('div');
+            list.className = 'photo-preview-list';
+            files.forEach((file) => {
+              const item = document.createElement('div');
+              item.className = 'photo-preview-item';
+              const img = document.createElement('img');
+              const url = URL.createObjectURL(file);
+              urls.push(url);
+              img.src = url;
+              img.alt = file.name;
+              img.onerror = () => {
+                URL.revokeObjectURL(url);
+                const reader = new FileReader();
+                reader.onload = () => {
+                  img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+              };
+              const caption = document.createElement('span');
+              caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+              item.appendChild(img);
+              item.appendChild(caption);
+              list.appendChild(item);
+            });
+            container.appendChild(list);
+          } else {
+            const file = files[0];
+            const item = document.createElement('div');
+            item.className = 'photo-preview-item';
+            const img = document.createElement('img');
+            const url = URL.createObjectURL(file);
+            urls.push(url);
+            img.src = url;
+            img.alt = file.name;
+            img.onerror = () => {
+              URL.revokeObjectURL(url);
+              const reader = new FileReader();
+              reader.onload = () => {
+                img.src = reader.result;
+              };
+              reader.readAsDataURL(file);
+            };
+            const caption = document.createElement('span');
+            caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+            item.appendChild(img);
+            item.appendChild(caption);
+            container.appendChild(item);
+          }
+          previewUrls.set(fieldName, urls);
+        }
+
+        function handleFileSelection(fieldName, fileList, mode) {
+          const files = fileList ? Array.from(fileList) : [];
+          selectedFiles.set(fieldName, files);
+          renderPreview(fieldName, files, mode);
+          updateFilesSummary();
+          recordDebug('files-updated', {
+            field: fieldName,
+            count: files.length,
+            totalBytes: files.reduce((sum, file) => sum + (file.size || 0), 0),
+            names: files.map((file) => file.name),
+          });
+        }
+
+        function setupAutoResizeTextareas() {
+          const textareas = document.querySelectorAll('textarea[data-auto-resize]');
+          if (!textareas.length) return;
+          const resize = (textarea) => {
+            textarea.style.height = 'auto';
+            const newHeight = Math.max(textarea.scrollHeight, 44);
+            textarea.style.height = newHeight + 'px';
+          };
+          textareas.forEach((textarea) => {
+            textarea.style.overflow = 'hidden';
+            resize(textarea);
+            textarea.addEventListener('input', () => resize(textarea));
+            textarea.addEventListener('change', () => resize(textarea));
+          });
+        }
+
+        function setupDateTimeTextInputs() {
+          document.querySelectorAll(DATETIME_TEXT_SELECTOR).forEach((input) => {
+            applyDateTimeTextBehavior(input);
+          });
+        }
+
+        function setupPartsTable() {
+          const table = document.querySelector('[data-parts-table]');
+          if (!table) return;
+          const rows = Array.from(table.querySelectorAll('.parts-row'));
+          const addButton = document.querySelector('[data-action="parts-add-row"]');
+          const removeButton = document.querySelector('[data-action="parts-remove-row"]');
+          const hiddenClass = 'is-hidden-row';
+
+          const enableRow = (row) => {
+            row.classList.remove(hiddenClass);
+            row.querySelectorAll('input, textarea').forEach((input) => {
+              input.disabled = false;
+            });
+          };
+
+          const disableRow = (row, clear = false) => {
+            row.classList.add(hiddenClass);
+            row.querySelectorAll('input, textarea').forEach((input) => {
+              if (clear) input.value = '';
+              input.disabled = true;
+            });
+          };
+
+          const refresh = () => {
+            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+            if (addButton) {
+              addButton.disabled = visibleRows.length >= rows.length;
+            }
+            if (removeButton) {
+              removeButton.disabled = visibleRows.length <= 1;
+            }
+          };
+
+          rows.forEach((row, index) => {
+            if (index === 0) {
+              enableRow(row);
+            } else if (
+              Array.from(row.querySelectorAll('input, textarea')).some((input) => input.value.trim().length)
+            ) {
+              enableRow(row);
+            } else {
+              disableRow(row, true);
+            }
+          });
+
+          refresh();
+
+          if (addButton) {
+            addButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const nextHidden = rows.find((row) => row.classList.contains(hiddenClass));
+              if (!nextHidden) return;
+              enableRow(nextHidden);
+              const firstInput = nextHidden.querySelector('input, textarea');
+              if (firstInput) firstInput.focus();
+              refresh();
+            });
+          }
+
+          if (removeButton) {
+            removeButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+              if (visibleRows.length <= 1) return;
+              const lastVisible = visibleRows[visibleRows.length - 1];
+              disableRow(lastVisible, true);
+              refresh();
+            });
+          }
+        }
+
+        function setupEmployees() {
+          const section = document.querySelector('[data-employees-section]');
+          if (!section) return;
+          ensureTimePresetList();
+
+          const listEl = section.querySelector('[data-employee-list]');
+          const template = section.querySelector('#employee-row-template');
+          const addButton = section.querySelector('[data-action="employee-add"]');
+          const summaryEl = section.querySelector('[data-employee-summary]');
+          const summaryTotalEl = summaryEl ? summaryEl.querySelector('[data-employee-total]') : null;
+          const summaryCountEl = summaryEl ? summaryEl.querySelector('[data-employee-count]') : null;
+
+          if (!listEl || !template) return;
+
+          const engineerNameInput = document.querySelector('#engineer-name');
+          const engineerDatetimeInput = document.querySelector('#engineer-datetime');
+          const customerDatetimeInput = document.querySelector('#customer-datetime');
+
+          const maxRows = Math.max(1, Number(section.dataset.employeeMax || '0') || 20);
+          const DEFAULT_SHIFT_MINUTES = 8 * 60;
+          const rowStates = new Map();
+          let suppressSummaryLog = false;
+
+          const signoffSync = {
+            name: { manual: false, syncedValue: '' },
+            datetime: { manual: false, syncedValue: '' },
+          };
+
+          const pad = (value) => (value < 10 ? '0' + value : String(value));
+
+          const formatIsoFromDate = (date) => {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+              return '';
+            }
+            return (
+              date.getFullYear() +
+              '-' +
+              pad(date.getMonth() + 1) +
+              '-' +
+              pad(date.getDate()) +
+              'T' +
+              pad(date.getHours()) +
+              ':' +
+              pad(date.getMinutes())
+            );
+          };
+
+          const parseLocalDateTime = (value) => {
+            if (typeof value !== 'string') return null;
+            const trimmed = value.trim();
+            if (!trimmed) return null;
+            const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(trimmed);
+            if (!match) return null;
+            const date = new Date(
+              Number(match[1]),
+              Number(match[2]) - 1,
+              Number(match[3]),
+              Number(match[4]),
+              Number(match[5]),
+              0,
+              0
+            );
+            if (Number.isNaN(date.getTime())) return null;
+            return date;
+          };
+
+          const nowLocalIso = () => formatIsoFromDate(new Date());
+          const formSessionStartIso = nowLocalIso();
+
+          const addMinutesToIso = (iso, minutes) => {
+            const base = parseLocalDateTime(iso);
+            if (!base) return '';
+            const delta = Number(minutes || 0);
+            if (Number.isNaN(delta)) return iso;
+            base.setMinutes(base.getMinutes() + delta);
+            return formatIsoFromDate(base);
+          };
+
+          const formatEmployeeDuration = (minutes) => {
+            if (!Number.isFinite(minutes) || minutes <= 0) return '0m';
+            const rounded = Math.round(minutes);
+            const hours = Math.floor(rounded / 60);
+            const mins = Math.max(0, rounded - hours * 60);
+            const parts = [];
+            if (hours) parts.push(hours + 'h');
+            if (mins) parts.push(mins + 'm');
+            return parts.length ? parts.join(' ') : '0m';
+          };
+
+          const determineBreakRequirement = (minutes) => {
+            if (!Number.isFinite(minutes) || minutes <= 0) {
+              return { code: 'UNKNOWN', minutes: 0, label: 'Pending (set arrival and departure)' };
+            }
+            if (minutes <= 6 * 60) {
+              return { code: 'NONE', minutes: 0, label: 'No mandatory break (<=6h)' };
+            }
+            if (minutes <= 9 * 60) {
+              return { code: 'MIN30', minutes: 30, label: '>=30m (6-9h, 2x15m allowed)' };
+            }
+            return { code: 'MIN45', minutes: 45, label: '>=45m (>9h)' };
+          };
+
+          const formatBreakStatsSummary = (stats) => {
+            if (!stats) return '';
+            const descriptors = [
+              { key: 'MIN45', label: '>=45m (>9h)' },
+              { key: 'MIN30', label: '>=30m (6-9h, 2x15m)' },
+              { key: 'NONE', label: 'no mandatory break (<=6h)' },
+            ];
+            const parts = [];
+            descriptors.forEach(({ key, label }) => {
+              const count = Number(stats[key] || 0);
+              if (count > 0) {
+                parts.push(count + ' x ' + label);
+              }
+            });
+            const pending = Number(stats.UNKNOWN || 0);
+            if (pending > 0 && parts.length) {
+              parts.push(pending + ' x pending');
+            }
+            return parts.join(', ');
+          };
+
+          const rowElements = () => Array.from(listEl.querySelectorAll('[data-employee-row]'));
+          const isPrimaryRow = (row) => row && row === rowElements()[0];
+
+          const ensureSignoffDefaults = () => {
+            const defaultIso = nowLocalIso();
+            if (engineerDatetimeInput && !engineerDatetimeInput.value) {
+              engineerDatetimeInput.value = defaultIso;
+              signoffSync.datetime.syncedValue = defaultIso;
+            }
+            if (customerDatetimeInput && !customerDatetimeInput.value) {
+              customerDatetimeInput.value = defaultIso;
+            }
+          };
+
+          ensureSignoffDefaults();
+
+          if (engineerNameInput) {
+            engineerNameInput.addEventListener('input', () => {
+              signoffSync.name.manual = true;
+            });
+          }
+          if (engineerDatetimeInput) {
+            engineerDatetimeInput.addEventListener('input', () => {
+              signoffSync.datetime.manual = true;
+            });
+          }
+
+          function setDateTimeValue(row, field, iso) {
+            const wrapper = row.querySelector('[data-datetime-field="' + field + '"]');
+            if (!wrapper) return;
+            const hidden = wrapper.querySelector('input[data-field="' + field + '"]');
+            const dateInput = wrapper.querySelector('input[data-datetime-part="date"]');
+            const timeInput = wrapper.querySelector('input[data-datetime-part="time"]');
+            const safeIso = iso || '';
+            if (hidden) hidden.value = safeIso;
+            const parts = safeIso.split('T');
+            if (dateInput) {
+              dateInput.value = parts[0] || '';
+            }
+            if (timeInput) {
+              const nextValue = parts[1] ? parts[1].slice(0, 5) : '';
+              timeInput.value = nextValue;
+              if (timeInput.dataset) {
+                timeInput.dataset.timeCommittedValue = (nextValue || '').trim();
+              }
+            }
+          }
+
+          function getDateTimePair(row, field) {
+            const wrapper = row.querySelector('[data-datetime-field="' + field + '"]');
+            if (!wrapper) return null;
+            return {
+              dateInput: wrapper.querySelector('input[data-datetime-part="date"]'),
+              timeInput: wrapper.querySelector('input[data-datetime-part="time"]'),
+              hiddenInput: wrapper.querySelector('input[data-field="' + field + '"]'),
+            };
+          }
+
+          function combineDateTimeValue(row, field) {
+            const pair = getDateTimePair(row, field);
+            if (!pair) return '';
+            const dateValue = pair.dateInput ? pair.dateInput.value.trim() : '';
+            const timeValue = pair.timeInput ? pair.timeInput.value.trim() : '';
+            const hasValidTime = TIME_VALUE_REGEX.test(timeValue);
+            const iso = dateValue && hasValidTime ? dateValue + 'T' + timeValue : '';
+            if (pair.hiddenInput) {
+              if (iso) {
+                pair.hiddenInput.value = iso;
+              } else if (!dateValue && !timeValue) {
+                pair.hiddenInput.value = '';
+              } else if (!hasValidTime) {
+                pair.hiddenInput.value = '';
+              }
+            }
+            return iso;
+          }
+
+          function updateRowDurationDisplay(row, state) {
+            const target = row.querySelector('[data-employee-duration]');
+            if (!target) return;
+            target.textContent =
+              'Working time: ' +
+              formatEmployeeDuration(state.durationMinutes) +
+              ' | Break: ' +
+              state.breakLabel;
+          }
+
+          const updateControlState = () => {
+            if (addButton) {
+              addButton.disabled = rowElements().length >= maxRows;
+            }
+          };
+
+          function renumberRows() {
+            rowElements().forEach((row, index) => {
+              row.dataset.index = String(index + 1);
+              const title = row.querySelector('[data-employee-title]');
+              if (title) {
+                title.textContent = 'Employee #' + (index + 1);
+              }
+              const setName = (selector, field) => {
+                const input = row.querySelector(selector);
+                if (input) {
+                  input.name = 'employees[' + index + '][' + field + ']';
+                }
+              };
+              setName('input[data-field="name"]', 'name');
+              setName('input[data-field="role"]', 'role');
+              setName('input[data-field="arrival"]', 'arrival');
+              setName('input[data-field="departure"]', 'departure');
+            });
+            updateControlState();
+          }
+
+          function updateSummary(reason) {
+            const summary = {
+              count: 0,
+              totalMinutes: 0,
+              totalBreakMinutes: 0,
+              breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+            };
+            rowElements().forEach((row) => {
+              const state = rowStates.get(row);
+              if (!state || !state.hasData) return;
+              summary.count += 1;
+              summary.totalMinutes += state.durationMinutes;
+              summary.totalBreakMinutes += state.breakRequiredMinutes;
+              if (summary.breakStats[state.breakCode] === undefined) {
+                summary.breakStats.UNKNOWN += 1;
+              } else {
+                summary.breakStats[state.breakCode] += 1;
+              }
+            });
+
+            if (summaryTotalEl) {
+              if (summary.count === 0) {
+                summaryTotalEl.textContent = 'Working time: 0m | Required breaks: pending';
+              } else {
+                summaryTotalEl.textContent =
+                  'Working time: ' +
+                  formatEmployeeDuration(summary.totalMinutes) +
+                  ' | Required breaks: ' +
+                  formatEmployeeDuration(summary.totalBreakMinutes);
+              }
+            }
+
+            if (summaryCountEl) {
+              if (summary.count === 0) {
+                summaryCountEl.textContent = 'No employees added yet.';
+              } else {
+                const base =
+                  summary.count === 1
+                    ? '1 employee recorded.'
+                    : summary.count + ' employees recorded.';
+                const breakSummary = formatBreakStatsSummary(summary.breakStats);
+                summaryCountEl.textContent = breakSummary ? base + ' ' + breakSummary : base;
+              }
+            }
+
+            if (!suppressSummaryLog) {
+              recordDebug('employee-summary', {
+                reason: reason || 'update',
+                totalMinutes: summary.totalMinutes,
+                totalBreakMinutes: summary.totalBreakMinutes,
+                breakStats: summary.breakStats,
+                count: summary.count,
+              });
+            }
+
+            return summary;
+          }
+
+          function syncEngineerSignoff(primaryState) {
+            if (!primaryState) return;
+            if (engineerNameInput && !signoffSync.name.manual && primaryState.name) {
+              engineerNameInput.value = primaryState.name;
+              signoffSync.name.syncedValue = primaryState.name;
+            }
+            if (engineerDatetimeInput && !signoffSync.datetime.manual) {
+              const candidate = primaryState.departure || primaryState.arrival || nowLocalIso();
+              if (candidate) {
+                engineerDatetimeInput.value = candidate;
+                signoffSync.datetime.syncedValue = candidate;
+              }
+            }
+          }
+
+          function updateRowState(row, reason, options = {}) {
+            const previous = rowStates.get(row) || {};
+            const indexLabel = row.dataset.index || '';
+            const nameInput = row.querySelector('input[data-field="name"]');
+            const roleInput = row.querySelector('input[data-field="role"]');
+
+            const name = nameInput ? nameInput.value.trim() : '';
+            const role = roleInput ? roleInput.value.trim() : '';
+            let arrivalIso = combineDateTimeValue(row, 'arrival');
+            let departureIso = combineDateTimeValue(row, 'departure');
+
+            const arrivalDate = parseLocalDateTime(arrivalIso);
+            let departureDate = parseLocalDateTime(departureIso);
+            let durationMinutes = 0;
+
+            const departurePair = getDateTimePair(row, 'departure');
+            const departureTimeInput = departurePair ? departurePair.timeInput : null;
+            const departureActive =
+              departureTimeInput && document.activeElement === departureTimeInput;
+            const departureRaw =
+              departureTimeInput && typeof departureTimeInput.value === 'string'
+                ? departureTimeInput.value.trim()
+                : '';
+            const departureValueValid = TIME_VALUE_REGEX.test(departureRaw);
+
+            if (arrivalDate && !departureDate) {
+              if (!(departureActive && !departureValueValid)) {
+                departureDate = new Date(arrivalDate.getTime() + 60 * 60000);
+                departureIso = formatIsoFromDate(departureDate);
+                setDateTimeValue(row, 'departure', departureIso);
+              }
+            }
+
+            if (arrivalDate && departureDate) {
+              durationMinutes = Math.round((departureDate.getTime() - arrivalDate.getTime()) / 60000);
+              if (durationMinutes <= 0) {
+                departureDate = new Date(arrivalDate.getTime() + 15 * 60000);
+                departureIso = formatIsoFromDate(departureDate);
+                setDateTimeValue(row, 'departure', departureIso);
+                durationMinutes = 15;
+              }
+            }
+
+            const breakInfo = determineBreakRequirement(durationMinutes);
+            const hasData = Boolean(name || role || arrivalIso || departureIso);
+
+            let syncedWithPrimary = previous.syncedWithPrimary || false;
+            if (options.markSynced === true) {
+              syncedWithPrimary = true;
+            } else if (reason !== 'primary-sync' && !options.preserveSyncFlag) {
+              syncedWithPrimary = false;
+            }
+
+            const state = {
+              hasData,
+              name,
+              role,
+              arrival: arrivalIso,
+              departure: departureIso,
+              durationMinutes,
+              breakCode: breakInfo.code,
+              breakRequiredMinutes: breakInfo.minutes,
+              breakLabel: breakInfo.label,
+              syncedWithPrimary,
+            };
+
+            updateRowDurationDisplay(row, state);
+            rowStates.set(row, state);
+
+            if (!suppressSummaryLog && options.logDebug !== false) {
+              recordDebug('employee-updated', {
+                index: indexLabel,
+                reason: reason || 'change',
+                hasData,
+                durationMinutes,
+                breakCode: breakInfo.code,
+                syncedWithPrimary,
+              });
+            }
+
+            if (isPrimaryRow(row)) {
+              if (!options.skipPropagation) {
+                propagatePrimarySchedule();
+              }
+              syncEngineerSignoff(state);
+            }
+
+            return state;
+          }
+
+          function propagatePrimarySchedule() {
+            const rows = rowElements();
+            if (!rows.length) return;
+            const primaryRow = rows[0];
+            const primaryState = rowStates.get(primaryRow);
+            if (!primaryState || !primaryState.arrival) return;
+
+            let summaryPending = false;
+            rows.slice(1).forEach((row) => {
+              const state = rowStates.get(row);
+              if (!state || !state.hasData || state.syncedWithPrimary) {
+                setDateTimeValue(row, 'arrival', primaryState.arrival);
+                setDateTimeValue(row, 'departure', primaryState.departure || '');
+                updateRowState(row, 'primary-sync', {
+                  markSynced: true,
+                  skipPropagation: true,
+                  logDebug: false,
+                  preserveSyncFlag: true,
+                });
+                summaryPending = true;
+              }
+            });
+
+            if (summaryPending) {
+              updateSummary('primary-sync');
+            }
+          }
+
+          function attachListeners(row) {
+            row
+              .querySelectorAll('input[data-field]:not([type="hidden"])')
+              .forEach((input) => {
+                input.addEventListener('input', () => {
+                  updateRowState(row, 'input');
+                  updateSummary('input');
+                });
+                input.addEventListener('change', () => {
+                  updateRowState(row, 'change');
+                  updateSummary('change');
+                });
+              });
+
+            ['arrival', 'departure'].forEach((field) => {
+              const pair = getDateTimePair(row, field);
+              if (!pair) return;
+              [pair.dateInput, pair.timeInput].forEach((input) => {
+                if (!input) return;
+                input.addEventListener('input', () => {
+                  updateRowState(row, 'datetime');
+                  updateSummary('datetime');
+                });
+                input.addEventListener('change', () => {
+                  updateRowState(row, 'datetime');
+                  updateSummary('datetime');
+                });
+              });
+            });
+
+            const removeBtn = row.querySelector('[data-action="employee-remove"]');
+            if (removeBtn) {
+              removeBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                recordDebug('employee-removed', { index: row.dataset.index });
+                rowStates.delete(row);
+                row.remove();
+                renumberRows();
+                updateSummary('remove');
+                propagatePrimarySchedule();
+                const primaryRow = rowElements()[0];
+                if (primaryRow) {
+                  const primaryState = rowStates.get(primaryRow);
+                  if (primaryState) {
+                    primaryState.syncedWithPrimary = false;
+                    rowStates.set(primaryRow, primaryState);
+                    syncEngineerSignoff(primaryState);
+                  }
+                }
+              });
+            }
+          }
+
+          function bindTimeShortcuts(row) {
+            if (!row) return;
+            row.querySelectorAll(TIME_INPUT_SELECTOR).forEach((input) => applyTimeInputBehavior(input));
+            if (row.dataset.timeShortcutsBound === '1') return;
+            row.dataset.timeShortcutsBound = '1';
+            row.addEventListener('click', (event) => {
+              const trigger = event.target.closest('[data-action="time-now"], [data-action="time-adjust"]');
+              if (!trigger) return;
+              event.preventDefault();
+              const wrapper = trigger.closest('[data-datetime-field]');
+              if (!wrapper) return;
+              const field = wrapper.dataset.datetimeField;
+              if (!field) return;
+              const pair = getDateTimePair(row, field);
+              if (!pair || !pair.timeInput) return;
+              if (trigger.dataset.action === 'time-now') {
+                const nowIso = nowLocalIso();
+                const dateValue = nowIso.slice(0, 10);
+                const timeValue = normalizeTimeInputValue(nowIso.slice(11, 16));
+                const iso = dateValue && timeValue ? dateValue + 'T' + timeValue : '';
+                if (iso) {
+                  setDateTimeValue(row, field, iso);
+                } else {
+                  if (pair.dateInput && !pair.dateInput.value) {
+                    pair.dateInput.value = dateValue;
+                  }
+                  pair.timeInput.value = timeValue;
+                  if (pair.timeInput.dataset) {
+                    pair.timeInput.dataset.timeCommittedValue = (timeValue || '').trim();
+                  }
+                }
+                const combinedIso = combineDateTimeValue(row, field) || iso;
+                updateRowState(row, 'time-now');
+                updateSummary('time-now');
+                recordDebug('employee-time-now', {
+                  index: row.dataset.index,
+                  field,
+                  value: combinedIso,
+                });
+                return;
+              }
+              if (trigger.dataset.action === 'time-adjust') {
+                const step = Number(trigger.dataset.step || 0);
+                if (!step) return;
+                let iso = combineDateTimeValue(row, field);
+                if (!iso) {
+                  const datePart =
+                    (pair.dateInput && pair.dateInput.value && pair.dateInput.value.trim()) ||
+                    nowLocalIso().slice(0, 10);
+                  const timePart =
+                    normalizeTimeInputValue(pair.timeInput.value) || nowLocalIso().slice(11, 16);
+                  iso = datePart + 'T' + timePart;
+                }
+                if (!iso) return;
+                const adjusted = addMinutesToIso(iso, step);
+                if (adjusted) {
+                  setDateTimeValue(row, field, adjusted);
+                  updateRowState(row, 'time-adjust');
+                  updateSummary('time-adjust');
+                  recordDebug('employee-time-adjust', {
+                    index: row.dataset.index,
+                    field,
+                    step,
+                    value: adjusted,
+                  });
+                }
+              }
+            });
+          }
+
+          function addRow(data = {}, options = {}) {
+            const existing = rowElements().length;
+            if (existing >= maxRows) {
+              if (!options.silent) {
+                recordDebug('employee-add-blocked', { reason: 'max-reached', max: maxRows });
+              }
+              return null;
+            }
+
+            const fragment = template.content.cloneNode(true);
+            const row = fragment.querySelector('[data-employee-row]');
+            listEl.appendChild(fragment);
+            renumberRows();
+
+            const isPrimary = isPrimaryRow(row);
+            const primaryState = rowStates.get(rowElements()[0]) || null;
+
+            const nameInput = row.querySelector('input[data-field="name"]');
+            if (nameInput) {
+              nameInput.value = data.name ? String(data.name) : '';
+            }
+            const roleInput = row.querySelector('input[data-field="role"]');
+            if (roleInput) {
+              roleInput.value = data.role ? String(data.role) : '';
+            }
+
+            const arrivalValue =
+              (data.arrival ? String(data.arrival) : '') ||
+              options.prefillArrival ||
+              (isPrimary ? '' : primaryState?.arrival) ||
+              '';
+
+            const departureValue =
+              (data.departure ? String(data.departure) : '') ||
+              options.prefillDeparture ||
+              (isPrimary ? '' : primaryState?.departure) ||
+              (arrivalValue ? addMinutesToIso(arrivalValue, DEFAULT_SHIFT_MINUTES) : '');
+
+            setDateTimeValue(row, 'arrival', arrivalValue);
+            setDateTimeValue(row, 'departure', departureValue);
+
+            bindTimeShortcuts(row);
+
+            attachListeners(row);
+
+            const state = updateRowState(
+              row,
+              options.summaryTrigger || (isPrimary ? 'init' : 'seed'),
+              {
+                markSynced: !isPrimary,
+                skipPropagation: !isPrimary && Boolean(primaryState),
+                logDebug: !options.silent,
+              },
+            );
+
+            const summaryReason =
+              options.summaryTrigger ||
+              (state.hasData ? (isPrimary ? 'init' : 'seed') : 'refresh');
+            updateSummary(summaryReason);
+
+            if (!options.silent) {
+              recordDebug('employee-added', {
+                index: row.dataset.index,
+                seeded: Boolean(options.summaryTrigger === 'seed'),
+                syncedWithPrimary: !isPrimary,
+              });
+              const focusTarget = row.querySelector('input[data-field="name"]');
+              if (focusTarget) {
+                focusTarget.focus();
+              }
+            }
+
+            return row;
+          }
+
+          let seedEmployees = [];
+          if (section.dataset.employeesSeed) {
+            try {
+              const parsed = JSON.parse(section.dataset.employeesSeed);
+              if (Array.isArray(parsed)) {
+                seedEmployees = parsed.slice(0, maxRows);
+              }
+            } catch (err) {
+              recordDebug('employee-seed-error', { message: err.message });
+            }
+          }
+
+          suppressSummaryLog = true;
+          if (seedEmployees.length) {
+            seedEmployees.forEach((employee) => {
+              addRow(
+                {
+                  name: employee.name,
+                  role: employee.role,
+                  arrival: employee.arrival,
+                  departure: employee.departure,
+                },
+                { silent: true, summaryTrigger: 'seed' },
+              );
+            });
+          } else {
+            addRow(
+              {},
+              {
+                silent: true,
+                summaryTrigger: 'init',
+              },
+            );
+          }
+          suppressSummaryLog = false;
+          updateSummary('init');
+          propagatePrimarySchedule();
+          const primaryRow = rowElements()[0];
+          if (primaryRow) {
+            const primaryState = rowStates.get(primaryRow);
+            if (primaryState) {
+              primaryState.syncedWithPrimary = false;
+              rowStates.set(primaryRow, primaryState);
+              syncEngineerSignoff(primaryState);
+            }
+          }
+
+          if (addButton) {
+            addButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              const primaryState = rowStates.get(rowElements()[0]);
+              const baseArrival = (primaryState && primaryState.arrival) || formSessionStartIso;
+              const row = addRow(
+                {},
+                {
+                  prefillArrival: baseArrival,
+                  prefillDeparture:
+                    (primaryState && primaryState.departure) ||
+                    addMinutesToIso(baseArrival, DEFAULT_SHIFT_MINUTES),
+                  summaryTrigger: 'add',
+                },
+              );
+              if (row && primaryState && primaryState.arrival) {
+                recordDebug('employee-arrival-prefill', {
+                  index: row.dataset.index,
+                  value: primaryState.arrival,
+                });
+              }
+            });
+          }
+
+        }
+
+        function setupPhotoUploads() {
+          document.querySelectorAll('[data-photo-preview]').forEach((container) => {
+            const fieldName = container.dataset.photoPreview;
+            if (!fieldName) return;
+            const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+            if (!input) return;
+            const mode = container.dataset.photoMode || (input.multiple ? 'multi' : 'single');
+            handleFileSelection(fieldName, input.files, mode);
+            input.addEventListener('change', () => handleFileSelection(fieldName, input.files, mode));
+          });
+        }
+
+        function setupSignaturePads() {
+          const ratio = window.devicePixelRatio || 1;
+          let overlay = document.querySelector('[data-signature-overlay]');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.dataset.signatureOverlay = 'true';
+            overlay.className = 'signature-overlay';
+            overlay.hidden = true;
+            overlay.innerHTML =
+              '<div class="signature-overlay__panel">' +
+              '<div class="signature-overlay__actions">' +
+              '<span>Draw signature</span>' +
+              '<span class="spacer"></span>' +
+              '<button type="button" class="secondary" data-overlay-clear>Clear</button>' +
+              '<button type="button" class="secondary" data-overlay-cancel>Cancel</button>' +
+              '<button type="button" class="primary" data-overlay-apply>Apply</button>' +
+              '</div>' +
+              '<canvas data-overlay-canvas></canvas>' +
+              '</div>';
+            document.body.appendChild(overlay);
+          }
+
+          const overlayCanvas = overlay.querySelector('[data-overlay-canvas]');
+          const overlayCtx = overlayCanvas.getContext('2d');
+          const overlayApply = overlay.querySelector('[data-overlay-apply]');
+          const overlayCancel = overlay.querySelector('[data-overlay-cancel]');
+          const overlayClear = overlay.querySelector('[data-overlay-clear]');
+
+          const overlayState = {
+            active: false,
+            targetPad: null,
+            hiddenInput: null,
+            sampleText: '',
+            drawing: false,
+          };
+
+          const openOverlay = (pad, hiddenInput, sampleText) => {
+            overlayState.active = true;
+            overlayState.targetPad = pad;
+            overlayState.hiddenInput = hiddenInput;
+            overlayState.sampleText = sampleText || '';
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+
+            const resizeOverlayCanvas = () => {
+              const w = Math.max(overlay.clientWidth - 32, 320);
+              const h = Math.max(overlay.clientHeight - 96, 240);
+              overlayCanvas.width = w * ratio;
+              overlayCanvas.height = h * ratio;
+              overlayCanvas.style.width = w + 'px';
+              overlayCanvas.style.height = h + 'px';
+              overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+              overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+              overlayCtx.scale(ratio, ratio);
+              overlayCtx.lineCap = 'round';
+              overlayCtx.lineJoin = 'round';
+              overlayCtx.lineWidth = 2.5;
+              overlayCtx.strokeStyle = '#1f2937';
+              overlayCtx.fillStyle = '#1f2937';
+
+              if (hiddenInput.value) {
+                const img = new Image();
+                img.onload = () => {
+                  overlayCtx.drawImage(img, 0, 0, w, h);
+                };
+                img.src = hiddenInput.value;
+              } else if (sampleText) {
+                overlayCtx.font = '28px "Segoe Script", cursive';
+                overlayCtx.fillText(sampleText, 24, h / 2 + 10);
+              }
+            };
+
+            resizeOverlayCanvas();
+            window.addEventListener('resize', resizeOverlayCanvas, { once: true });
+          };
+
+          const closeOverlay = () => {
+            overlayState.active = false;
+            overlayState.targetPad = null;
+            overlayState.hiddenInput = null;
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+          };
+
+          let overlayDrawing = false;
+          const overlayGetPoint = (event) => {
+            const rect = overlayCanvas.getBoundingClientRect();
+            return {
+              x: (event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0) - rect.left,
+              y: (event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0) - rect.top,
+            };
+          };
+
+          overlayCanvas.addEventListener('pointerdown', (event) => {
+            if (!overlayState.active) return;
+            event.preventDefault();
+            overlayCanvas.setPointerCapture(event.pointerId);
+            overlayDrawing = true;
+            const { x, y } = overlayGetPoint(event);
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(x, y);
+          });
+          overlayCanvas.addEventListener('pointermove', (event) => {
+            if (!overlayDrawing) return;
+            event.preventDefault();
+            const { x, y } = overlayGetPoint(event);
+            overlayCtx.lineTo(x, y);
+            overlayCtx.stroke();
+          });
+          const overlayFinish = (event) => {
+            if (!overlayDrawing) return;
+            event.preventDefault();
+            try {
+              overlayCanvas.releasePointerCapture(event.pointerId);
+            } catch (err) {}
+            overlayDrawing = false;
+            overlayCtx.closePath();
+          };
+          overlayCanvas.addEventListener('pointerup', overlayFinish);
+          overlayCanvas.addEventListener('pointerleave', overlayFinish);
+          overlayCanvas.addEventListener('pointercancel', overlayFinish);
+
+          overlayClear.addEventListener('click', (event) => {
+            event.preventDefault();
+            overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            overlayCtx.scale(ratio, ratio);
+            overlayCtx.lineCap = 'round';
+            overlayCtx.lineJoin = 'round';
+            overlayCtx.lineWidth = 2.5;
+            overlayCtx.strokeStyle = '#1f2937';
+            overlayCtx.fillStyle = '#1f2937';
+          });
+
+          overlayCancel.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeOverlay();
+          });
+
+          overlayApply.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (!overlayState.active || !overlayState.targetPad || !overlayState.hiddenInput) {
+              closeOverlay();
+              return;
+            }
+            const dataUrl = overlayCanvas.toDataURL('image/png');
+            overlayState.hiddenInput.value = dataUrl;
+            const targetCanvas = overlayState.targetPad.querySelector('canvas');
+            const targetCtx = targetCanvas.getContext('2d');
+            const wrapper = overlayState.targetPad.querySelector('.signature-canvas-wrapper');
+            const w = wrapper.clientWidth || 340;
+            const h = wrapper.clientHeight || 160;
+            const targetRatio = window.devicePixelRatio || 1;
+            targetCanvas.width = w * targetRatio;
+            targetCanvas.height = h * targetRatio;
+            targetCanvas.style.width = w + 'px';
+            targetCanvas.style.height = h + 'px';
+            targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+            targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+            targetCtx.scale(targetRatio, targetRatio);
+            const img = new Image();
+            img.onload = () => {
+              targetCtx.drawImage(img, 0, 0, w, h);
+            };
+            img.src = dataUrl;
+            closeOverlay();
+          });
+
+          document.querySelectorAll('.signature-pad').forEach((pad) => {
+            const canvas = pad.querySelector('canvas');
+            const hiddenInput = pad.querySelector('input[type="hidden"]');
+            const clearButton = pad.querySelector('.signature-clear');
+            const fullscreenButton = pad.querySelector('.signature-fullscreen');
+            const sampleText = pad.dataset.sample || '';
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            let sampleActive = false;
+            let canvasWidth = 0;
+            let canvasHeight = 0;
+
+            canvas.style.touchAction = 'none';
+
+            const setPenDefaults = () => {
+              ctx.setTransform(1, 0, 0, 1, 0, 0);
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              ctx.scale(ratio, ratio);
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              ctx.lineWidth = 2.5;
+              ctx.strokeStyle = '#1f2937';
+              ctx.fillStyle = '#1f2937';
+            };
+
+            const syncHiddenValue = () => {
+              try {
+                hiddenInput.value = canvas.toDataURL('image/png');
+              } catch (err) {
+                hiddenInput.value = '';
+              }
+            };
+
+            const drawFromDataUrl = (dataUrl) => {
+              if (!dataUrl || !dataUrl.startsWith('data:image/')) return;
+              const img = new Image();
+              img.onload = () => {
+                setPenDefaults();
+                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+              };
+              img.src = dataUrl;
+            };
+
+            const renderSample = () => {
+              if (!sampleText) return;
+              setPenDefaults();
+              ctx.font = '28px "Segoe Script", cursive';
+              ctx.fillText(sampleText, 24, canvasHeight / 2 + 10);
+              sampleActive = true;
+              syncHiddenValue();
+            };
+
+            const resizeCanvas = () => {
+              const wrapper = pad.querySelector('.signature-canvas-wrapper');
+              canvasWidth = wrapper.clientWidth || 340;
+              canvasHeight = wrapper.clientHeight || 160;
+              canvas.width = canvasWidth * ratio;
+              canvas.height = canvasHeight * ratio;
+              canvas.style.width = canvasWidth + 'px';
+              canvas.style.height = canvasHeight + 'px';
+              setPenDefaults();
+              if (sampleActive) {
+                renderSample();
+                return;
+              }
+              if (hiddenInput.value) {
+                drawFromDataUrl(hiddenInput.value);
+              } else if (sampleText) {
+                renderSample();
+              }
+            };
+
+            resizeCanvas();
+            window.addEventListener('resize', () => {
+              const previousValue = hiddenInput.value;
+              const wasSample = sampleActive;
+              resizeCanvas();
+              if (previousValue && !wasSample) {
+                drawFromDataUrl(previousValue);
+              } else if (wasSample) {
+                renderSample();
+              }
+            });
+
+            const getPoint = (event) => {
+              const rect = canvas.getBoundingClientRect();
+              return {
+                x: (event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0) - rect.left,
+                y: (event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0) - rect.top,
+              };
+            };
+
+            canvas.addEventListener('pointerdown', (event) => {
+              if (window.matchMedia('(max-width: 768px)').matches) {
+                event.preventDefault();
+                openOverlay(pad, hiddenInput, sampleText);
+                return;
+              }
+              event.preventDefault();
+              canvas.setPointerCapture(event.pointerId);
+              if (sampleActive) {
+                setPenDefaults();
+                hiddenInput.value = '';
+                sampleActive = false;
+              }
+              drawing = true;
+              const { x, y } = getPoint(event);
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+            });
+
+            canvas.addEventListener('pointermove', (event) => {
+              if (!drawing) return;
+              event.preventDefault();
+              const { x, y } = getPoint(event);
+              ctx.lineTo(x, y);
+              ctx.stroke();
+            });
+
+            const finishStroke = (event) => {
+              if (!drawing) return;
+              event.preventDefault();
+              try {
+                canvas.releasePointerCapture(event.pointerId);
+              } catch (err) {
+                // ignore
+              }
+              drawing = false;
+              ctx.closePath();
+              sampleActive = false;
+              syncHiddenValue();
+            };
+
+            canvas.addEventListener('pointerup', finishStroke);
+            canvas.addEventListener('pointerleave', finishStroke);
+            canvas.addEventListener('pointercancel', finishStroke);
+
+            clearButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              drawing = false;
+              sampleActive = false;
+              hiddenInput.value = '';
+              setPenDefaults();
+            });
+            syncHiddenValue();
+
+            if (fullscreenButton && overlay) {
+              fullscreenButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                openOverlay(pad, hiddenInput, sampleText);
+              });
+            }
+          });
+        }
+
+        function setupAutoSuggestions() {
+          const inputs = document.querySelectorAll('input[data-suggest-field]');
+          if (!inputs.length || typeof fetch !== 'function') return;
+
+          inputs.forEach((input) => {
+            const fieldName = input.dataset.suggestField;
+            if (!fieldName) return;
+            const listId = input.getAttribute('list');
+            if (!listId) return;
+            const dataList = document.getElementById(listId);
+            if (!dataList) return;
+
+            // локальные подсказки на основе уже введённых значений (включая восстановленный драфт)
+            const localSeeds = [];
+            const addLocalSeed = (val) => {
+              const next = (val || '').trim();
+              if (!next) return;
+              if (localSeeds.find((item) => item.toLowerCase() === next.toLowerCase())) return;
+              localSeeds.push(next);
+              // отправляем на сервер, чтобы подсказки были общими
+              if (next.length >= 2) {
+                const body = JSON.stringify({ field: fieldName, value: next });
+                fetch(buildAppUrl('suggest/save'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body,
+                }).catch(() => {});
+              }
+            };
+            if (input.value && input.value.trim()) {
+              addLocalSeed(input.value);
+            }
+
+            let lastQuery = '';
+            let pendingController = null;
+
+            const applySuggestions = (values) => {
+              dataList.innerHTML = '';
+              const combined = [...localSeeds, ...(Array.isArray(values) ? values : [])];
+              const seen = new Set();
+              combined.forEach((value) => {
+                const normalized = (value || '').trim();
+                if (!normalized) return;
+                const lower = normalized.toLowerCase();
+                if (seen.has(lower)) return;
+                seen.add(lower);
+                const option = document.createElement('option');
+                option.value = normalized;
+                dataList.appendChild(option);
+              });
+            };
+
+            const requestSuggestions = (rawValue) => {
+              const query = (rawValue || '').trim();
+              if (query === lastQuery) {
+                return;
+              }
+              lastQuery = query;
+              if (pendingController && typeof pendingController.abort === 'function') {
+                pendingController.abort();
+              }
+              pendingController =
+                typeof AbortController === 'function' ? new AbortController() : null;
+              const params =
+                '?field=' + encodeURIComponent(fieldName) + '&q=' + encodeURIComponent(query);
+              const init = pendingController ? { signal: pendingController.signal } : undefined;
+              fetch(buildAppUrl('suggest' + params), init)
+                .then((response) => (response.ok ? response.json() : null))
+                .then((payload) => {
+                  if (!payload || !Array.isArray(payload.suggestions)) {
+                    applySuggestions([]);
+                    return;
+                  }
+                  applySuggestions(payload.suggestions);
+                })
+                .catch((err) => {
+                  if (err && err.name === 'AbortError') {
+                    return;
+                  }
+                  console.warn('Suggestion lookup failed', err);
+                });
+            };
+
+            input.addEventListener('input', () => requestSuggestions(input.value));
+            input.addEventListener('focus', () => requestSuggestions(input.value));
+            ['change', 'blur'].forEach((eventName) => {
+              input.addEventListener(eventName, () => addLocalSeed(input.value));
+            });
+          });
+        }
+
+        if (debugToggleEl) {
+          let stored = null;
+          try {
+            stored = window.localStorage.getItem(DEBUG_KEY);
+          } catch (err) {
+            stored = null;
+          }
+          applyDebugState(stored === '1');
+          debugToggleEl.addEventListener('change', () => {
+            applyDebugState(debugToggleEl.checked);
+          });
+        } else {
+          applyDebugState(false);
+        }
+
+        setupAutoResizeTextareas();
+        setupPartsTable();
+        setupEmployees();
+        setupPhotoUploads();
+        setupSignaturePads();
+        setupDateTimeTextInputs();
+        setupAutoSuggestions();
+        updateFilesSummary();
+
+        formEl.addEventListener('submit', (event) => {
+          event.preventDefault();
+          if (statusEl) {
+            statusEl.textContent = 'Submitting...';
+          }
+          submitButton.classList.remove('is-success', 'is-error');
+          submitButton.classList.add('is-disabled');
+          submitButton.disabled = true;
+
+          const dateTimeSnapshots = Array.from(formEl.querySelectorAll(DATETIME_TEXT_SELECTOR)).map((input) => ({
+            input,
+            normalized: normalizeDateTimeText(input.value),
+          }));
+          const hasInvalidDateTimes = dateTimeSnapshots.some(({ input, normalized }) => {
+            const raw = input.value.trim();
+            if (raw && !normalized.iso) {
+              input.classList.add('is-invalid');
+              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              return true;
+            }
+            input.classList.remove('is-invalid');
+            input.setCustomValidity('');
+            return false;
+          });
+          if (hasInvalidDateTimes) {
+            submitButton.classList.remove('is-disabled');
+            submitButton.disabled = false;
+            if (statusEl) {
+              statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
+            }
+            return;
+          }
+          dateTimeSnapshots.forEach(({ input, normalized }) => {
+            input.dataset.displayValue = normalized.display;
+            input.value = normalized.iso;
+          });
+
+          const formData = new FormData(formEl);
+          dateTimeSnapshots.forEach(({ input, normalized }) => {
+            input.value = normalized.display;
+          });
+          if (debugState.enabled) {
+            formData.set('debug_mode', 'true');
+          } else {
+            formData.delete('debug_mode');
+          }
+
+          const totalBytes = Array.from(formData.values()).reduce((sum, value) => {
+            if (value instanceof File) {
+              return sum + (value.size || 0);
+            }
+            return sum;
+          }, 0);
+
+          showProgress(totalBytes);
+          debugState.timeline = [];
+          recordDebug('submit-start', {
+            totalFields: Array.from(formData.keys()).length,
+            totalUploadBytes: totalBytes,
+          });
+
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', buildAppUrl('submit'));
+
+          xhr.upload.onprogress = (event) => {
+            if (!event) return;
+            if (event.lengthComputable) {
+              const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+              setProgress(
+                percent,
+                'Uploading ' +
+                  percent +
+                  '% (' +
+                  formatBytes(event.loaded) +
+                  ' of ' +
+                  formatBytes(event.total) +
+                  ')'
+              );
+              recordDebug('upload-progress', {
+                lengthComputable: true,
+                loaded: event.loaded,
+                total: event.total,
+                percent,
+              });
+            } else {
+              setProgress(15, 'Uploading...');
+              recordDebug('upload-progress', {
+                lengthComputable: false,
+                loaded: event.loaded || 0,
+              });
+            }
+          };
+
+          const resetSubmitState = () => {
+            submitButton.disabled = false;
+            submitButton.classList.remove('is-disabled');
+          };
+
+          xhr.onerror = () => {
+            recordDebug('submit-error', { type: 'network' });
+            submitButton.classList.add('is-error');
+            if (statusEl) {
+              statusEl.textContent = 'Network error during submission.';
+            }
+            hideProgress();
+            resetSubmitState();
+          };
+
+          xhr.ontimeout = () => {
+            recordDebug('submit-error', { type: 'timeout' });
+            submitButton.classList.add('is-error');
+            if (statusEl) {
+              statusEl.textContent = 'Submission timed out.';
+            }
+            hideProgress();
+            resetSubmitState();
+          };
+
+          xhr.onload = () => {
+            let payload = null;
+            let parseError = null;
+            if (xhr.responseText) {
+              try {
+                payload = JSON.parse(xhr.responseText);
+              } catch (err) {
+                parseError = err.message;
+              }
+            }
+            recordDebug('submit-complete', {
+              status: xhr.status,
+              payload,
+              parseError,
+            });
+
+            const success =
+              xhr.status >= 200 &&
+              xhr.status < 300 &&
+              payload &&
+              payload.ok &&
+              typeof payload.url === 'string';
+
+            if (success) {
+              submitButton.classList.add('is-success');
+              if (statusEl) {
+                statusEl.textContent = 'Download starting...';
+              }
+              setProgress(100, 'Upload complete');
+              setTimeout(() => {
+                hideProgress();
+              const downloadUrl = new URL(payload.url || '', window.location.href).toString();
+              window.location.href = downloadUrl;
+              }, 200);
+            } else {
+              submitButton.classList.add('is-error');
+              const message =
+                (payload && (payload.error || payload.message)) ||
+                'Submission failed (status ' + xhr.status + ')';
+              if (statusEl) {
+                statusEl.textContent = message;
+              }
+              hideProgress();
+            }
+
+            resetSubmitState();
+          };
+
+          xhr.send(formData);
+        });
+      })();
+    </script>
+  </body>
+</html>

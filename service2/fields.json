@@ -1,0 +1,495 @@
+{
+  "templatePath": "./public/form-template1.pdf",
+  "extractedAt": "2025-10-13T10:50:36.550Z",
+  "fieldCount": 122,
+  "fields": [
+    {
+      "name": "end_customer_name",
+      "type": "text"
+    },
+    {
+      "name": "site_location",
+      "type": "text"
+    },
+    {
+      "name": "led_display_model",
+      "type": "text"
+    },
+    {
+      "name": "batch_number",
+      "type": "text"
+    },
+    {
+      "name": "date_of_service",
+      "type": "text"
+    },
+    {
+      "name": "service_company_name",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_1",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_1",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_2",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_2",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_3",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_3",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_4",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_4",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_5",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_5",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_6",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_6",
+      "type": "text"
+    },
+    {
+      "name": "led_complete_7",
+      "type": "checkbox"
+    },
+    {
+      "name": "led_notes_7",
+      "type": "text"
+    },
+    {
+      "name": "control_complete_1",
+      "type": "checkbox"
+    },
+    {
+      "name": "control_notes_1",
+      "type": "text"
+    },
+    {
+      "name": "control_complete_2",
+      "type": "checkbox"
+    },
+    {
+      "name": "control_notes_2",
+      "type": "text"
+    },
+    {
+      "name": "control_complete_3",
+      "type": "checkbox"
+    },
+    {
+      "name": "control_notes_3",
+      "type": "text"
+    },
+    {
+      "name": "control_complete_4",
+      "type": "checkbox"
+    },
+    {
+      "name": "control_notes_4",
+      "type": "text"
+    },
+    {
+      "name": "control_complete_5",
+      "type": "checkbox"
+    },
+    {
+      "name": "control_notes_5",
+      "type": "text"
+    },
+    {
+      "name": "spares_complete_1",
+      "type": "checkbox"
+    },
+    {
+      "name": "spares_notes_1",
+      "type": "text"
+    },
+    {
+      "name": "spares_complete_2",
+      "type": "checkbox"
+    },
+    {
+      "name": "spares_notes_2",
+      "type": "text"
+    },
+    {
+      "name": "general_notes",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_1",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_1",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_1",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_1",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_1",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_2",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_2",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_2",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_2",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_2",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_3",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_3",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_3",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_3",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_3",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_4",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_4",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_4",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_4",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_4",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_5",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_5",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_5",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_5",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_5",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_6",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_6",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_6",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_6",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_6",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_7",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_7",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_7",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_7",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_7",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_8",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_8",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_8",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_8",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_8",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_9",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_9",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_9",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_9",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_9",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_10",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_10",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_10",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_10",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_10",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_11",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_11",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_11",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_11",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_11",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_12",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_12",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_12",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_12",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_12",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_13",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_13",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_13",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_13",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_13",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_14",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_14",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_14",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_14",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_14",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_desc_15",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_part_15",
+      "type": "text"
+    },
+    {
+      "name": "parts_removed_serial_15",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_part_15",
+      "type": "text"
+    },
+    {
+      "name": "parts_used_serial_15",
+      "type": "text"
+    },
+    {
+      "name": "signoff_complete_1",
+      "type": "checkbox"
+    },
+    {
+      "name": "signoff_notes_1",
+      "type": "text"
+    },
+    {
+      "name": "signoff_complete_2",
+      "type": "checkbox"
+    },
+    {
+      "name": "signoff_notes_2",
+      "type": "text"
+    },
+    {
+      "name": "engineer_company",
+      "type": "text"
+    },
+    {
+      "name": "engineer_datetime",
+      "type": "text"
+    },
+    {
+      "name": "engineer_name",
+      "type": "text"
+    },
+    {
+      "name": "customer_company",
+      "type": "text"
+    },
+    {
+      "name": "customer_datetime",
+      "type": "text"
+    },
+    {
+      "name": "customer_name",
+      "type": "text"
+    },
+    {
+      "name": "engineer_signature",
+      "type": "text"
+    },
+    {
+      "name": "customer_signature",
+      "type": "text"
+    }
+  ]
+}
