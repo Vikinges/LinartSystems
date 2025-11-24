@@ -608,6 +608,17 @@ const SUGGESTION_FIELDS = new Set([
   'employee_role',
 ]);
 const MIN_SUGGESTION_LENGTH = 2;
+const DEFAULT_SUGGESTIONS = {
+  end_customer_name: ['Mercedes-Benz AG', 'Siemens'],
+  site_location: ['Flughafen Berlin Brandenburg', 'Munich Airport'],
+  service_company_name: ['Sharp / NEC LED Solution Center'],
+  engineer_company: ['Sharp / NEC LED Solution Center'],
+  engineer_name: ['Ivan Technician', 'Ulrich Maurer'],
+  customer_company: ['Mercedes-Benz AG'],
+  customer_name: ['Anna Schneider'],
+  employee_name: ['Ivan Technician', 'Ulrich Maurer'],
+  employee_role: ['Engineer', 'Service tech'],
+};
 const MAX_SUGGESTIONS_PER_FIELD = 12;
 
 function getSeedSuggestions(fieldName) {
@@ -683,6 +694,24 @@ function loadSuggestionStore() {
       if (filtered.length) {
         normalized.suggestions[field] = filtered.slice(0, MAX_SUGGESTIONS_PER_FIELD);
       }
+    }
+  }
+  // merge defaults so подсказки есть даже без прошлых отправок
+  for (const [field, values] of Object.entries(DEFAULT_SUGGESTIONS)) {
+    const existing = normalized.suggestions[field] || [];
+    const combined = [...values, ...existing]
+      .map((entry) => normalizeSuggestionValue(entry))
+      .filter((entry) => entry.length >= MIN_SUGGESTION_LENGTH);
+    if (combined.length) {
+      const deduped = [];
+      const seen = new Set();
+      combined.forEach((val) => {
+        const lower = val.toLowerCase();
+        if (seen.has(lower)) return;
+        seen.add(lower);
+        deduped.push(val);
+      });
+      normalized.suggestions[field] = deduped.slice(0, MAX_SUGGESTIONS_PER_FIELD);
     }
   }
   return normalized;
