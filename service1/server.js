@@ -2567,7 +2567,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   });
   cursorY -= detailHeight * detailRows + 20;
 
-  const signatureHeight = 130;
+  const signatureHeight = 180;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
@@ -6713,17 +6713,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
             const applySuggestions = (values) => {
               dataList.innerHTML = '';
-              localSeeds.forEach((value) => {
+              const combined = [...localSeeds, ...(Array.isArray(values) ? values : [])];
+              const seen = new Set();
+              combined.forEach((value) => {
+                const normalized = (value || '').trim();
+                if (!normalized) return;
+                const lower = normalized.toLowerCase();
+                if (seen.has(lower)) return;
+                seen.add(lower);
                 const option = document.createElement('option');
-                option.value = value;
-                dataList.appendChild(option);
-              });
-              if (!Array.isArray(values) || !values.length) {
-                return;
-              }
-              values.forEach((value) => {
-                const option = document.createElement('option');
-                option.value = value;
+                option.value = normalized;
                 dataList.appendChild(option);
               });
             };
