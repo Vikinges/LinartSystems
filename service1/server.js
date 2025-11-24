@@ -2495,7 +2495,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
   ];
   const detailRows = engineerDetails.length;
-  const detailHeight = 28;
+  const detailHeight = 34;
   const detailHeading =
     ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
       ? 'Sign-off details (cont.)'
@@ -2521,12 +2521,12 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     page.drawText(detail.label, {
       x: engineerRect.x,
-      y: engineerRect.y + engineerRect.height + 6,
+      y: engineerRect.y + engineerRect.height + 10,
       size: 9,
       font,
       color: headingColor,
     });
-    drawCenteredTextBlock(page, detail.value, font, engineerRect, { fontSize: 10 });
+    drawCenteredTextBlock(page, detail.value, font, engineerRect, { fontSize: 10, paddingY: 6, align: 'left' });
 
     const customer = customerDetails[index];
     const customerRect = {
@@ -2546,18 +2546,18 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     page.drawText(customer.label, {
       x: customerRect.x,
-      y: customerRect.y + customerRect.height + 6,
+      y: customerRect.y + customerRect.height + 10,
       size: 9,
       font,
       color: headingColor,
     });
-    drawCenteredTextBlock(page, customer.value, font, customerRect, { fontSize: 10 });
+    drawCenteredTextBlock(page, customer.value, font, customerRect, { fontSize: 10, paddingY: 6, align: 'left' });
   });
   cursorY -= detailHeight * detailRows + 20;
 
-  const signatureHeight = 90;
+  const signatureHeight = 130;
   const signatureHeading =
-    ensureSpace(signatureHeight + 60, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
+    ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
   const signatureWidth = columnWidth;
   const signatureBoxes = [
