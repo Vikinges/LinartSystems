@@ -1507,7 +1507,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
       </div>
     </div>
   </section>
-    <script src="/vendor/pdfjs/pdf.min.js"></script>
+    <script src="vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -1974,7 +1974,7 @@ Please schedule follow-up for cabinet C4 fan swap.</textarea>
         const pdfjsLib =
           (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
         }
         const adminUiState = {
           previewTemplateId: null,
