@@ -2680,8 +2680,8 @@ function generateIndexHtml() {
 ]);
 
   const signatureSamples = new Map([
-    ['engineer_signature', 'Ivan Technician'],
-    ['customer_signature', 'Anna Schneider'],
+    ['engineer_signature', ''],
+    ['customer_signature', ''],
   ]);
   demoValues.set('control_notes_3', '');
 
