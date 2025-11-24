@@ -2834,7 +2834,10 @@ ${rows.join('\n')}
     return `        <div class="signature-pad" data-field="${escapeHtml(descriptor.requestName)}" data-sample="${escapeHtml(sample)}">
           <div class="signature-pad__label">
             <span>${escapeHtml(label)}</span>
-            <button type="button" class="signature-clear">Clear</button>
+            <div class="signature-pad__actions">
+              <button type="button" class="signature-fullscreen">Fullscreen</button>
+              <button type="button" class="signature-clear">Clear</button>
+            </div>
           </div>
           <div class="signature-canvas-wrapper">
             <canvas aria-label="${escapeHtml(label)} signature area"></canvas>
@@ -3372,6 +3375,72 @@ ${rows.join('\n')}
         touch-action: none;
         background: white;
         border-radius: 8px;
+      }
+      .signature-fullscreen {
+        margin-left: 0.5rem;
+        border: none;
+        background: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        padding: 0;
+      }
+      .signature-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.65);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        z-index: 2000;
+      }
+      .signature-overlay[hidden] {
+        display: none;
+      }
+      .signature-overlay__panel {
+        width: min(960px, 100%);
+        height: min(80vh, 700px);
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+        display: flex;
+        flex-direction: column;
+        padding: 0.75rem;
+      }
+      .signature-overlay__actions {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: #1f2a5b;
+      }
+      .signature-overlay__actions .spacer {
+        flex: 1;
+      }
+      .signature-overlay__actions button {
+        border: none;
+        border-radius: 8px;
+        padding: 0.5rem 0.9rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .signature-overlay__actions .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+      .signature-overlay__actions .primary {
+        background: #2563eb;
+        color: #fff;
+      }
+      .signature-overlay canvas {
+        flex: 1;
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 10px;
+        background: #fff;
+        touch-action: none;
       }
       .footer-actions {
         display: flex;
@@ -6294,11 +6363,178 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         function setupSignaturePads() {
           const ratio = window.devicePixelRatio || 1;
+          let overlay = document.querySelector('[data-signature-overlay]');
+          if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.dataset.signatureOverlay = 'true';
+            overlay.className = 'signature-overlay';
+            overlay.hidden = true;
+            overlay.innerHTML = `
+              <div class="signature-overlay__panel">
+                <div class="signature-overlay__actions">
+                  <span>Draw signature</span>
+                  <span class="spacer"></span>
+                  <button type="button" class="secondary" data-overlay-clear>Clear</button>
+                  <button type="button" class="secondary" data-overlay-cancel>Cancel</button>
+                  <button type="button" class="primary" data-overlay-apply>Apply</button>
+                </div>
+                <canvas data-overlay-canvas></canvas>
+              </div>
+            `;
+            document.body.appendChild(overlay);
+          }
+
+          const overlayCanvas = overlay.querySelector('[data-overlay-canvas]');
+          const overlayCtx = overlayCanvas.getContext('2d');
+          const overlayApply = overlay.querySelector('[data-overlay-apply]');
+          const overlayCancel = overlay.querySelector('[data-overlay-cancel]');
+          const overlayClear = overlay.querySelector('[data-overlay-clear]');
+
+          const overlayState = {
+            active: false,
+            targetPad: null,
+            hiddenInput: null,
+            sampleText: '',
+            drawing: false,
+          };
+
+          const openOverlay = (pad, hiddenInput, sampleText) => {
+            overlayState.active = true;
+            overlayState.targetPad = pad;
+            overlayState.hiddenInput = hiddenInput;
+            overlayState.sampleText = sampleText || '';
+            overlay.hidden = false;
+            document.body.style.overflow = 'hidden';
+
+            const resizeOverlayCanvas = () => {
+              const rect = overlayCanvas.getBoundingClientRect();
+              const w = Math.max(overlay.clientWidth - 32, 320);
+              const h = Math.max(overlay.clientHeight - 96, 240);
+              overlayCanvas.width = w * ratio;
+              overlayCanvas.height = h * ratio;
+              overlayCanvas.style.width = w + 'px';
+              overlayCanvas.style.height = h + 'px';
+              overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+              overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+              overlayCtx.scale(ratio, ratio);
+              overlayCtx.lineCap = 'round';
+              overlayCtx.lineJoin = 'round';
+              overlayCtx.lineWidth = 2.5;
+              overlayCtx.strokeStyle = '#1f2937';
+              overlayCtx.fillStyle = '#1f2937';
+
+              if (hiddenInput.value) {
+                const img = new Image();
+                img.onload = () => {
+                  overlayCtx.drawImage(img, 0, 0, w, h);
+                };
+                img.src = hiddenInput.value;
+              } else if (sampleText) {
+                overlayCtx.font = '28px "Segoe Script", cursive';
+                overlayCtx.fillText(sampleText, 24, h / 2 + 10);
+              }
+            };
+
+            resizeOverlayCanvas();
+          };
+
+          const closeOverlay = () => {
+            overlayState.active = false;
+            overlayState.targetPad = null;
+            overlayState.hiddenInput = null;
+            overlay.hidden = true;
+            document.body.style.overflow = '';
+          };
+
+          let overlayDrawing = false;
+          const overlayGetPoint = (event) => {
+            const rect = overlayCanvas.getBoundingClientRect();
+            return {
+              x: (event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0) - rect.left,
+              y: (event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0) - rect.top,
+            };
+          };
+
+          overlayCanvas.addEventListener('pointerdown', (event) => {
+            if (!overlayState.active) return;
+            event.preventDefault();
+            overlayCanvas.setPointerCapture(event.pointerId);
+            overlayDrawing = true;
+            const { x, y } = overlayGetPoint(event);
+            overlayCtx.beginPath();
+            overlayCtx.moveTo(x, y);
+          });
+          overlayCanvas.addEventListener('pointermove', (event) => {
+            if (!overlayDrawing) return;
+            event.preventDefault();
+            const { x, y } = overlayGetPoint(event);
+            overlayCtx.lineTo(x, y);
+            overlayCtx.stroke();
+          });
+          const overlayFinish = (event) => {
+            if (!overlayDrawing) return;
+            event.preventDefault();
+            try {
+              overlayCanvas.releasePointerCapture(event.pointerId);
+            } catch (err) {}
+            overlayDrawing = false;
+            overlayCtx.closePath();
+          };
+          overlayCanvas.addEventListener('pointerup', overlayFinish);
+          overlayCanvas.addEventListener('pointerleave', overlayFinish);
+          overlayCanvas.addEventListener('pointercancel', overlayFinish);
+
+          overlayClear.addEventListener('click', (event) => {
+            event.preventDefault();
+            overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            overlayCtx.scale(ratio, ratio);
+            overlayCtx.lineCap = 'round';
+            overlayCtx.lineJoin = 'round';
+            overlayCtx.lineWidth = 2.5;
+            overlayCtx.strokeStyle = '#1f2937';
+            overlayCtx.fillStyle = '#1f2937';
+          });
+
+          overlayCancel.addEventListener('click', (event) => {
+            event.preventDefault();
+            closeOverlay();
+          });
+
+          overlayApply.addEventListener('click', (event) => {
+            event.preventDefault();
+            if (!overlayState.active || !overlayState.targetPad || !overlayState.hiddenInput) {
+              closeOverlay();
+              return;
+            }
+            const dataUrl = overlayCanvas.toDataURL('image/png');
+            overlayState.hiddenInput.value = dataUrl;
+            const targetCanvas = overlayState.targetPad.querySelector('canvas');
+            const targetCtx = targetCanvas.getContext('2d');
+            const wrapper = overlayState.targetPad.querySelector('.signature-canvas-wrapper');
+            const w = wrapper.clientWidth || 340;
+            const h = wrapper.clientHeight || 160;
+            const targetRatio = window.devicePixelRatio || 1;
+            targetCanvas.width = w * targetRatio;
+            targetCanvas.height = h * targetRatio;
+            targetCanvas.style.width = w + 'px';
+            targetCanvas.style.height = h + 'px';
+            targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+            targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+            targetCtx.scale(targetRatio, targetRatio);
+            const img = new Image();
+            img.onload = () => {
+              targetCtx.drawImage(img, 0, 0, w, h);
+            };
+            img.src = dataUrl;
+            closeOverlay();
+          });
 
           document.querySelectorAll('.signature-pad').forEach((pad) => {
             const canvas = pad.querySelector('canvas');
             const hiddenInput = pad.querySelector('input[type="hidden"]');
             const clearButton = pad.querySelector('.signature-clear');
+            const fullscreenButton = pad.querySelector('.signature-fullscreen');
             const sampleText = pad.dataset.sample || '';
             const ctx = canvas.getContext('2d');
             let drawing = false;
@@ -6434,6 +6670,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               setPenDefaults();
             });
             syncHiddenValue();
+
+            if (fullscreenButton && overlay) {
+              fullscreenButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                openOverlay(pad, hiddenInput, sampleText);
+              });
+            }
           });
         }
 
