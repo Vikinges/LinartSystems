@@ -604,8 +604,10 @@ const SUGGESTION_FIELDS = new Set([
   'engineer_name',
   'customer_company',
   'customer_name',
+  'employee_name',
+  'employee_role',
 ]);
-const MIN_SUGGESTION_LENGTH = 3;
+const MIN_SUGGESTION_LENGTH = 2;
 const MAX_SUGGESTIONS_PER_FIELD = 12;
 
 function getSeedSuggestions(fieldName) {
@@ -735,6 +737,19 @@ function recordSuggestionsFromSubmission(body) {
       changed = true;
     }
   }
+
+  // Вытаскиваем имена/роли сотрудников из массива employees[n][...]
+  Object.keys(body || {}).forEach((key) => {
+    const match = key.match(/^employees\[(\d+)\]\[(name|role)\]$/);
+    if (!match) return;
+    const [, , field] = match;
+    const value = toSingleValue(body[key]);
+    const targetField = field === 'name' ? 'employee_name' : 'employee_role';
+    if (recordSuggestionValue(targetField, value)) {
+      changed = true;
+    }
+  });
+
   if (changed) {
     saveSuggestionStore();
   }
@@ -3775,11 +3790,11 @@ ${renderTextInput('service_company_name', 'Service company name')}
                 <div class="employee-person-fields">
                   <label class="field" data-field-wrapper="name">
                     <span>Employee name</span>
-                    <input type="text" data-field="name" placeholder="Full name" autocomplete="off" />
+                    <input type="text" data-field="name" placeholder="Full name" autocomplete="off" data-suggest-field="employee_name" list="suggest-employee-name" />
                   </label>
                   <label class="field" data-field-wrapper="role">
                     <span>Role / position</span>
-                    <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" />
+                    <input type="text" data-field="role" placeholder="Role on site" autocomplete="off" data-suggest-field="employee_role" list="suggest-employee-role" />
                   </label>
                 </div>
               </td>
@@ -3831,6 +3846,8 @@ ${renderTextInput('service_company_name', 'Service company name')}
               </td>
             </tr>
           </template>
+          <datalist id="suggest-employee-name" data-suggest-list="employee_name"></datalist>
+          <datalist id="suggest-employee-role" data-suggest-list="employee_role"></datalist>
         </section>
 ${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, section.rows)).join('\n')}
         <section class="card">
