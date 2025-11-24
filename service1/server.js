@@ -613,10 +613,10 @@ const DEFAULT_SUGGESTIONS = {
   site_location: ['Flughafen Berlin Brandenburg', 'Munich Airport'],
   service_company_name: ['Sharp / NEC LED Solution Center'],
   engineer_company: ['Sharp / NEC LED Solution Center'],
-  engineer_name: ['Ivan Technician', 'Ulrich Maurer'],
+  engineer_name: ['Ivan Technician', 'Ulrich Maurer', 'Vladimir'],
   customer_company: ['Mercedes-Benz AG'],
-  customer_name: ['Anna Schneider'],
-  employee_name: ['Ivan Technician', 'Ulrich Maurer'],
+  customer_name: ['Anna Schneider', 'Vladimir'],
+  employee_name: ['Ivan Technician', 'Ulrich Maurer', 'Vladimir'],
   employee_role: ['Engineer', 'Service tech'],
 };
 const MAX_SUGGESTIONS_PER_FIELD = 12;
@@ -790,13 +790,11 @@ function getSuggestionsForField(fieldName, query) {
     return [];
   }
   const prefix = normalizeSuggestionValue(query).toLowerCase();
-  if (prefix.length < MIN_SUGGESTION_LENGTH) {
-    return [];
-  }
   const bucket = suggestionStore.suggestions[fieldName] || [];
-  return bucket
-    .filter((entry) => entry.toLowerCase().startsWith(prefix))
-    .slice(0, MAX_SUGGESTIONS_PER_FIELD);
+  if (prefix.length < MIN_SUGGESTION_LENGTH) {
+    return bucket.slice(0, MAX_SUGGESTIONS_PER_FIELD);
+  }
+  return bucket.filter((entry) => entry.toLowerCase().startsWith(prefix)).slice(0, MAX_SUGGESTIONS_PER_FIELD);
 }
 
 const PARTS_ROW_COUNT = 15;
@@ -6466,15 +6464,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
             const requestSuggestions = (rawValue) => {
               const query = (rawValue || '').trim();
-              if (query.length < 2) {
-                lastQuery = '';
-                applySuggestions([]);
-                if (pendingController && typeof pendingController.abort === 'function') {
-                  pendingController.abort();
-                }
-                pendingController = null;
-                return;
-              }
               if (query === lastQuery) {
                 return;
               }
