@@ -6369,18 +6369,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             overlay.dataset.signatureOverlay = 'true';
             overlay.className = 'signature-overlay';
             overlay.hidden = true;
-            overlay.innerHTML = `
-              <div class="signature-overlay__panel">
-                <div class="signature-overlay__actions">
-                  <span>Draw signature</span>
-                  <span class="spacer"></span>
-                  <button type="button" class="secondary" data-overlay-clear>Clear</button>
-                  <button type="button" class="secondary" data-overlay-cancel>Cancel</button>
-                  <button type="button" class="primary" data-overlay-apply>Apply</button>
-                </div>
-                <canvas data-overlay-canvas></canvas>
-              </div>
-            `;
+            overlay.innerHTML =
+              '<div class="signature-overlay__panel">' +
+              '<div class="signature-overlay__actions">' +
+              '<span>Draw signature</span>' +
+              '<span class="spacer"></span>' +
+              '<button type="button" class="secondary" data-overlay-clear>Clear</button>' +
+              '<button type="button" class="secondary" data-overlay-cancel>Cancel</button>' +
+              '<button type="button" class="primary" data-overlay-apply>Apply</button>' +
+              '</div>' +
+              '<canvas data-overlay-canvas></canvas>' +
+              '</div>';
             document.body.appendChild(overlay);
           }
 
