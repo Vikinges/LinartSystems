@@ -6603,10 +6603,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         };`;
 
   const sanitizedHtml = html
-    .replace(/const buildAppUrl = \\(path\\) => \\{[\\s\\S]*?\\};/, fixedBuildAppUrl)
-    .replace(/selected\\.previewUrl\\.replace\\([^)]*\\)/g, "selected.previewUrl.replace(/^\\/+/, '')")
-    .replace(/src="\/vendor\/pdfjs\//g, 'src="/service1/vendor/pdfjs/')
-    .replace(/GlobalWorkerOptions\\.workerSrc = '\\/vendor\\/pdfjs\\/pdf.worker.min.js';/g, "GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';");
+    .replace(/const buildAppUrl = \(path\) => \{[\s\S]*?};/, fixedBuildAppUrl)
+    .replace(/selected\.previewUrl\.replace\([^)]*\)/g, "selected.previewUrl.replace(/^\\/+/, '')")
+    .replace('src="/vendor/pdfjs/pdf.min.js"', 'src="/service1/vendor/pdfjs/pdf.min.js"')
+    .replace(
+      "GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';",
+      "GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';",
+    );
 
   fs.writeFileSync(path.join(PUBLIC_DIR, 'index.html'), sanitizedHtml, 'utf8');
 }
