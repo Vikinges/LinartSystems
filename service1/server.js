@@ -4934,6 +4934,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const endCustomerInput = document.getElementById('end-customer-name');
         const customerNameInput = document.getElementById('customer-name');
         const customerNameSync = { manual: false };
+        const serviceCompanyInput = document.getElementById('service-company-name');
+        const engineerCompanyInput = document.getElementById('engineer-company');
+        const customerCompanyInput = document.getElementById('customer-company');
+        const signatureCompanySync = { engineerManual: false, customerManual: false };
 
         const syncCustomerNameFromSite = () => {
           if (!endCustomerInput || !customerNameInput) return;
@@ -4964,6 +4968,66 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               return;
             }
             customerNameSync.manual = current !== source;
+          });
+        }
+
+        const syncEngineerCompanyFromService = () => {
+          if (!serviceCompanyInput || !engineerCompanyInput) return;
+          if (signatureCompanySync.engineerManual) return;
+          engineerCompanyInput.value = serviceCompanyInput.value.trim();
+        };
+
+        const syncCustomerCompanyFromHeader = () => {
+          if (!endCustomerInput || !customerCompanyInput) return;
+          if (signatureCompanySync.customerManual) return;
+          customerCompanyInput.value = endCustomerInput.value.trim();
+        };
+
+        if (serviceCompanyInput && engineerCompanyInput) {
+          syncEngineerCompanyFromService();
+          ['input', 'change'].forEach((eventName) => {
+            serviceCompanyInput.addEventListener(eventName, () => {
+              if (!signatureCompanySync.engineerManual || !engineerCompanyInput.value.trim()) {
+                if (!engineerCompanyInput.value.trim()) {
+                  signatureCompanySync.engineerManual = false;
+                }
+                syncEngineerCompanyFromService();
+              }
+            });
+          });
+          engineerCompanyInput.addEventListener('input', () => {
+            const current = engineerCompanyInput.value.trim();
+            const source = serviceCompanyInput.value.trim();
+            if (!current) {
+              signatureCompanySync.engineerManual = false;
+              syncEngineerCompanyFromService();
+              return;
+            }
+            signatureCompanySync.engineerManual = current !== source;
+          });
+        }
+
+        if (endCustomerInput && customerCompanyInput) {
+          syncCustomerCompanyFromHeader();
+          ['input', 'change'].forEach((eventName) => {
+            endCustomerInput.addEventListener(eventName, () => {
+              if (!signatureCompanySync.customerManual || !customerCompanyInput.value.trim()) {
+                if (!customerCompanyInput.value.trim()) {
+                  signatureCompanySync.customerManual = false;
+                }
+                syncCustomerCompanyFromHeader();
+              }
+            });
+          });
+          customerCompanyInput.addEventListener('input', () => {
+            const current = customerCompanyInput.value.trim();
+            const source = endCustomerInput.value.trim();
+            if (!current) {
+              signatureCompanySync.customerManual = false;
+              syncCustomerCompanyFromHeader();
+              return;
+            }
+            signatureCompanySync.customerManual = current !== source;
           });
         }
 
@@ -6373,7 +6437,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
             const requestSuggestions = (rawValue) => {
               const query = (rawValue || '').trim();
-              if (query.length < 3) {
+              if (query.length < 2) {
                 lastQuery = '';
                 applySuggestions([]);
                 if (pendingController && typeof pendingController.abort === 'function') {
