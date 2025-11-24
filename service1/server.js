@@ -6447,11 +6447,28 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const dataList = document.getElementById(listId);
             if (!dataList) return;
 
+            // локальные подсказки на основе уже введённых значений (включая восстановленный драфт)
+            const localSeeds = [];
+            const addLocalSeed = (val) => {
+              const next = (val || '').trim();
+              if (!next) return;
+              if (localSeeds.find((item) => item.toLowerCase() === next.toLowerCase())) return;
+              localSeeds.push(next);
+            };
+            if (input.value && input.value.trim()) {
+              addLocalSeed(input.value);
+            }
+
             let lastQuery = '';
             let pendingController = null;
 
             const applySuggestions = (values) => {
               dataList.innerHTML = '';
+              localSeeds.forEach((value) => {
+                const option = document.createElement('option');
+                option.value = value;
+                dataList.appendChild(option);
+              });
               if (!Array.isArray(values) || !values.length) {
                 return;
               }
@@ -6495,6 +6512,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
             input.addEventListener('input', () => requestSuggestions(input.value));
             input.addEventListener('focus', () => requestSuggestions(input.value));
+            ['change', 'blur'].forEach((eventName) => {
+              input.addEventListener(eventName, () => addLocalSeed(input.value));
+            });
           });
         }
 
