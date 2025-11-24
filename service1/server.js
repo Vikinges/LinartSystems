@@ -2516,7 +2516,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
-    const engineerLabelY = engineerRect.y + engineerRect.height + 12;
+    const engineerLabelY = engineerRect.y + engineerRect.height - 14;
     page.drawText(detail.label, {
       x: engineerRect.x,
       y: engineerLabelY,
@@ -2547,7 +2547,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       borderColor: TABLE_BORDER_COLOR,
       color: rgb(1, 1, 1),
     });
-    const customerLabelY = customerRect.y + customerRect.height + 12;
+    const customerLabelY = customerRect.y + customerRect.height - 14;
     page.drawText(customer.label, {
       x: customerRect.x,
       y: customerLabelY,
