@@ -6734,6 +6734,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               if (!next) return;
               if (localSeeds.find((item) => item.toLowerCase() === next.toLowerCase())) return;
               localSeeds.push(next);
+              // отправляем на сервер, чтобы подсказки были общими
+              if (next.length >= ${MIN_SUGGESTION_LENGTH}) {
+                const body = JSON.stringify({ field: fieldName, value: next });
+                fetch(buildAppUrl('suggest/save'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body,
+                }).catch(() => {});
+              }
             };
             if (input.value && input.value.trim()) {
               addLocalSeed(input.value);
@@ -7336,6 +7345,16 @@ app.get('/suggest', (req, res) => {
     query: queryParam,
     suggestions,
   });
+});
+
+app.post('/suggest/save', (req, res) => {
+  const fieldName = typeof req.body?.field === 'string' ? req.body.field.trim() : '';
+  const value = typeof req.body?.value === 'string' ? req.body.value : '';
+  if (!recordSuggestionValue(fieldName, value)) {
+    return res.status(400).json({ ok: false });
+  }
+  saveSuggestionStore();
+  return res.json({ ok: true });
 });
 
 function buildAdminProfilePayload() {
