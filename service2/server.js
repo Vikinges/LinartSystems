@@ -7247,62 +7247,61 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
 
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let currentPage = null;
-  let slotIndex = 0;
   const landscapeSize = { width: 841.89, height: 595.28 }; // A4 landscape
 
-  for (const { file, image } of embeddings) {
-    const fieldName = file.fieldname || 'photos';
-    const labelBase = labelByField[fieldName] || 'Photo';
-    const currentIndex = (counters.get(fieldName) || 0) + 1;
-    counters.set(fieldName, currentIndex);
-    const caption = labelBase + (currentIndex > 1 ? ` #${currentIndex}` : '');
+  for (let i = 0; i < embeddings.length; i += 2) {
+    const pair = embeddings.slice(i, i + 2);
+    const page = pdfDoc.addPage([landscapeSize.width, landscapeSize.height]);
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
 
-    // каждые 2 фото на одной странице (альбомной)
-    if (!currentPage || slotIndex % 2 === 0) {
-      currentPage = pdfDoc.addPage([landscapeSize.width, landscapeSize.height]);
-    }
+    const layoutSingle = pair.length === 1;
+    const cellWidth = layoutSingle
+      ? pageWidth - margin * 2
+      : (pageWidth - margin * 2 - gutter) / 2;
+    const cellHeight = pageHeight - margin * 2;
 
-    const col = slotIndex % 2;
-    const cellWidth = (currentPage.getWidth() - margin * 2 - gutter) / 2;
-    const cellHeight = currentPage.getHeight() - margin * 2;
-    const cellX = margin + col * (cellWidth + gutter);
-    const cellY = margin;
+    pair.forEach(({ file, image }, idxInPair) => {
+      const fieldName = file.fieldname || 'photos';
+      const labelBase = labelByField[fieldName] || 'Photo';
+      const currentIndex = (counters.get(fieldName) || 0) + 1;
+      counters.set(fieldName, currentIndex);
+      const caption = labelBase + (currentIndex > 1 ? ` #${currentIndex}` : '');
 
-    const availableWidth = cellWidth;
-    const availableHeight = cellHeight - captionHeight - 8;
-    const scale = Math.min(
-      availableWidth / image.width,
-      availableHeight / image.height,
-    );
-    const drawWidth = image.width * scale;
-    const drawHeight = image.height * scale;
-    const x = cellX + (availableWidth - drawWidth) / 2;
-    const y = cellY + captionHeight + (availableHeight - drawHeight) / 2;
+      const col = layoutSingle ? 0 : idxInPair;
+      const cellX = margin + col * (cellWidth + (layoutSingle ? 0 : gutter));
+      const cellY = margin;
 
-    currentPage.drawImage(image, {
-      x,
-      y,
-      width: drawWidth,
-      height: drawHeight,
-    });
+      const availableWidth = cellWidth;
+      const availableHeight = cellHeight - captionHeight - 10;
+      const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
+      const drawWidth = image.width * scale;
+      const drawHeight = image.height * scale;
+      const x = cellX + (availableWidth - drawWidth) / 2;
+      const y = cellY + captionHeight + (availableHeight - drawHeight) / 2;
 
-    currentPage.drawText(caption, {
-      x: cellX,
-      y: cellY + 6,
-      size: 11,
-      font: boldFont,
-      color: rgb(0.12, 0.12, 0.18),
-    });
+      page.drawImage(image, {
+        x,
+        y,
+        width: drawWidth,
+        height: drawHeight,
+      });
 
-    slotIndex += 1;
+      page.drawText(caption, {
+        x: cellX,
+        y: cellY + 6,
+        size: 11,
+        font: boldFont,
+        color: rgb(0.12, 0.12, 0.18),
+      });
 
-    placements.push({
-      originalName: file.originalname,
-      fieldName,
-      label: caption,
-      index: currentIndex,
-      fieldTarget: `page-${pdfDoc.getPageCount()}`,
+      placements.push({
+        originalName: file.originalname,
+        fieldName,
+        label: caption,
+        index: currentIndex,
+        fieldTarget: `page-${pdfDoc.getPageCount()}`,
+      });
     });
   }
 
