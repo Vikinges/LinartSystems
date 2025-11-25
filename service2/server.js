@@ -2008,23 +2008,15 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     ];
     const headerHeight = 18;
     const rowBaseHeight = 34;
+    if (!employeeEntries.length) {
+      return; // пропускаем секцию, если нет сотрудников
+    }
+
     const sectionLabel =
       ensureSpace(headerHeight + rowBaseHeight * Math.max(1, employeeEntries.length) + 24)
         ? 'On-site team (cont.)'
         : 'On-site team';
     drawSectionTitle(sectionLabel);
-
-    if (!employeeEntries.length) {
-      page.drawText('No employees were recorded for this visit.', {
-        x: margin,
-        y: cursorY,
-        size: 11,
-        font,
-        color: textColor,
-      });
-      cursorY -= 24;
-      return;
-    }
 
     const headers = ['#', 'Employee', 'Role', 'Arrival', 'Departure', 'Duration / break'];
     const drawHeaderRow = () => {
@@ -2244,14 +2236,19 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= headerHeight;
     };
 
+    const usedRowsFiltered = usedRows.filter((row) => row.hasData);
+    if (!usedRowsFiltered.length) {
+      return; // пропускаем секцию, если нет данных
+    }
+
     const headerLabel =
-      ensureSpace(headerHeight + rowHeightBase * Math.min(usedRows.length, 3) + 12)
+      ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 12)
         ? 'Parts record (cont.)'
         : 'Parts record';
     drawSectionTitle(headerLabel);
     drawPartsHeader();
 
-    usedRows.forEach((row) => {
+    usedRowsFiltered.forEach((row) => {
       const cellValues = [
         row.fields[`parts_removed_desc_${row.number}`] || '',
         row.fields[`parts_removed_part_${row.number}`] || '',
@@ -2314,20 +2311,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
 
     cursorY -= 24;
-  } else {
-    if (ensureSpace(24)) {
-      drawSectionTitle('Parts record (cont.)');
-    } else {
-      drawSectionTitle('Parts record');
-    }
-    page.drawText('No spare parts were recorded for this visit.', {
-      x: margin,
-      y: cursorY,
-      size: 11,
-      font,
-      color: textColor,
-    });
-    cursorY -= 24;
   }
 
   const drawChecklistSection = (section) => {
@@ -2361,12 +2344,19 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= headerHeight;
     };
 
+    const filteredRows = section.rows.filter((row) => {
+      const checked = normalizeCheckboxValue(body?.[row.checkbox]);
+      const note = toSingleValue(body?.[row.notes]);
+      return checked || (note && String(note).trim().length > 0);
+    });
+    if (!filteredRows.length) return;
+
     const headingLabel =
       ensureSpace(headerHeight + rowBaseHeight + 12) ? `${section.title} (cont.)` : section.title;
     drawSectionTitle(headingLabel);
     drawHeaderRow();
 
-    section.rows.forEach((row) => {
+    filteredRows.forEach((row) => {
       const actionLayout = layoutTextForWidth({
         value: row.action,
         font,
@@ -2505,6 +2495,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     { label: 'Customer date & time', value: toSingleValue(body?.customer_datetime) || '' },
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
   ];
+  const hasSignoffDetails =
+    engineerDetails.some((d) => d.value && String(d.value).trim()) ||
+    customerDetails.some((d) => d.value && String(d.value).trim());
+  if (hasSignoffDetails) {
   const detailRows = engineerDetails.length;
   const detailHeight = 50;
   const detailHeading =
@@ -2577,6 +2571,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
   });
   cursorY -= detailHeight * detailRows + 20;
+  }
 
   // Увеличиваем поле для подписей, чтобы две подписи занимали половину страницы.
   const signatureHeight = 240;
@@ -7237,10 +7232,9 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
 
   if (!embeddings.length) return [];
 
-  const pages = pdfDoc.getPages();
-  const baseSize = pages.length ? pages[pages.length - 1].getSize() : { width: 595.28, height: 841.89 };
   const margin = 36;
-  const captionHeight = 28;
+  const gutter = 18;
+  const captionHeight = 24;
   const placements = [];
   const labelByField = {
     photo_before: 'Before photo',
@@ -7252,6 +7246,10 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
 
   const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
+  let currentPage = null;
+  let slotIndex = 0;
+  const landscapeSize = { width: 841.89, height: 595.28 }; // A4 landscape
+
   for (const { file, image } of embeddings) {
     const fieldName = file.fieldname || 'photos';
     const labelBase = labelByField[fieldName] || 'Photo';
@@ -7259,37 +7257,44 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
     counters.set(fieldName, currentIndex);
     const caption = labelBase + (currentIndex > 1 ? ` #${currentIndex}` : '');
 
-    const isLandscape = image.width >= image.height;
-    const pageSize = isLandscape
-      ? [baseSize.height, baseSize.width]
-      : [baseSize.width, baseSize.height];
-    const page = pdfDoc.addPage(pageSize);
+    // каждые 2 фото на одной странице (альбомной)
+    if (!currentPage || slotIndex % 2 === 0) {
+      currentPage = pdfDoc.addPage([landscapeSize.width, landscapeSize.height]);
+    }
 
-    const availableWidth = page.getWidth() - margin * 2;
-    const availableHeight = page.getHeight() - margin * 2 - captionHeight;
+    const col = slotIndex % 2;
+    const cellWidth = (currentPage.getWidth() - margin * 2 - gutter) / 2;
+    const cellHeight = currentPage.getHeight() - margin * 2;
+    const cellX = margin + col * (cellWidth + gutter);
+    const cellY = margin;
+
+    const availableWidth = cellWidth;
+    const availableHeight = cellHeight - captionHeight - 8;
     const scale = Math.min(
       availableWidth / image.width,
       availableHeight / image.height,
     );
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
-    const x = (page.getWidth() - drawWidth) / 2;
-    const y = margin + (availableHeight - drawHeight) / 2;
+    const x = cellX + (availableWidth - drawWidth) / 2;
+    const y = cellY + captionHeight + (availableHeight - drawHeight) / 2;
 
-    page.drawImage(image, {
+    currentPage.drawImage(image, {
       x,
       y,
       width: drawWidth,
       height: drawHeight,
     });
 
-    page.drawText(caption, {
-      x: margin,
-      y: page.getHeight() - margin - captionHeight + 10,
-      size: 12,
+    currentPage.drawText(caption, {
+      x: cellX,
+      y: cellY + 6,
+      size: 11,
       font: boldFont,
       color: rgb(0.12, 0.12, 0.18),
     });
+
+    slotIndex += 1;
 
     placements.push({
       originalName: file.originalname,
