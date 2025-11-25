@@ -1858,7 +1858,7 @@ function appendOverflowPages(pdfDoc, font, overflowEntries, options = {}) {
       font,
       color: rgb(0.1, 0.1, 0.3),
     });
-    cursorY -= 24;
+    cursorY -= 12;
     entries.forEach((entry) => {
       page.drawText(`${entry.label || entry.acroName}:`, {
         x: margin,
@@ -1908,11 +1908,8 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Точка старта рендера: чуть выше, чтобы сократить пустое пространство под шапкой.
-  const startY = Math.min(
-    pageHeight - 32,
-    Math.max(pageHeight - bodyTopOffset + 60, 72),
-  );
+  // Точка старта рендера: максимально близко к шапке, но с небольшим отступом.
+  const startY = Math.max(pageHeight - bodyTopOffset + 20, 64);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1930,7 +1927,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
   const pagesList = pdfDoc.getPages();
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
-  const margin = 32;
+  const margin = 28;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.12, 0.12, 0.18);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
@@ -2314,7 +2311,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= rowHeight;
     });
 
-    cursorY -= 24;
+    cursorY -= 12;
   }
 
   const drawChecklistSection = (section) => {
@@ -2575,11 +2572,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         verticalAlign: 'middle',
       });
     });
-    cursorY -= detailHeight * detailRows + 20;
+    cursorY -= detailHeight * detailRows + 16;
   }
 
-  // Подписи крупнее, но компактнее.
-  const signatureHeight = 200;
+  // Подписи крупные, но занимают меньше высоты.
+  const signatureHeight = 160;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
@@ -2636,7 +2633,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       }
     }
   }
-  cursorY -= signatureHeight + 30;
+  cursorY -= signatureHeight + 16;
 
   return signaturePlacements;
 }
