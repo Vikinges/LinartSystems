@@ -679,7 +679,8 @@ const SIGN_OFF_CHECKLIST_ROWS = [
 
 function normalizeSuggestionValue(value) {
   if (value === undefined || value === null) return '';
-  return String(value).trim().replace(/\s+/g, ' ');
+  // Оставляем внутренние пробелы как есть, только обрезаем края.
+  return String(value).trim();
 }
 
 function loadSuggestionStore() {
