@@ -1905,7 +1905,9 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   if (!targetPage) return null;
 
   const pageHeight = targetPage.getHeight();
-  const bodyTopOffset = Number.isFinite(options.bodyTopOffset) ? options.bodyTopOffset : defaultBodyTopOffset(pageHeight);
+  const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
+    ? options.bodyTopOffset
+    : defaultBodyTopOffset(pageHeight);
   const startY = Math.max(pageHeight - bodyTopOffset, 0);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
@@ -1927,8 +1929,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const margin = 56;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.12, 0.12, 0.18);
+  // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
-    options.startY && Number.isFinite(options.startY) ? Math.max(options.startY - margin, margin) : null;
+    options.startY && Number.isFinite(options.startY)
+      ? Math.max(options.startY - margin, margin)
+      : null;
 
   const initialPage =
     options.targetPage && pagesList.includes(options.targetPage)
@@ -2573,7 +2578,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   });
   cursorY -= detailHeight * detailRows + 20;
 
-  const signatureHeight = 180;
+  // Увеличиваем поле для подписей, чтобы две подписи занимали половину страницы.
+  const signatureHeight = 240;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
