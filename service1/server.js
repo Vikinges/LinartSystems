@@ -619,7 +619,8 @@ const DEFAULT_SUGGESTIONS = {
   employee_name: ['Ivan Technician', 'Ulrich Maurer', 'Vladimir'],
   employee_role: ['Engineer', 'Service tech'],
 };
-const MAX_SUGGESTIONS_PER_FIELD = 12;
+// Держим большой пул автоподсказок, чтобы сохранять много имён/клиентов из разных объектов.
+const MAX_SUGGESTIONS_PER_FIELD = 200;
 
 function getSeedSuggestions(fieldName) {
   if (!fieldName || !suggestionStore || !suggestionStore.suggestions) {
