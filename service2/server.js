@@ -1908,7 +1908,11 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  const startY = Math.max(pageHeight - bodyTopOffset, 0);
+  // Точка старта рендера: чуть выше, чтобы сократить пустое пространство под шапкой.
+  const startY = Math.min(
+    pageHeight - 32,
+    Math.max(pageHeight - bodyTopOffset + 60, 72),
+  );
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1932,7 +1936,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
-      ? Math.max(options.startY - 16, margin + 24)
+      ? Math.max(options.startY - 8, margin + 24)
       : null;
 
   const initialPage =
