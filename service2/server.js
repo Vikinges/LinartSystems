@@ -2498,79 +2498,80 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const hasSignoffDetails =
     engineerDetails.some((d) => d.value && String(d.value).trim()) ||
     customerDetails.some((d) => d.value && String(d.value).trim());
-  if (hasSignoffDetails) {
-  const detailRows = engineerDetails.length;
-  const detailHeight = 50;
-  const detailHeading =
-    ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
-      ? 'Sign-off details (cont.)'
-      : 'Sign-off details';
-  drawSectionTitle(detailHeading);
   const columnWidth = (page.getWidth() - margin * 2 - 16) / 2;
-  const baseDetailY = cursorY;
-  engineerDetails.forEach((detail, index) => {
-    const engineerRect = {
-      x: margin,
-      y: baseDetailY - detailHeight * (index + 1),
-      width: columnWidth,
-      height: detailHeight,
-    };
-    page.drawRectangle({
-      x: engineerRect.x,
-      y: engineerRect.y,
-      width: engineerRect.width,
-      height: engineerRect.height,
-      borderWidth: TABLE_BORDER_WIDTH,
-      borderColor: TABLE_BORDER_COLOR,
-      color: rgb(1, 1, 1),
-    });
-    const engineerLabelY = engineerRect.y + engineerRect.height - 14;
-    page.drawText(detail.label, {
-      x: engineerRect.x,
-      y: engineerLabelY,
-      size: 9,
-      font,
-      color: headingColor,
-    });
-    drawCenteredTextBlock(page, detail.value, font, engineerRect, {
-      fontSize: 10,
-      paddingY: 22,
-      align: 'left',
-      verticalAlign: 'middle',
-    });
 
-    const customer = customerDetails[index];
-    const customerRect = {
-      x: margin + columnWidth + 16,
-      y: baseDetailY - detailHeight * (index + 1),
-      width: columnWidth,
-      height: detailHeight,
-    };
-    page.drawRectangle({
-      x: customerRect.x,
-      y: customerRect.y,
-      width: customerRect.width,
-      height: customerRect.height,
-      borderWidth: TABLE_BORDER_WIDTH,
-      borderColor: TABLE_BORDER_COLOR,
-      color: rgb(1, 1, 1),
+  if (hasSignoffDetails) {
+    const detailRows = engineerDetails.length;
+    const detailHeight = 50;
+    const detailHeading =
+      ensureSpace(detailHeight * detailRows + 40, 'Sign-off details (cont.)')
+        ? 'Sign-off details (cont.)'
+        : 'Sign-off details';
+    drawSectionTitle(detailHeading);
+    const baseDetailY = cursorY;
+    engineerDetails.forEach((detail, index) => {
+      const engineerRect = {
+        x: margin,
+        y: baseDetailY - detailHeight * (index + 1),
+        width: columnWidth,
+        height: detailHeight,
+      };
+      page.drawRectangle({
+        x: engineerRect.x,
+        y: engineerRect.y,
+        width: engineerRect.width,
+        height: engineerRect.height,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(1, 1, 1),
+      });
+      const engineerLabelY = engineerRect.y + engineerRect.height - 14;
+      page.drawText(detail.label, {
+        x: engineerRect.x,
+        y: engineerLabelY,
+        size: 9,
+        font,
+        color: headingColor,
+      });
+      drawCenteredTextBlock(page, detail.value, font, engineerRect, {
+        fontSize: 10,
+        paddingY: 22,
+        align: 'left',
+        verticalAlign: 'middle',
+      });
+
+      const customer = customerDetails[index];
+      const customerRect = {
+        x: margin + columnWidth + 16,
+        y: baseDetailY - detailHeight * (index + 1),
+        width: columnWidth,
+        height: detailHeight,
+      };
+      page.drawRectangle({
+        x: customerRect.x,
+        y: customerRect.y,
+        width: customerRect.width,
+        height: customerRect.height,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(1, 1, 1),
+      });
+      const customerLabelY = customerRect.y + customerRect.height - 14;
+      page.drawText(customer.label, {
+        x: customerRect.x,
+        y: customerLabelY,
+        size: 9,
+        font,
+        color: headingColor,
+      });
+      drawCenteredTextBlock(page, customer.value, font, customerRect, {
+        fontSize: 10,
+        paddingY: 22,
+        align: 'left',
+        verticalAlign: 'middle',
+      });
     });
-    const customerLabelY = customerRect.y + customerRect.height - 14;
-    page.drawText(customer.label, {
-      x: customerRect.x,
-      y: customerLabelY,
-      size: 9,
-      font,
-      color: headingColor,
-    });
-    drawCenteredTextBlock(page, customer.value, font, customerRect, {
-      fontSize: 10,
-      paddingY: 22,
-      align: 'left',
-      verticalAlign: 'middle',
-    });
-  });
-  cursorY -= detailHeight * detailRows + 20;
+    cursorY -= detailHeight * detailRows + 20;
   }
 
   // Подписи крупнее, но компактнее.
