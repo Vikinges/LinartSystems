@@ -4143,7 +4143,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
       </div>
     </div>
   </section>
-   <script src="/service1/vendor/pdfjs/pdf.min.js"></script>
+   <script src="/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -4582,7 +4582,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
          const pdfjsLib =
           (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
         }
         const adminUiState = {
           previewTemplateId: null,
@@ -7022,10 +7022,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
     .replace(/const buildAppUrl = \(path\) => \{[\s\S]*?};/, fixedBuildAppUrl)
     .replace(/selected\.previewUrl\.replace\([^)]*\)/g, "selected.previewUrl.replace(/^\\/+/, '')")
     .replace(/\(tpl\.relativePath \|\| ''\)\.replace\([^)]*\)/g, "(tpl.relativePath || '').replace(/\\\\/g, '/')")
-    .replace('src="/vendor/pdfjs/pdf.min.js"', 'src="/service1/vendor/pdfjs/pdf.min.js"')
+    .replace('src="/vendor/pdfjs/pdf.min.js"', 'src="/vendor/pdfjs/pdf.min.js"')
     .replace(
       "GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';",
-      "GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';",
+      "GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';",
     );
 
   fs.writeFileSync(path.join(PUBLIC_DIR, 'index.html'), sanitizedHtml, 'utf8');
