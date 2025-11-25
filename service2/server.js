@@ -1898,20 +1898,27 @@ function appendOverflowPages(pdfDoc, font, overflowEntries, options = {}) {
   return placements;
 }
 
-function clearOriginalSignoffSection(pdfDoc) {
+function clearOriginalSignoffSection(pdfDoc, options = {}) {
   if (!pdfDoc || typeof pdfDoc.getPages !== 'function') return null;
   const pages = pdfDoc.getPages();
-  const templatePage = pages[PARTS_TABLE_LAYOUT.pageIndex];
-  if (!templatePage) return null;
-  templatePage.drawRectangle({
+  const targetPage = pages[0];
+  if (!targetPage) return null;
+
+  const pageHeight = targetPage.getHeight();
+  const bodyTopOffset = Number.isFinite(options.bodyTopOffset) ? options.bodyTopOffset : defaultBodyTopOffset(pageHeight);
+  const startY = Math.max(pageHeight - bodyTopOffset, 0);
+
+  // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
+  targetPage.drawRectangle({
     x: 0,
     y: 0,
-    width: templatePage.getWidth(),
-    height: templatePage.getHeight(),
+    width: targetPage.getWidth(),
+    height: startY,
     color: rgb(1, 1, 1),
     borderWidth: 0,
   });
-  return { page: templatePage, index: PARTS_TABLE_LAYOUT.pageIndex };
+
+  return { page: targetPage, index: 0, startY };
 }
 
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
@@ -1920,17 +1927,19 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const margin = 56;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.12, 0.12, 0.18);
+  const initialStartY =
+    options.startY && Number.isFinite(options.startY) ? Math.max(options.startY - margin, margin) : null;
 
   const initialPage =
     options.targetPage && pagesList.includes(options.targetPage)
       ? options.targetPage
       : pdfDoc.addPage([baseSize.width, baseSize.height]);
   let page = initialPage;
-  let cursorY = 0;
+  let cursorY = initialStartY !== null ? initialStartY : 0;
 
   const setCurrentPage = (target, heading) => {
     page = target;
-    cursorY = page.getHeight() - margin;
+    cursorY = initialStartY !== null ? initialStartY : page.getHeight() - margin;
     page.drawText(heading, {
       x: margin,
       y: cursorY,
@@ -7756,7 +7765,12 @@ app.post('/submit', (req, res, next) => {
     hiddenPartRows = partsRowUsage.filter((row) => !row.hasData).map((row) => row.number);
     partsRowsRendered = partsRowUsage.filter((row) => row.hasData).map((row) => row.number);
 
-    const clearedSignoff = clearOriginalSignoffSection(pdfDoc);
+    const clearedSignoff = clearOriginalSignoffSection(pdfDoc, {
+      bodyTopOffset:
+        submissionTemplateEntry && Number.isFinite(submissionTemplateEntry.bodyTopOffset)
+          ? submissionTemplateEntry.bodyTopOffset
+          : null,
+    });
     const signaturePlacements = await drawSignOffPage(
       pdfDoc,
       helveticaFont,
@@ -7765,6 +7779,7 @@ app.post('/submit', (req, res, next) => {
       partsRowUsage,
       {
         targetPage: clearedSignoff ? clearedSignoff.page : undefined,
+        startY: clearedSignoff && Number.isFinite(clearedSignoff.startY) ? clearedSignoff.startY : undefined,
         employees: employeeSummary,
       },
     );
