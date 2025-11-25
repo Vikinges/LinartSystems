@@ -7563,6 +7563,14 @@ app.post('/submit', (req, res, next) => {
   let partsRowsRendered = [];
 
   if (req.body && typeof req.body === 'object') {
+    // Подхватываем подписи даже если не нашли их в descriptors (подстраховка при смене шаблона).
+    ['engineer_signature', 'customer_signature'].forEach((sigName) => {
+      const raw = req.body[sigName];
+      if (typeof raw === 'string' && raw.startsWith('data:image/')) {
+        signatureImages.push({ acroName: sigName, data: raw });
+      }
+    });
+
     for (const [key, value] of Object.entries(req.body)) {
       if (Array.isArray(value)) {
         sanitizedBody[key] = value.map((item) => (typeof item === 'string' && item.startsWith('data:image/')) ? '[embedded-image]' : item);
