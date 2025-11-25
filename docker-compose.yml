@@ -54,6 +54,11 @@ services:
     build: ./service2
     container_name: linart_service2
     restart: always
+    volumes:
+      - ./service2/data:/app/data
+      - ./service2/public/form-template1.pdf:/app/public/form-template1.pdf:ro
+      - ./service2/public/templates:/app/public/templates
+      - ./service2/out:/app/out
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/health || exit 1"]
       interval: 10s
