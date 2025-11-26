@@ -1944,10 +1944,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       : pdfDoc.addPage([baseSize.width, baseSize.height]);
   let page = initialPage;
   let cursorY = initialStartY !== null ? initialStartY : page.getHeight() - margin;
+  let firstPageDone = false;
 
   const setCurrentPage = (target, heading) => {
     page = target;
-    cursorY = initialStartY !== null ? initialStartY : page.getHeight() - margin;
+    // Для первой страницы используем заданный отступ, для следующих — весь доступный верх.
+    if (!firstPageDone && initialStartY !== null) {
+      cursorY = initialStartY;
+      firstPageDone = true;
+    } else {
+      cursorY = page.getHeight() - margin;
+    }
     page.drawText(heading, {
       x: margin,
       y: cursorY,
@@ -2483,9 +2490,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 18;
   };
 
-  CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
-  drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
-
   // Site information (two columns)
   const siteInfoRows = [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
@@ -2550,6 +2554,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
     cursorY -= rowsPerCol * rowHeight + 8;
   }
+
+  // Чек-листы после site info
+  CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
+  drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
   addPageWithHeading('Sign-off details');
 
