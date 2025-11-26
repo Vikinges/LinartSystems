@@ -1908,8 +1908,10 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера ближе к хедеру: отступ от шапки ~60pt, но не выше 40% страницы.
-  const startY = Math.max(pageHeight * 0.4, pageHeight - bodyTopOffset + 60);
+  // Старт рендера: сразу под линией контента, заданной в админке (bodyTopOffset),
+  // с небольшим безопасным отступом 10pt и не ниже верхнего margin.
+  const marginTop = 20;
+  const startY = Math.max(marginTop, pageHeight - bodyTopOffset - 10);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1927,7 +1929,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
   const pagesList = pdfDoc.getPages();
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
-  const margin = 20;
+  const margin = 16;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.12, 0.12, 0.18);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
@@ -2496,26 +2498,15 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const hasSiteInfo = siteInfoRows.some((row) => row.value && String(row.value).trim());
   if (hasSiteInfo) {
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
-    const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
-    const rowHeight = 24;
-    const blockHeight = rowsPerCol * rowHeight + 18 + 8;
+    const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
+    const rowHeight = 22;
+    const blockHeight = rowsPerCol * rowHeight + 16;
     if (ensureSpace(blockHeight, 'Site information (cont.)')) {
       drawSectionTitle('Site information (cont.)');
     } else {
       drawSectionTitle('Site information');
     }
-    const colX = [margin, margin + columnWidth + 12];
-    const headers = ['Site information', ''];
-    headers.forEach((label, colIdx) => {
-      page.drawText(label || '', {
-        x: colX[colIdx],
-        y: cursorY,
-        size: 10,
-        font,
-        color: headingColor,
-      });
-    });
-    cursorY -= 14;
+    const colX = [margin, margin + columnWidth + 8];
     siteInfoRows.forEach((row, idx) => {
       const colIdx = idx < rowsPerCol ? 0 : 1;
       const rowIdx = idx % rowsPerCol;
@@ -2557,7 +2548,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         textY -= valueLayout.lineHeight;
       });
     });
-    cursorY -= rowsPerCol * rowHeight + 16;
+    cursorY -= rowsPerCol * rowHeight + 8;
   }
 
   addPageWithHeading('Sign-off details');
@@ -7655,19 +7646,15 @@ app.post('/submit', (req, res, next) => {
   const overflowTextEntries = [];
   const partsRowUsage = collectPartsRowUsage(req.body || {});
   const employeeSummary = collectEmployeeEntries(req.body || {});
+  const signatureInputs = {
+    engineer_signature: req.body?.engineer_signature,
+    customer_signature: req.body?.customer_signature,
+  };
   let overflowPlacements = [];
   let hiddenPartRows = [];
   let partsRowsRendered = [];
 
   if (req.body && typeof req.body === 'object') {
-    // Всегда подхватываем подписи даже если изменились поля в шаблоне.
-    ['engineer_signature', 'customer_signature'].forEach((sigName) => {
-      const raw = req.body[sigName];
-      if (typeof raw === 'string' && raw.startsWith('data:image/')) {
-        signatureImages.push({ acroName: sigName, data: raw });
-      }
-    });
-
     for (const [key, value] of Object.entries(req.body)) {
       if (Array.isArray(value)) {
         sanitizedBody[key] = value.map((item) => (typeof item === 'string' && item.startsWith('data:image/')) ? '[embedded-image]' : item);
@@ -7678,6 +7665,13 @@ app.post('/submit', (req, res, next) => {
       }
     }
   }
+
+  // Всегда подхватываем подписи, даже если поля не совпадают с шаблоном.
+  Object.entries(signatureInputs).forEach(([sigName, raw]) => {
+    if (typeof raw === 'string' && raw.startsWith('data:image/')) {
+      signatureImages.push({ acroName: sigName, data: raw });
+    }
+  });
 
   const templateIdParam =
     req.body && typeof req.body.template_id === 'string' ? req.body.template_id.trim() : '';
