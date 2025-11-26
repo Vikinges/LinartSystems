@@ -7,7 +7,8 @@
     "dev": "node --watch server.js",
     "extract-fields": "node extract-fields.js",
     "build-docker": "docker build -t pm-check .",
-    "test": "bash ./test-start.sh"
+    "test": "bash ./test-start.sh",
+    "gen:sample": "node tools/gen-sample.js"
   },
   "keywords": [],
   "author": "",
