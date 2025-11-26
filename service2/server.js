@@ -1909,9 +1909,9 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
   // Старт рендера: сразу под линией контента, заданной в админке (bodyTopOffset),
-  // с небольшим безопасным отступом 2pt и не ниже верхнего margin.
+  // с небольшим безопасным отступом 5pt и не ниже верхнего margin.
   const marginTop = 20;
-  const startY = Math.max(marginTop, pageHeight - bodyTopOffset - 2);
+  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 5);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -2587,8 +2587,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           borderColor: TABLE_BORDER_COLOR,
         });
         page.drawText(label, {
-          x: headerX + 6,
-          y: cursorY - headerHeight + headerHeight - 10,
+          x: headerX + 8,
+          y: cursorY - headerHeight + headerHeight - 12,
           size: 8.5,
           font,
           color: rgb(0.1, 0.1, 0.3),
@@ -2649,16 +2649,16 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
             page,
             value,
             font,
-            { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
-            {
-              align: 'center',
-              paddingX: 8,
-              paddingY: 10,
-              color: textColor,
-              fontSize: layout.fontSize,
-              minFontSize: layout.fontSize,
-              lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-              layout,
+          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
+          {
+            align: 'center',
+            paddingX: 10,
+            paddingY: 12,
+            color: textColor,
+            fontSize: layout.fontSize,
+            minFontSize: layout.fontSize,
+            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+            layout,
             },
           );
           cellX += cellWidth;
