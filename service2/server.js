@@ -2199,10 +2199,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 26;
   };
 
-  renderEmployeesSection();
-
-  const usedRows = (partsRows || []).filter((row) => row.hasData);
-  if (usedRows.length) {
+  if (false) {
+    renderEmployeesSection();
+    const usedRows = (partsRows || []).filter((row) => row.hasData);
+    if (usedRows.length) {
     const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
     const headerHeight = 18;
     const rowHeightBase = 32;
@@ -2325,7 +2325,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= rowHeight;
     });
 
-    cursorY -= 12;
+      cursorY -= 12;
+    }
   }
 
   const drawChecklistSection = (section) => {
