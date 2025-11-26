@@ -1908,11 +1908,8 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера ближе к хедеру: уменьшаем тело шапки на ~200pt, но не выше верхнего поля.
-  const startY = Math.min(
-    pageHeight - 20,
-    pageHeight - Math.max(bodyTopOffset - 200, 0),
-  );
+  // Старт рендера ближе к хедеру: отступ от шапки ~60pt, но не выше 40% страницы.
+  const startY = Math.max(pageHeight * 0.4, pageHeight - bodyTopOffset + 60);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -2487,6 +2484,82 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
   drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
+  // Site information (two columns)
+  const siteInfoRows = [
+    { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
+    { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
+    { label: 'LED display model', value: toSingleValue(body?.led_display_model) || '' },
+    { label: 'Batch number', value: toSingleValue(body?.batch_number) || '' },
+    { label: 'Date of service', value: toSingleValue(body?.date_of_service) || '' },
+    { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
+  ];
+  const hasSiteInfo = siteInfoRows.some((row) => row.value && String(row.value).trim());
+  if (hasSiteInfo) {
+    const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
+    const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
+    const rowHeight = 24;
+    const blockHeight = rowsPerCol * rowHeight + 18 + 8;
+    if (ensureSpace(blockHeight, 'Site information (cont.)')) {
+      drawSectionTitle('Site information (cont.)');
+    } else {
+      drawSectionTitle('Site information');
+    }
+    const colX = [margin, margin + columnWidth + 12];
+    const headers = ['Site information', ''];
+    headers.forEach((label, colIdx) => {
+      page.drawText(label || '', {
+        x: colX[colIdx],
+        y: cursorY,
+        size: 10,
+        font,
+        color: headingColor,
+      });
+    });
+    cursorY -= 14;
+    siteInfoRows.forEach((row, idx) => {
+      const colIdx = idx < rowsPerCol ? 0 : 1;
+      const rowIdx = idx % rowsPerCol;
+      const x = colX[colIdx];
+      const y = cursorY - rowHeight * rowIdx;
+      page.drawRectangle({
+        x,
+        y: y - rowHeight,
+        width: columnWidth,
+        height: rowHeight,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(1, 1, 1),
+      });
+      page.drawText(row.label, {
+        x: x + 4,
+        y: y - 8,
+        size: 8.5,
+        font,
+        color: headingColor,
+      });
+      const valueLayout = layoutTextForWidth({
+        value: row.value,
+        font,
+        fontSize: 10,
+        minFontSize: 9,
+        lineHeightMultiplier: 1.2,
+        maxWidth: columnWidth - 8,
+      });
+      let textY = y - 16;
+      valueLayout.lines.forEach((line) => {
+        page.drawText(line, {
+          x: x + 4,
+          y: textY,
+          size: valueLayout.fontSize,
+          font,
+          color: textColor,
+        });
+        textY -= valueLayout.lineHeight;
+      });
+    });
+    cursorY -= rowsPerCol * rowHeight + 16;
+  }
+
   addPageWithHeading('Sign-off details');
 
   const engineerDetails = [
@@ -2575,11 +2648,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         verticalAlign: 'middle',
       });
     });
-    cursorY -= detailHeight * detailRows + 16;
+    cursorY -= detailHeight * detailRows + 10;
   }
 
   // Подписи крупные, но занимают меньше высоты.
-  const signatureHeight = 150;
+  const signatureHeight = 140;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
