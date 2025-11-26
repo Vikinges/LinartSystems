@@ -2379,8 +2379,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (hasSiteInfo) {
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
-    const rowHeight = 36;
-    const blockHeight = rowsPerCol * rowHeight + 24 + 20;
+    const headerHeight = 18;
+    const dataHeight = 36;
+    const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20;
     const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
     drawSectionTitle(sectionLabel);
     const colX = [margin, margin + columnWidth + 8];
@@ -2389,47 +2390,62 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       const rowIdx = idx % rowsPerCol;
       const x = colX[colIdx];
       const y = cursorY - rowHeight * rowIdx;
+      const headerY = y - headerHeight;
+      const dataY = headerY - dataHeight;
+
+      // Header cell with description
       page.drawRectangle({
         x,
-        y: y - rowHeight,
+        y: headerY,
         width: columnWidth,
-        height: rowHeight,
+        height: headerHeight,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(0.92, 0.95, 0.99),
+      });
+      drawCenteredTextBlock(
+        page,
+        row.label,
+        font,
+        { x, y: headerY, width: columnWidth, height: headerHeight },
+        {
+          align: 'center',
+          paddingX: 6,
+          paddingY: 4,
+          color: headingColor,
+          fontSize: 9,
+          minFontSize: 8.5,
+          lineHeightMultiplier: 1.1,
+        },
+      );
+
+      // Data cell with value
+      page.drawRectangle({
+        x,
+        y: dataY,
+        width: columnWidth,
+        height: dataHeight,
         borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
         color: rgb(1, 1, 1),
       });
       drawCenteredTextBlock(
         page,
-        row.label,
-        font,
-        { x, y: y - rowHeight, width: columnWidth, height: rowHeight / 2 },
-        {
-          align: 'center',
-          paddingX: 6,
-          paddingY: 4,
-          color: headingColor,
-          fontSize: 9.5,
-          minFontSize: 9,
-          lineHeightMultiplier: 1.15,
-        },
-      );
-      drawCenteredTextBlock(
-        page,
         row.value || '',
         font,
-        { x, y: y - rowHeight, width: columnWidth, height: rowHeight },
+        { x, y: dataY, width: columnWidth, height: dataHeight },
         {
           align: 'center',
           paddingX: 8,
-          paddingY: 8,
+          paddingY: 12,
           color: textColor,
-          fontSize: 10.5,
-          minFontSize: 9.5,
+          fontSize: 11,
+          minFontSize: 10,
           lineHeightMultiplier: 1.15,
         },
       );
     });
-    cursorY -= rowsPerCol * rowHeight + 14;
+    cursorY -= rowsPerCol * (headerHeight + dataHeight) + 12;
   }
 
   // Небольшой зазор после site info
