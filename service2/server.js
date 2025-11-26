@@ -584,10 +584,10 @@ if (fieldDescriptors.length) {
 }
 
 const DEFAULT_TEXT_FIELD_STYLE = {
-  fontSize: 10,
+  fontSize: 9,
   multiline: false,
   lineHeightMultiplier: 1.2,
-  minFontSize: 7,
+  minFontSize: 8,
 };
 
 const TEXT_FIELD_STYLE_RULES = [
@@ -1911,7 +1911,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   // Старт рендера: сразу под линией контента, заданной в админке (bodyTopOffset),
   // с небольшим безопасным отступом 10pt и не ниже верхнего margin.
   const marginTop = 20;
-  const startY = Math.max(marginTop, pageHeight - bodyTopOffset - 10);
+  const startY = Math.max(marginTop, pageHeight - bodyTopOffset - 2);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1931,7 +1931,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
   const margin = 16;
   const headingColor = rgb(0.08, 0.2, 0.4);
-  const textColor = rgb(0.12, 0.12, 0.18);
+  const textColor = rgb(0.1, 0.1, 0.16);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
@@ -2490,7 +2490,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 18;
   };
 
-  // Site information (two columns)
+  // Сначала Site information (две колонки)
   const siteInfoRows = [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
@@ -2503,8 +2503,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (hasSiteInfo) {
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
-    const rowHeight = 22;
-    const blockHeight = rowsPerCol * rowHeight + 16;
+    const rowHeight = 20;
+    const blockHeight = rowsPerCol * rowHeight + 14;
     if (ensureSpace(blockHeight, 'Site information (cont.)')) {
       drawSectionTitle('Site information (cont.)');
     } else {
@@ -2527,7 +2527,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       });
       page.drawText(row.label, {
         x: x + 4,
-        y: y - 8,
+        y: y - 7,
         size: 8.5,
         font,
         color: headingColor,
@@ -2535,12 +2535,12 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       const valueLayout = layoutTextForWidth({
         value: row.value,
         font,
-        fontSize: 10,
-        minFontSize: 9,
-        lineHeightMultiplier: 1.2,
+        fontSize: 9,
+        minFontSize: 8,
+        lineHeightMultiplier: 1.1,
         maxWidth: columnWidth - 8,
       });
-      let textY = y - 16;
+      let textY = y - 13;
       valueLayout.lines.forEach((line) => {
         page.drawText(line, {
           x: x + 4,
@@ -2552,10 +2552,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         textY -= valueLayout.lineHeight;
       });
     });
-    cursorY -= rowsPerCol * rowHeight + 8;
+    cursorY -= rowsPerCol * rowHeight + 6;
   }
 
-  // Чек-листы после site info
+  // Затем employees и чеклисты
+  renderEmployeesSection();
   CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
   drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
