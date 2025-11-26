@@ -1998,6 +1998,14 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const tableWidth = page.getWidth() - margin * 2;
   const signaturePlacements = [];
 
+  const ensureBlock = (height, heading) => {
+    if (cursorY - height < margin) {
+      addPageWithHeading(heading);
+      return true;
+    }
+    return false;
+  };
+
   const employeesData =
     options.employees && Array.isArray(options.employees.entries)
       ? options.employees
@@ -2017,15 +2025,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       tableWidth * 0.28,
     ];
     const headerHeight = 18;
-    const rowBaseHeight = 34;
+    const rowBaseHeight = 32;
     if (!employeeEntries.length) {
       return; // пропускаем секцию, если нет сотрудников
     }
 
-    const sectionLabel =
-      ensureSpace(headerHeight + rowBaseHeight * Math.max(1, employeeEntries.length) + 24)
-        ? 'On-site team (cont.)'
-        : 'On-site team';
+    const blockHeight = headerHeight + rowBaseHeight * employeeEntries.length + 20;
+    const sectionLabel = ensureBlock(blockHeight, 'On-site team (cont.)') ? 'On-site team (cont.)' : 'On-site team';
     drawSectionTitle(sectionLabel);
 
     const headers = ['#', 'Employee', 'Role', 'Arrival', 'Departure', 'Duration / break'];
@@ -2504,12 +2510,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
     const rowHeight = 20;
-    const blockHeight = rowsPerCol * rowHeight + 14;
-    if (ensureSpace(blockHeight, 'Site information (cont.)')) {
-      drawSectionTitle('Site information (cont.)');
-    } else {
-      drawSectionTitle('Site information');
-    }
+    const blockHeight = rowsPerCol * rowHeight + 14 + 14;
+    const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
+    drawSectionTitle(sectionLabel);
     const colX = [margin, margin + columnWidth + 8];
     siteInfoRows.forEach((row, idx) => {
       const colIdx = idx < rowsPerCol ? 0 : 1;
