@@ -4398,11 +4398,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             }
             return;
           }
-          const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
-          const wrapperWidth = adminPreviewFrameWrapper.clientWidth;
+          const wrapperRect = adminPreviewFrameWrapper.getBoundingClientRect();
+          const canvasRect = adminPreviewCanvas ? adminPreviewCanvas.getBoundingClientRect() : null;
+          const wrapperHeight = wrapperRect.height;
+          const wrapperWidth = wrapperRect.width;
+          const canvasHeight = canvasRect ? canvasRect.height : 0;
+          const canvasWidth = canvasRect ? canvasRect.width : 0;
           if (
             !wrapperHeight ||
             !wrapperWidth ||
+            !canvasHeight ||
+            !canvasWidth ||
             !Number.isFinite(boundaryState.pageHeight) ||
             boundaryState.pageHeight <= 0 ||
             !Number.isFinite(boundaryState.pageWidth) ||
