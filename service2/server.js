@@ -2561,8 +2561,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
   // Parts record — в самом конце перед Sign-off details
-  const usedRows = (partsRows || []).filter((row) => row.hasData);
-  if (usedRows.length) {
+  const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
+  if (partsUsedRows.length) {
     const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
     const headerHeight = 18;
     const rowHeightBase = 30;
@@ -2597,7 +2597,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       });
       cursorY -= headerHeight;
     };
-    const usedRowsFiltered = usedRows.filter((row) => row.hasData);
+    const usedRowsFiltered = partsUsedRows.filter((row) => row.hasData);
     if (usedRowsFiltered.length) {
       const headerLabel =
         ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 8)
