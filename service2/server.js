@@ -1909,7 +1909,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
   // Старт рендера: сразу под линией контента, заданной в админке (bodyTopOffset),
-  // с небольшим безопасным отступом 10pt и не ниже верхнего margin.
+  // с небольшим безопасным отступом 2pt и не ниже верхнего margin.
   const marginTop = 20;
   const startY = Math.max(marginTop, pageHeight - bodyTopOffset - 2);
 
@@ -2560,6 +2560,114 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
   drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
 
+  // Parts record — в самом конце перед Sign-off details
+  const usedRows = (partsRows || []).filter((row) => row.hasData);
+  if (usedRows.length) {
+    const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
+    const headerHeight = 18;
+    const rowHeightBase = 30;
+    const headers = [
+      'Part removed (description)',
+      'Part number',
+      'Serial number (removed)',
+      'Part used in display',
+      'Serial number (used)',
+    ];
+    const drawPartsHeader = () => {
+      let headerX = margin;
+      headers.forEach((label, index) => {
+        const width = columnWidths[index];
+        page.drawRectangle({
+          x: headerX,
+          y: cursorY - headerHeight,
+          width,
+          height: headerHeight,
+          color: rgb(0.88, 0.92, 0.98),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        page.drawText(label, {
+          x: headerX + 6,
+          y: cursorY - headerHeight + headerHeight - 10,
+          size: 8.5,
+          font,
+          color: rgb(0.1, 0.1, 0.3),
+        });
+        headerX += width;
+      });
+      cursorY -= headerHeight;
+    };
+    const usedRowsFiltered = usedRows.filter((row) => row.hasData);
+    if (usedRowsFiltered.length) {
+      const headerLabel =
+        ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 8)
+          ? 'Parts record (cont.)'
+          : 'Parts record';
+      drawSectionTitle(headerLabel);
+      drawPartsHeader();
+
+      usedRowsFiltered.forEach((row) => {
+        const cellValues = [
+          row.fields[`parts_removed_desc_${row.number}`] || '',
+          row.fields[`parts_removed_part_${row.number}`] || '',
+          row.fields[`parts_removed_serial_${row.number}`] || '',
+          row.fields[`parts_used_part_${row.number}`] || '',
+          row.fields[`parts_used_serial_${row.number}`] || '',
+        ];
+        const cellLayouts = cellValues.map((value, index) => {
+          const layout = layoutTextForWidth({
+            value,
+            font,
+            fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+            minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+            maxWidth: columnWidths[index] - 10,
+          });
+          return { value, layout };
+        });
+        const rowHeight = Math.max(
+          rowHeightBase,
+          ...cellLayouts.map(({ layout }) => Math.ceil(layout.lineCount * layout.lineHeight + 14)),
+        );
+        if (ensureSpace(rowHeight + 6)) {
+          drawSectionTitle('Parts record (cont.)');
+          drawPartsHeader();
+        }
+        let cellX = margin;
+        cellLayouts.forEach(({ value, layout }, index) => {
+          const cellWidth = columnWidths[index];
+          page.drawRectangle({
+            x: cellX,
+            y: cursorY - rowHeight,
+            width: cellWidth,
+            height: rowHeight,
+            color: rgb(1, 1, 1),
+            borderWidth: TABLE_BORDER_WIDTH,
+            borderColor: TABLE_BORDER_COLOR,
+          });
+          drawCenteredTextBlock(
+            page,
+            value,
+            font,
+            { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
+            {
+              align: 'center',
+              paddingX: 8,
+              paddingY: 10,
+              color: textColor,
+              fontSize: layout.fontSize,
+              minFontSize: layout.fontSize,
+              lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+              layout,
+            },
+          );
+          cellX += cellWidth;
+        });
+        cursorY -= rowHeight;
+      });
+      cursorY -= 8;
+    }
+  }
   addPageWithHeading('Sign-off details');
 
   const engineerDetails = [
