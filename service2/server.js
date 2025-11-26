@@ -1908,8 +1908,11 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Точка старта рендера: максимально близко к шапке, но с небольшим отступом.
-  const startY = Math.max(pageHeight - bodyTopOffset + 10, pageHeight * 0.55);
+  // Старт рендера ближе к хедеру: уменьшаем тело шапки на ~200pt, но не выше верхнего поля.
+  const startY = Math.min(
+    pageHeight - 20,
+    pageHeight - Math.max(bodyTopOffset - 200, 0),
+  );
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
