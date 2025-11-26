@@ -1908,9 +1908,9 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера: точно на линии контента (bodyTopOffset) с минимальным запасом 0.1pt.
+  // Старт рендера: чуть ниже линии контента (bodyTopOffset), чтобы визуально совпасть с линией в админке.
   const marginTop = 12;
-  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 0.1);
+  const startY = Math.max(marginTop + 8, pageHeight - bodyTopOffset - 6);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1928,13 +1928,13 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
   const pagesList = pdfDoc.getPages();
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
-  const margin = 16;
+  const margin = 18;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.1, 0.1, 0.16);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
-      ? Math.max(options.startY - 8, margin + 24)
+      ? Math.max(options.startY - 6, margin + 28)
       : null;
 
   const initialPage =
@@ -2199,136 +2199,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 26;
   };
 
-  if (false) {
-    renderEmployeesSection();
-    const usedRows = (partsRows || []).filter((row) => row.hasData);
-    if (usedRows.length) {
-    const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
-    const headerHeight = 18;
-    const rowHeightBase = 32;
-    const headers = [
-      'Part removed (description)',
-      'Part number',
-      'Serial number (removed)',
-      'Part used in display',
-      'Serial number (used)',
-    ];
-
-    const drawPartsHeader = () => {
-      let headerX = margin;
-      headers.forEach((label, index) => {
-        const width = columnWidths[index];
-        page.drawRectangle({
-          x: headerX,
-          y: cursorY - headerHeight,
-          width,
-          height: headerHeight,
-          color: rgb(0.88, 0.92, 0.98),
-          borderWidth: TABLE_BORDER_WIDTH,
-          borderColor: TABLE_BORDER_COLOR,
-        });
-        const labelLayout = layoutTextForWidth({
-          value: label,
-          font,
-          fontSize: 9,
-          minFontSize: 8,
-          lineHeightMultiplier: 1.2,
-          maxWidth: width - 8,
-        });
-        let textY = cursorY - headerHeight + headerHeight - 6;
-        labelLayout.lines.forEach((line) => {
-          page.drawText(line, {
-            x: headerX + 4,
-            y: textY,
-            size: labelLayout.fontSize,
-            font,
-            color: rgb(0.1, 0.1, 0.3),
-          });
-          textY -= labelLayout.lineHeight;
-        });
-        headerX += width;
-      });
-      cursorY -= headerHeight;
-    };
-
-    const usedRowsFiltered = usedRows.filter((row) => row.hasData);
-    if (!usedRowsFiltered.length) {
-      return; // пропускаем секцию, если нет данных
-    }
-
-    const headerLabel =
-      ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 12)
-        ? 'Parts record (cont.)'
-        : 'Parts record';
-    drawSectionTitle(headerLabel);
-    drawPartsHeader();
-
-    usedRowsFiltered.forEach((row) => {
-      const cellValues = [
-        row.fields[`parts_removed_desc_${row.number}`] || '',
-        row.fields[`parts_removed_part_${row.number}`] || '',
-        row.fields[`parts_removed_serial_${row.number}`] || '',
-        row.fields[`parts_used_part_${row.number}`] || '',
-        row.fields[`parts_used_serial_${row.number}`] || '',
-      ];
-      const cellLayouts = cellValues.map((value, index) => {
-        const layout = layoutTextForWidth({
-          value,
-          font,
-          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
-          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
-          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-          maxWidth: columnWidths[index] - 8,
-        });
-        return { value, layout };
-      });
-      const rowHeight = Math.max(
-        rowHeightBase,
-        ...cellLayouts.map(({ layout }) =>
-          Math.ceil(layout.lineCount * layout.lineHeight + 16),
-        ),
-      );
-      if (ensureSpace(rowHeight + 6)) {
-        drawSectionTitle('Parts record (cont.)');
-        drawPartsHeader();
-      }
-      let cellX = margin;
-      cellLayouts.forEach(({ value, layout }, index) => {
-        const cellWidth = columnWidths[index];
-        page.drawRectangle({
-          x: cellX,
-          y: cursorY - rowHeight,
-          width: cellWidth,
-          height: rowHeight,
-          color: rgb(1, 1, 1),
-          borderWidth: TABLE_BORDER_WIDTH,
-          borderColor: TABLE_BORDER_COLOR,
-        });
-        drawCenteredTextBlock(
-          page,
-          value,
-          font,
-          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
-          {
-            align: 'center',
-            paddingX: 6,
-            paddingY: 8,
-            color: textColor,
-            fontSize: layout.fontSize,
-            minFontSize: layout.fontSize,
-            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-            layout,
-          },
-        );
-        cellX += cellWidth;
-      });
-      cursorY -= rowHeight;
-    });
-
-      cursorY -= 12;
-    }
-  }
-
   const drawChecklistSection = (section) => {
     const columnWidths = [tableWidth * 0.55, tableWidth * 0.12, tableWidth * 0.33];
     const headerHeight = 18;
@@ -2509,8 +2379,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (hasSiteInfo) {
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
-    const rowHeight = 26;
-    const blockHeight = rowsPerCol * rowHeight + 16 + 16;
+    const rowHeight = 36;
+    const blockHeight = rowsPerCol * rowHeight + 24 + 20;
     const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
     drawSectionTitle(sectionLabel);
     const colX = [margin, margin + columnWidth + 8];
@@ -2528,35 +2398,42 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         borderColor: TABLE_BORDER_COLOR,
         color: rgb(1, 1, 1),
       });
-      page.drawText(row.label, {
-        x: x + 4,
-        y: y - 7,
-        size: 8.5,
+      drawCenteredTextBlock(
+        page,
+        row.label,
         font,
-        color: headingColor,
-      });
-      const valueLayout = layoutTextForWidth({
-        value: row.value,
+        { x, y: y - rowHeight, width: columnWidth, height: rowHeight / 2 },
+        {
+          align: 'center',
+          paddingX: 6,
+          paddingY: 4,
+          color: headingColor,
+          fontSize: 9.5,
+          minFontSize: 9,
+          lineHeightMultiplier: 1.15,
+        },
+      );
+      drawCenteredTextBlock(
+        page,
+        row.value || '',
         font,
-        fontSize: 9,
-        minFontSize: 8,
-        lineHeightMultiplier: 1.1,
-        maxWidth: columnWidth - 8,
-      });
-      let textY = y - 13;
-      valueLayout.lines.forEach((line) => {
-        page.drawText(line, {
-          x: x + 4,
-          y: textY,
-          size: valueLayout.fontSize,
-          font,
+        { x, y: y - rowHeight, width: columnWidth, height: rowHeight },
+        {
+          align: 'center',
+          paddingX: 8,
+          paddingY: 8,
           color: textColor,
-        });
-        textY -= valueLayout.lineHeight;
-      });
+          fontSize: 10.5,
+          minFontSize: 9.5,
+          lineHeightMultiplier: 1.15,
+        },
+      );
     });
-    cursorY -= rowsPerCol * rowHeight + 6;
+    cursorY -= rowsPerCol * rowHeight + 14;
   }
+
+  // Небольшой зазор после site info
+  cursorY -= 6;
 
   // Затем employees и чеклисты
   renderEmployeesSection();
@@ -4345,7 +4222,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const uploadProgressBarEl = document.querySelector('[data-upload-progress-bar]');
         const uploadProgressLabelEl = document.querySelector('[data-upload-progress-label]');
         const uploadFilesSummaryEl = document.querySelector('[data-upload-files]');
-        const debugToggleEl = document.querySelector('[data-debug-toggle]');
+        let debugToggleEls = Array.from(document.querySelectorAll('[data-debug-toggle]'));
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
@@ -4535,10 +4412,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             return;
           }
           const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
-          const aspect = boundaryState.pageHeight / boundaryState.pageWidth;
-          const displayHeight = Math.min(wrapperWidth * aspect, wrapperHeight);
-          const offsetTop = (wrapperHeight - displayHeight) / 2;
-          const topPosition = offsetTop + displayHeight * ratio;
+          const overlayTop = canvasRect.top - wrapperRect.top;
+          const overlayLeft = canvasRect.left - wrapperRect.left;
+          adminPreviewOverlayEl.style.top = overlayTop + 'px';
+          adminPreviewOverlayEl.style.left = overlayLeft + 'px';
+          adminPreviewOverlayEl.style.height = canvasHeight + 'px';
+          adminPreviewOverlayEl.style.width = canvasWidth + 'px';
+          const topPosition = overlayTop + canvasHeight * ratio;
           adminPreviewBoundaryEl.style.top = topPosition + 'px';
           adminPreviewOverlayEl.hidden = false;
         };
@@ -5642,9 +5522,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         function applyDebugState(enabled) {
           debugState.enabled = !!enabled;
-          if (debugToggleEl) {
-            debugToggleEl.checked = debugState.enabled;
-          }
+          debugToggleEls.forEach((el) => {
+            el.checked = debugState.enabled;
+          });
           if (debugPanelEl) {
             if (debugState.enabled) {
               debugPanelEl.classList.add('is-visible');
@@ -5656,11 +5536,136 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             debugLogEl.textContent = 'Debug output will appear here once enabled.';
           } else if (debugState.enabled) {
             emitDebug();
+            requestAnimationFrame(() => fillDebugDefaults());
           }
           try {
             window.localStorage.setItem(DEBUG_KEY, debugState.enabled ? '1' : '0');
           } catch (err) {
             // ignore storage failures
+          }
+        }
+
+        function fillDebugDefaults() {
+          if (!debugState.enabled) return;
+
+          const firstOptionValue = (datalistId) => {
+            if (!datalistId) return '';
+            const list =
+              document.getElementById(datalistId) ||
+              document.querySelector('datalist#' + datalistId) ||
+              document.querySelector('[data-suggest-list=\"' + datalistId + '\"]');
+            if (!list) return '';
+            const opt = list.querySelector('option');
+            return opt ? opt.value || '' : '';
+          };
+
+          const setIfEmpty = (selector, value) => {
+            const el = formEl.querySelector(selector);
+            if (el && !el.value.trim()) {
+              el.value = value;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return el;
+          };
+
+          const todayIso = new Date().toISOString().slice(0, 10);
+          setIfEmpty(
+            '[name=\"end_customer_name\"]',
+            firstOptionValue('suggest-end-customer-name') || 'Debug Customer GmbH',
+          );
+          setIfEmpty(
+            '[name=\"site_location\"]',
+            firstOptionValue('suggest-site-location') || 'Berlin, Teststrasse 1',
+          );
+          setIfEmpty(
+            '[name=\"led_display_model\"]',
+            firstOptionValue('suggest-led-display-model') || 'FA 1.5 / 1.9 / 2.5',
+          );
+          setIfEmpty('[name=\"batch_number\"]', 'DBG-001');
+          setIfEmpty('[name=\"date_of_service\"]', todayIso);
+          setIfEmpty(
+            '[name=\"service_company_name\"]',
+            firstOptionValue('suggest-service-company-name') || 'Sharp / NEC LED Solution Center',
+          );
+
+          const firstEngineer = firstOptionValue('suggest-employee-name') || 'Debug Engineer';
+          const firstCustomer = firstOptionValue('suggest-end-customer-name') || 'Debug Customer';
+          setIfEmpty('#engineer-name', firstEngineer);
+          setIfEmpty('#customer-name', firstCustomer);
+          setIfEmpty(
+            '#engineer-company',
+            firstOptionValue('suggest-service-company-name') || 'Debug Service Co',
+          );
+          setIfEmpty(
+            '#customer-company',
+            firstOptionValue('suggest-end-customer-name') || 'Debug Client Co',
+          );
+
+          const ensureEmployeeRow = () => {
+            let rows = Array.from(document.querySelectorAll('[data-employee-row]'));
+            if (!rows.length) {
+              const addBtn = document.querySelector('[data-action=\"employee-add\"]');
+              if (addBtn) {
+                addBtn.click();
+                rows = Array.from(document.querySelectorAll('[data-employee-row]'));
+              }
+            }
+            return rows;
+          };
+
+          const rows = ensureEmployeeRow();
+          if (rows.length) {
+            const row = rows[0];
+            const setRowField = (field, value) => {
+              const input = row.querySelector('input[data-field=\"' + field + '\"]');
+              if (input && !input.value.trim()) {
+                input.value = value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            };
+            const employeeNameSeed = firstOptionValue('suggest-employee-name') || 'Debug Engineer';
+            const employeeRoleSeed = firstOptionValue('suggest-employee-role') || 'Technician';
+            setRowField('name', employeeNameSeed);
+            setRowField('role', employeeRoleSeed);
+
+            const setDateTime = (field, iso) => {
+              const wrap = row.querySelector('[data-datetime-field=\"' + field + '\"]');
+              if (!wrap) return;
+              const dateInput = wrap.querySelector('input[data-datetime-part=\"date\"]');
+              const timeInput = wrap.querySelector('input[data-datetime-part=\"time\"]');
+              const hiddenInput = wrap.querySelector('input[data-field=\"' + field + '\"]');
+              const parts = iso.split('T');
+              if (dateInput && !dateInput.value.trim()) {
+                dateInput.value = parts[0] || '';
+                dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              if (timeInput && !timeInput.value.trim()) {
+                const timeVal = (parts[1] || '').slice(0, 5);
+                timeInput.value = timeVal;
+                timeInput.dataset.timeCommittedValue = timeVal;
+                timeInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              if (hiddenInput && !hiddenInput.value.trim()) {
+                hiddenInput.value = iso;
+              }
+            };
+
+            const now = new Date();
+            const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+            const fmt = (d) =>
+              d.getFullYear() +
+              '-' +
+              String(d.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(d.getDate()).padStart(2, '0') +
+              'T' +
+              String(d.getHours()).padStart(2, '0') +
+              ':' +
+              String(d.getMinutes()).padStart(2, '0');
+            setDateTime('arrival', fmt(now));
+            setDateTime('departure', fmt(oneHourLater));
           }
         }
 
@@ -7005,7 +7010,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
         }
 
-        if (debugToggleEl) {
+        if (debugToggleEls.length) {
           let stored = null;
           try {
             stored = window.localStorage.getItem(DEBUG_KEY);
@@ -7013,8 +7018,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             stored = null;
           }
           applyDebugState(stored === '1');
-          debugToggleEl.addEventListener('change', () => {
-            applyDebugState(debugToggleEl.checked);
+          debugToggleEls.forEach((el) => {
+            el.addEventListener('change', () => {
+              applyDebugState(el.checked);
+            });
           });
         } else {
           applyDebugState(false);
