@@ -1908,9 +1908,9 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера: прямо от линии контента (bodyTopOffset) с минимальным запасом 1pt.
-  const marginTop = 20;
-  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 1);
+  // Старт рендера: точно на линии контента (bodyTopOffset) с минимальным запасом 0.1pt.
+  const marginTop = 12;
+  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 0.1);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -2509,8 +2509,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (hasSiteInfo) {
     const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
-    const rowHeight = 20;
-    const blockHeight = rowsPerCol * rowHeight + 14 + 14;
+    const rowHeight = 26;
+    const blockHeight = rowsPerCol * rowHeight + 16 + 16;
     const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
     drawSectionTitle(sectionLabel);
     const colX = [margin, margin + columnWidth + 8];
