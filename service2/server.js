@@ -584,10 +584,10 @@ if (fieldDescriptors.length) {
 }
 
 const DEFAULT_TEXT_FIELD_STYLE = {
-  fontSize: 9,
+  fontSize: 9.5,
   multiline: false,
   lineHeightMultiplier: 1.2,
-  minFontSize: 8,
+  minFontSize: 8.5,
 };
 
 const TEXT_FIELD_STYLE_RULES = [
@@ -1908,10 +1908,9 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера: сразу под линией контента, заданной в админке (bodyTopOffset),
-  // с небольшим безопасным отступом 5pt и не ниже верхнего margin.
+  // Старт рендера: прямо от линии контента (bodyTopOffset) с минимальным запасом 1pt.
   const marginTop = 20;
-  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 5);
+  const startY = Math.max(marginTop, pageHeight - bodyTopOffset + 1);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -2025,7 +2024,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       tableWidth * 0.28,
     ];
     const headerHeight = 18;
-    const rowBaseHeight = 32;
+    const rowBaseHeight = 36;
     if (!employeeEntries.length) {
       return; // пропускаем секцию, если нет сотрудников
     }
@@ -2059,7 +2058,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         let textY = cursorY - headerHeight + headerHeight - 6;
         labelLayout.lines.forEach((line) => {
           page.drawText(line, {
-            x: headerX + 4,
+            x: headerX + 6,
             y: textY,
             size: labelLayout.fontSize,
             font,
@@ -2111,7 +2110,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       );
       const rowHeight = Math.max(
         rowBaseHeight,
-        ...measurements.map((measurement) => Math.ceil(measurement.totalHeight + 18)),
+        ...measurements.map((measurement) => Math.ceil(measurement.totalHeight + 22)),
       );
       if (ensureSpace(rowHeight + 8)) {
         drawSectionTitle('On-site team (cont.)');
