@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Preventative Maintenance Checklist</title>
+    <title>Service report</title>
     <link
       rel="icon"
       type="image/gif"
@@ -997,8 +997,8 @@
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>Preventative Maintenance Checklist</h1>
-        <p>Please review each item and attach up to eight supporting photos. The fields below are pre-filled with example data for quick testing.</p>
+        <h1>Service report</h1>
+        <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
         <section class="card" data-template-selector>
@@ -1519,7 +1519,11 @@
               <input type="checkbox" data-debug-toggle />
               <span>Enable debug feedback</span>
             </label>
-            <span class="debug-hint">Toggle to capture request details for troubleshooting.</span>
+            <label class="checkbox">
+              <input type="checkbox" data-debug-toggle />
+              <span>Autofill demo data</span>
+            </label>
+            <span class="debug-hint">Toggle to capture request details and auto-fill sample data.</span>
           </div>
           <div class="debug-panel" data-debug-panel>
             <pre data-debug-log>Debug output will appear here once enabled.</pre>
@@ -1600,7 +1604,7 @@
       </div>
     </div>
   </section>
-   <script src="/service1/vendor/pdfjs/pdf.min.js"></script>
+   <script src="/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -1612,7 +1616,7 @@
         const uploadProgressBarEl = document.querySelector('[data-upload-progress-bar]');
         const uploadProgressLabelEl = document.querySelector('[data-upload-progress-label]');
         const uploadFilesSummaryEl = document.querySelector('[data-upload-files]');
-        const debugToggleEl = document.querySelector('[data-debug-toggle]');
+        let debugToggleEls = Array.from(document.querySelectorAll('[data-debug-toggle]'));
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
@@ -2039,7 +2043,7 @@
          const pdfjsLib =
           (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-          pdfjsLib.GlobalWorkerOptions.workerSrc = '/service1/vendor/pdfjs/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
         }
         const adminUiState = {
           previewTemplateId: null,
@@ -2909,9 +2913,9 @@
 
         function applyDebugState(enabled) {
           debugState.enabled = !!enabled;
-          if (debugToggleEl) {
-            debugToggleEl.checked = debugState.enabled;
-          }
+          debugToggleEls.forEach((el) => {
+            el.checked = debugState.enabled;
+          });
           if (debugPanelEl) {
             if (debugState.enabled) {
               debugPanelEl.classList.add('is-visible');
@@ -2923,11 +2927,136 @@
             debugLogEl.textContent = 'Debug output will appear here once enabled.';
           } else if (debugState.enabled) {
             emitDebug();
+            requestAnimationFrame(() => fillDebugDefaults());
           }
           try {
             window.localStorage.setItem(DEBUG_KEY, debugState.enabled ? '1' : '0');
           } catch (err) {
             // ignore storage failures
+          }
+        }
+
+        function fillDebugDefaults() {
+          if (!debugState.enabled) return;
+
+          const firstOptionValue = (datalistId) => {
+            if (!datalistId) return '';
+            const list =
+              document.getElementById(datalistId) ||
+              document.querySelector('datalist#' + datalistId) ||
+              document.querySelector('[data-suggest-list="' + datalistId + '"]');
+            if (!list) return '';
+            const opt = list.querySelector('option');
+            return opt ? opt.value || '' : '';
+          };
+
+          const setIfEmpty = (selector, value) => {
+            const el = formEl.querySelector(selector);
+            if (el && !el.value.trim()) {
+              el.value = value;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return el;
+          };
+
+          const todayIso = new Date().toISOString().slice(0, 10);
+          setIfEmpty(
+            '[name=\"end_customer_name\"]',
+            firstOptionValue('suggest-end-customer-name') || 'Debug Customer GmbH',
+          );
+          setIfEmpty(
+            '[name=\"site_location\"]',
+            firstOptionValue('suggest-site-location') || 'Berlin, Teststrasse 1',
+          );
+          setIfEmpty(
+            '[name=\"led_display_model\"]',
+            firstOptionValue('suggest-led-display-model') || 'FA 1.5 / 1.9 / 2.5',
+          );
+          setIfEmpty('[name=\"batch_number\"]', 'DBG-001');
+          setIfEmpty('[name=\"date_of_service\"]', todayIso);
+          setIfEmpty(
+            '[name=\"service_company_name\"]',
+            firstOptionValue('suggest-service-company-name') || 'Sharp / NEC LED Solution Center',
+          );
+
+          const firstEngineer = firstOptionValue('suggest-employee-name') || 'Debug Engineer';
+          const firstCustomer = firstOptionValue('suggest-end-customer-name') || 'Debug Customer';
+          setIfEmpty('#engineer-name', firstEngineer);
+          setIfEmpty('#customer-name', firstCustomer);
+          setIfEmpty(
+            '#engineer-company',
+            firstOptionValue('suggest-service-company-name') || 'Debug Service Co',
+          );
+          setIfEmpty(
+            '#customer-company',
+            firstOptionValue('suggest-end-customer-name') || 'Debug Client Co',
+          );
+
+          const ensureEmployeeRow = () => {
+            let rows = Array.from(document.querySelectorAll('[data-employee-row]'));
+            if (!rows.length) {
+              const addBtn = document.querySelector('[data-action=\"employee-add\"]');
+              if (addBtn) {
+                addBtn.click();
+                rows = Array.from(document.querySelectorAll('[data-employee-row]'));
+              }
+            }
+            return rows;
+          };
+
+          const rows = ensureEmployeeRow();
+          if (rows.length) {
+            const row = rows[0];
+            const setRowField = (field, value) => {
+              const input = row.querySelector('input[data-field=\"' + field + '\"]');
+              if (input && !input.value.trim()) {
+                input.value = value;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            };
+            const employeeNameSeed = firstOptionValue('suggest-employee-name') || 'Debug Engineer';
+            const employeeRoleSeed = firstOptionValue('suggest-employee-role') || 'Technician';
+            setRowField('name', employeeNameSeed);
+            setRowField('role', employeeRoleSeed);
+
+            const setDateTime = (field, iso) => {
+              const wrap = row.querySelector('[data-datetime-field=\"' + field + '\"]');
+              if (!wrap) return;
+              const dateInput = wrap.querySelector('input[data-datetime-part=\"date\"]');
+              const timeInput = wrap.querySelector('input[data-datetime-part=\"time\"]');
+              const hiddenInput = wrap.querySelector('input[data-field=\"' + field + '\"]');
+              const parts = iso.split('T');
+              if (dateInput && !dateInput.value.trim()) {
+                dateInput.value = parts[0] || '';
+                dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              if (timeInput && !timeInput.value.trim()) {
+                const timeVal = (parts[1] || '').slice(0, 5);
+                timeInput.value = timeVal;
+                timeInput.dataset.timeCommittedValue = timeVal;
+                timeInput.dispatchEvent(new Event('input', { bubbles: true }));
+              }
+              if (hiddenInput && !hiddenInput.value.trim()) {
+                hiddenInput.value = iso;
+              }
+            };
+
+            const now = new Date();
+            const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+            const fmt = (d) =>
+              d.getFullYear() +
+              '-' +
+              String(d.getMonth() + 1).padStart(2, '0') +
+              '-' +
+              String(d.getDate()).padStart(2, '0') +
+              'T' +
+              String(d.getHours()).padStart(2, '0') +
+              ':' +
+              String(d.getMinutes()).padStart(2, '0');
+            setDateTime('arrival', fmt(now));
+            setDateTime('departure', fmt(oneHourLater));
           }
         }
 
@@ -4272,7 +4401,7 @@
           });
         }
 
-        if (debugToggleEl) {
+        if (debugToggleEls.length) {
           let stored = null;
           try {
             stored = window.localStorage.getItem(DEBUG_KEY);
@@ -4280,8 +4409,10 @@
             stored = null;
           }
           applyDebugState(stored === '1');
-          debugToggleEl.addEventListener('change', () => {
-            applyDebugState(debugToggleEl.checked);
+          debugToggleEls.forEach((el) => {
+            el.addEventListener('change', () => {
+              applyDebugState(el.checked);
+            });
           });
         } else {
           applyDebugState(false);
