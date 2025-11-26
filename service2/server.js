@@ -1909,7 +1909,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
   // Точка старта рендера: максимально близко к шапке, но с небольшим отступом.
-  const startY = Math.max(pageHeight - bodyTopOffset + 20, 64);
+  const startY = Math.max(pageHeight - bodyTopOffset + 10, pageHeight * 0.55);
 
   // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
   targetPage.drawRectangle({
@@ -1927,7 +1927,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
   const pagesList = pdfDoc.getPages();
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
-  const margin = 28;
+  const margin = 20;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.12, 0.12, 0.18);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
@@ -2499,7 +2499,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const hasSignoffDetails =
     engineerDetails.some((d) => d.value && String(d.value).trim()) ||
     customerDetails.some((d) => d.value && String(d.value).trim());
-  const columnWidth = (page.getWidth() - margin * 2 - 16) / 2;
+  const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
 
   if (hasSignoffDetails) {
     const detailRows = engineerDetails.length;
@@ -2576,14 +2576,14 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   }
 
   // Подписи крупные, но занимают меньше высоты.
-  const signatureHeight = 160;
+  const signatureHeight = 150;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
   const signatureWidth = columnWidth;
   const signatureBoxes = [
     { label: 'Engineer signature', acroName: 'engineer_signature', x: margin },
-    { label: 'Customer signature', acroName: 'customer_signature', x: margin + columnWidth + 16 },
+    { label: 'Customer signature', acroName: 'customer_signature', x: margin + columnWidth + 12 },
   ];
   const resolvePageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
 
@@ -7584,6 +7584,14 @@ app.post('/submit', (req, res, next) => {
   let partsRowsRendered = [];
 
   if (req.body && typeof req.body === 'object') {
+    // Всегда подхватываем подписи даже если изменились поля в шаблоне.
+    ['engineer_signature', 'customer_signature'].forEach((sigName) => {
+      const raw = req.body[sigName];
+      if (typeof raw === 'string' && raw.startsWith('data:image/')) {
+        signatureImages.push({ acroName: sigName, data: raw });
+      }
+    });
+
     for (const [key, value] of Object.entries(req.body)) {
       if (Array.isArray(value)) {
         sanitizedBody[key] = value.map((item) => (typeof item === 'string' && item.startsWith('data:image/')) ? '[embedded-image]' : item);
