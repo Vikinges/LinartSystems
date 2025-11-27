@@ -4464,9 +4464,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               return;
             }
             fillPartsFromOcr(parsed);
-            setPartsOcrStatus(`OCR ok. Serial: ${parsed.serial || 'n/a'}; Model: ${parsed.model || 'n/a'}; Batch: ${parsed.batch || 'n/a'}. Check and edit if needed.`);
+            const summary = 'OCR ok. Serial: ' + (parsed.serial || 'n/a') + '; Model: ' + (parsed.model || 'n/a') + '; Batch: ' + (parsed.batch || 'n/a') + '. Check and edit if needed.';
+            setPartsOcrStatus(summary);
           } catch (err) {
-            setPartsOcrStatus(err.message || 'OCR failed.', true);
+            setPartsOcrStatus((err && err.message) || 'OCR failed.', true);
           } finally {
             if (partsOcrInput) partsOcrInput.value = '';
           }
