@@ -2513,10 +2513,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           });
           return { value, layout };
         });
-        const rowHeight = Math.max(
+        let rowHeight = Math.max(
           rowHeightBase,
           ...cellLayouts.map(({ layout }) => Math.ceil(layout.lineCount * layout.lineHeight + 14)),
         );
+        if (!Number.isFinite(rowHeight) || rowHeight <= 0) {
+          rowHeight = rowHeightBase;
+        }
         if (ensureSpace(rowHeight + 6)) {
           drawSectionTitle('Parts record (cont.)');
           drawPartsHeader();
