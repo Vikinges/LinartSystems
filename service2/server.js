@@ -1931,6 +1931,14 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const margin = 18;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.1, 0.1, 0.16);
+  const templateType = (body && body.template_type) || 'service_report';
+  const headingTitle =
+    {
+      maintenance: 'Maintenance Report',
+      installation_report: 'Installation Report',
+      calibration: 'Calibration Certificate',
+      service_report: 'Service Report',
+    }[templateType] || 'Service Report';
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
@@ -1970,7 +1978,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     return next;
   };
 
-  const addContinuationPage = (heading = 'Service Report (cont.)') => {
+  const addContinuationPage = (heading = `${headingTitle} (cont.)`) => {
     return addPageWithHeading(heading);
   };
 
@@ -1992,7 +2000,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 18;
   };
 
-  setCurrentPage(page, 'Service Report');
+  setCurrentPage(page, headingTitle);
 
   const tableWidth = page.getWidth() - margin * 2;
   const signaturePlacements = [];
@@ -3945,6 +3953,15 @@ ${rows.join('\n')}
                 <option value="">Loading templates...</option>
               </select>
               <input type="hidden" name="template_slug" data-template-slug />
+            </label>
+            <label class="field" style="max-width:360px">
+              <span>Form type</span>
+              <select name="template_type" data-template-type>
+                <option value="service_report" selected>Service report</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="installation_report">Installation report</option>
+                <option value="calibration">Calibration</option>
+              </select>
             </label>
             <div class="template-details" data-template-info>
               <p data-template-status>Loading available templates...</p>
