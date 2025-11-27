@@ -7637,7 +7637,8 @@ app.post('/suggest/save', (req, res) => {
   const fieldName = typeof req.body?.field === 'string' ? req.body.field.trim() : '';
   const value = typeof req.body?.value === 'string' ? req.body.value : '';
   if (!recordSuggestionValue(fieldName, value)) {
-    return res.status(400).json({ ok: false });
+    // Ничего не записали (пустое/короткое/неизвестное поле) — не считаем это ошибкой
+    return res.json({ ok: true, skipped: true });
   }
   saveSuggestionStore();
   return res.json({ ok: true });
