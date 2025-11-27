@@ -2373,8 +2373,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const siteInfoRows = [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
-    { label: 'LED display model', value: toSingleValue(body?.led_display_model) || '' },
-    { label: 'Batch number', value: toSingleValue(body?.batch_number) || '' },
+    { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
+    { label: 'LSC Project number', value: toSingleValue(body?.batch_number) || '' },
     { label: 'Date of service', value: toSingleValue(body?.date_of_service) || '' },
     { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
   ];
@@ -3970,12 +3970,11 @@ ${rows.join('\n')}
           <div class="grid two-col">
 ${renderTextInput('end_customer_name', 'End customer name')}
 ${renderTextInput('site_location', 'Site location')}
-${renderTextInput('led_display_model', 'LED display model')}
-${renderTextInput('batch_number', 'Batch number')}
+${renderTextInput('led_display_model', 'LED display model / batch')}
+${renderTextInput('batch_number', 'LSC Project number')}
 ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 ${renderTextInput('service_company_name', 'Service company name')}
 <div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
-${renderTextInput('lsc_project_number', 'LSC Project number')}
 ${renderTextInput('supplier_name', 'Supplier')}
 </div>
           </div>
