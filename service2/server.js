@@ -2403,21 +2403,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         borderColor: TABLE_BORDER_COLOR,
         color: rgb(0.92, 0.95, 0.99),
       });
-      drawCenteredTextBlock(
-        page,
-        row.label,
+      page.drawText(row.label, {
+        x: x + 6,
+        y: headerY + headerHeight - 8.5,
+        size: 8.5,
         font,
-        { x, y: headerY, width: columnWidth, height: headerHeight },
-        {
-          align: 'center',
-          paddingX: 6,
-          paddingY: 4,
-          color: headingColor,
-          fontSize: 9,
-          minFontSize: 8.5,
-          lineHeightMultiplier: 1.1,
-        },
-      );
+        color: headingColor,
+      });
 
       // Data cell with value
       page.drawRectangle({
@@ -4977,6 +4969,24 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             }
             colActions.appendChild(selectBtn);
 
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'link-button danger';
+            deleteBtn.textContent = 'Delete';
+            if (tpl.source === 'builtin') {
+              deleteBtn.disabled = true;
+              deleteBtn.title = 'Builtin template cannot be deleted';
+            } else {
+              deleteBtn.addEventListener('click', () => {
+                const proceed = window.confirm(
+                  'Delete template "' + (tpl.label || tpl.slug || tpl.id) + '"? This cannot be undone.',
+                );
+                if (!proceed) return;
+                deleteAdminTemplate(tpl.id);
+              });
+            }
+            colActions.appendChild(deleteBtn);
+
             row.appendChild(colInfo);
             row.appendChild(colStatus);
             row.appendChild(colActions);
@@ -5035,6 +5045,23 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             })
             .catch((err) => {
               showAdminStatus(err.message, true);
+            });
+        };
+
+        const deleteAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Deleting template...');
+          adminFetch('admin/templates/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template deleted.');
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message || 'Unable to delete template.', true);
             });
         };
 
@@ -7733,6 +7760,51 @@ app.post('/admin/templates/boundary', requireAdmin, (req, res) => {
     bodyTopOffset: entry.bodyTopOffset,
     pageHeight,
   });
+  return res.json(buildTemplatesResponse());
+});
+
+app.post('/admin/templates/delete', requireAdmin, (req, res) => {
+  const templateId = req.body && req.body.templateId;
+  if (!templateId) {
+    return res.status(400).json({ ok: false, error: 'templateId is required.' });
+  }
+  const entry = getTemplateEntryById(templateId);
+  if (!entry) {
+    return res.status(404).json({ ok: false, error: 'Template not found.' });
+  }
+  if (entry.source === 'builtin') {
+    return res.status(400).json({ ok: false, error: 'Builtin template cannot be deleted.' });
+  }
+
+  // Удаляем файл, если он существует
+  try {
+    const safeRelative = sanitizeRelativePath(entry.relativePath || '');
+    const absolute = path.join(PUBLIC_DIR, safeRelative);
+    if (safeRelative && fs.existsSync(absolute)) {
+      fs.unlinkSync(absolute);
+    }
+  } catch (err) {
+    console.warn('[server] Failed to remove template file', err.message);
+  }
+
+  // Удаляем запись из манифеста
+  templateManifest.templates = templateManifest.templates.filter((tpl) => tpl.id !== entry.id);
+
+  // Если удалили активный — переключаемся на первый доступный или builtin
+  if (templateManifest.activeTemplateId === entry.id) {
+    const fallback = getActiveTemplateEntry(templateManifest) || templateManifest.templates[0] || null;
+    templateManifest.activeTemplateId = fallback ? fallback.id : null;
+    if (fallback) {
+      try {
+        applyActiveTemplateEntry(fallback);
+      } catch (err) {
+        console.warn('[server] Failed to apply fallback template', err.message);
+      }
+    }
+  }
+
+  saveTemplateManifest(templateManifest);
+  logAdminEvent('template.delete', { templateId: entry.id, label: entry.label, source: entry.source });
   return res.json(buildTemplatesResponse());
 });
 
