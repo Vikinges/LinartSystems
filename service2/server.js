@@ -1954,8 +1954,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     } else {
       cursorY = page.getHeight() - margin;
     }
-    page.drawText(heading, {
-      x: margin,
+    const headingText = heading || headingTitle;
+    const textWidth = font.widthOfTextAtSize(headingText, 18);
+    const centeredX = (page.getWidth() - textWidth) / 2;
+    page.drawText(headingText, {
+      x: centeredX,
       y: cursorY,
       size: 18,
       font,
@@ -1970,7 +1973,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     return next;
   };
 
-  const addContinuationPage = (heading = 'Service Report (cont.)') => {
+  const addContinuationPage = (heading = `${headingTitle} (cont.)`) => {
     return addPageWithHeading(heading);
   };
 
@@ -1992,7 +1995,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 18;
   };
 
-  setCurrentPage(page, 'Service Report');
+  setCurrentPage(page, headingTitle);
 
   const tableWidth = page.getWidth() - margin * 2;
   const signaturePlacements = [];
@@ -3946,6 +3949,15 @@ ${rows.join('\n')}
               </select>
               <input type="hidden" name="template_slug" data-template-slug />
             </label>
+            <label class="field" style="max-width:360px">
+              <span>Form type</span>
+              <select name="template_type" data-template-type>
+                <option value="service_report" selected>Service report</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="installation_report">Installation report</option>
+                <option value="calibration" disabled>Calibration (coming soon)</option>
+              </select>
+            </label>
             <div class="template-details" data-template-info>
               <p data-template-status>Loading available templates...</p>
               <p class="template-description" data-template-description hidden></p>
@@ -3962,6 +3974,32 @@ ${renderTextInput('led_display_model', 'LED display model')}
 ${renderTextInput('batch_number', 'Batch number')}
 ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 ${renderTextInput('service_company_name', 'Service company name')}
+<div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
+${renderTextInput('lsc_project_number', 'LSC Project number')}
+${renderTextInput('supplier_name', 'Supplier')}
+</div>
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Installation details</h2>
+          <div class="grid two-col">
+${renderTextInput('acceptance_status', 'Acceptance status (accepted / with reservations)', { placeholder: 'accepted / accepted with reservations' })}
+${renderTextInput('installation_participants', 'Participants (customer / contractor)', { placeholder: 'List participants' })}
+${renderTextArea('installation_defects', 'Defects (Annex 1)')}
+${renderTextArea('installation_remaining', 'Remaining activities')}
+${renderTextArea('installation_reservations', 'Reservations')}
+${renderTextInput('warranty_begin', 'Warranty begin', { type: 'date' })}
+${renderTextInput('warranty_end', 'Warranty end', { type: 'date' })}
+          </div>
+          <div class="grid two-col" style="margin-top:0.5rem">
+            <label class="checkbox">
+              <input type="checkbox" name="annex1_present" value="yes" />
+              <span>Annex 1 (Defects / remaining work) attached</span>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="annex2_present" value="yes" />
+              <span>Annex 2 (Spare parts) attached</span>
+            </label>
           </div>
         </section>
         <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
