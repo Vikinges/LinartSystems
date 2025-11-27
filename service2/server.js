@@ -1935,6 +1935,15 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const margin = 18;
   const headingColor = rgb(0.08, 0.2, 0.4);
   const textColor = rgb(0.1, 0.1, 0.16);
+  const templateType = (body && body.template_type) || 'service_report';
+  const headingTitle =
+    {
+      maintenance: 'Maintenance Report',
+      installation_report: 'Installation Report',
+      calibration: 'Calibration (draft)',
+      service_report: 'Service Report',
+    }[templateType] || 'Service Report';
+  const isInstallation = templateType === 'installation_report';
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
@@ -2452,8 +2461,12 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   // Затем employees и чеклисты
   renderEmployeesSection();
-  CHECKLIST_SECTIONS.forEach((section) => drawChecklistSection(section));
-  drawChecklistSection({ title: 'Sign-off checklist', rows: SIGN_OFF_CHECKLIST_ROWS });
+  const checklistSections = isInstallation ? [] : CHECKLIST_SECTIONS;
+  checklistSections.forEach((section) => drawChecklistSection(section));
+  const signoffRows = isInstallation ? [] : SIGN_OFF_CHECKLIST_ROWS;
+  if (signoffRows.length) {
+    drawChecklistSection({ title: 'Sign-off checklist', rows: signoffRows });
+  }
 
   // Parts record — в самом конце перед Sign-off details
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
