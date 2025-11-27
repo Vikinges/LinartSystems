@@ -7300,6 +7300,8 @@ app.use(
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+// Serve assets both at root and under /service2 (for proxied paths)
+app.use('/service2', express.static(PUBLIC_DIR));
 app.use(express.static(PUBLIC_DIR));
 
 const upload = multer({
