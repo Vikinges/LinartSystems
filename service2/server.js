@@ -7985,14 +7985,22 @@ app.post('/submit', (req, res, next) => {
       }
       throw err;
     }
-    const form = pdfDoc.getForm();
-
-    if (!form) {
-      return res.status(500).json({ ok: false, error: 'Template PDF does not contain an AcroForm.' });
+    let form = pdfDoc.getForm();
+    const hasAcroForm =
+      form &&
+      typeof form.getFields === 'function' &&
+      Array.isArray(form.getFields()) &&
+      form.getFields().length > 0;
+    if (!hasAcroForm) {
+      console.warn(
+        `[server] Selected template "${submissionTemplateEntry.label || submissionTemplateEntry.id}" has no AcroForm fields; skipping form population.`,
+      );
+      form = null;
     }
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    for (const descriptor of fieldDescriptors) {
+    if (form) {
+      for (const descriptor of fieldDescriptors) {
       const rawValue = req.body ? req.body[descriptor.requestName] : undefined;
       const value = toSingleValue(rawValue);
       const skipOriginalField = SIGN_OFF_REQUEST_FIELDS.has(descriptor.requestName);
@@ -8100,10 +8108,13 @@ app.post('/submit', (req, res, next) => {
         console.warn(`[server] Unable to populate field ${descriptor.acroName}: ${err.message}`);
       }
     }
+    }
 
     const imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles);
 
-    form.flatten();
+    if (form) {
+      form.flatten();
+    }
 
     if (overflowTextEntries.length) {
       overflowPlacements = appendOverflowPages(pdfDoc, helveticaFont, overflowTextEntries);
