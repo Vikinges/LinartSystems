@@ -2922,7 +2922,10 @@ ${rows.join('\n')}
         <div class="parts-table-actions">
           <button type="button" class="button" data-action="parts-add-row">+ Add another part</button>
           <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <button type="button" class="button" data-parts-ocr>+ Add photo (OCR)</button>
+          <input type="file" data-parts-ocr-input accept="image/*" hidden />
           <p class="parts-table-hint">Maximum of ${PARTS_ROW_COUNT} rows.</p>
+          <p class="parts-table-hint" data-parts-ocr-status></p>
         </div>
       </section>`;
   };
@@ -4341,6 +4344,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminPreviewBoundaryEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-template-boundary-line]')
           : null;
+        const formTypeSelectEl = document.querySelector('[data-template-type]');
+        const partsOcrButton = document.querySelector('[data-parts-ocr]');
+        const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
+        const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
         const boundaryControlsEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-boundary-controls]')
           : null;
@@ -4353,6 +4360,117 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const boundarySaveBtn = boundaryControlsEl
           ? boundaryControlsEl.querySelector('[data-boundary-save]')
           : null;
+        const applyFormTypeVisibility = (formType) => {
+          const type = formType || (formTypeSelectEl ? formTypeSelectEl.value : '');
+          const targets = Array.from(document.querySelectorAll('[data-form-types]'));
+          targets.forEach((el) => {
+            const allowed = (el.getAttribute('data-form-types') || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const shouldShow = allowed.length === 0 || allowed.includes(type);
+            el.hidden = !shouldShow;
+            el.style.display = shouldShow ? '' : 'none';
+          });
+        };
+
+        const findFirstVisiblePartsRow = () => {
+          const table = document.querySelector('[data-parts-table]');
+          if (!table) return null;
+          const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
+          return rows[0] || null;
+        };
+
+        const loadTesseract = () =>
+          new Promise((resolve, reject) => {
+            if (window.Tesseract) return resolve(window.Tesseract);
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js';
+            script.onload = () => resolve(window.Tesseract);
+            script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+            document.head.appendChild(script);
+          });
+
+        const setPartsOcrStatus = (msg, isError = false) => {
+          if (!partsOcrStatus) return;
+          partsOcrStatus.textContent = msg || '';
+          partsOcrStatus.style.color = isError ? '#c1121f' : '#475569';
+        };
+
+        const parseOcrText = (text) => {
+          const lines = text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+          const tokens = text
+            .split(/\s+/)
+            .map((t) => t.replace(/[^A-Za-z0-9-]/g, '').trim())
+            .filter(Boolean);
+          const model =
+            lines.find((l) => /LED-[A-Z0-9]/i.test(l)) ||
+            tokens.find((t) => /^LED-[A-Z0-9]/i.test(t)) ||
+            tokens.find((t) => /^[A-Z]{2}\d{2,}/i.test(t)) ||
+            '';
+          const serialCandidate =
+            tokens
+              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Za-z0-9]/g, '').length >= 8)
+              .sort((a, b) => b.length - a.length)[0] || '';
+          let batch = '';
+          const serialUp = serialCandidate.toUpperCase();
+          for (let i = 0; i <= serialUp.length - 3; i += 1) {
+            const sub = serialUp.slice(i, i + 3);
+            if (/[A-Z]/.test(sub) && /[0-9].*[0-9]/.test(sub)) {
+              batch = sub;
+              break;
+            }
+          }
+          return { model, serial: serialCandidate, batch };
+        };
+
+        const fillPartsFromOcr = (parsed) => {
+          const row = findFirstVisiblePartsRow();
+          if (!row) return false;
+          if (parsed.serial) {
+            const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
+            if (serialInput) serialInput.value = parsed.serial;
+          }
+          if (parsed.model) {
+            const partInput = row.querySelector('input[name^="parts_used_part_"]');
+            if (partInput) partInput.value = parsed.model;
+          }
+          const ledField = document.querySelector('input[name="led_display_model"]');
+          if (parsed.model && ledField && !ledField.value) {
+            ledField.value = parsed.model;
+          }
+          const batchField = document.querySelector('input[name="batch_number"]');
+          if (parsed.batch && batchField && !batchField.value) {
+            batchField.value = parsed.batch;
+          }
+          return true;
+        };
+
+        const handlePartsOcrFile = async (file) => {
+          if (!file) return;
+          setPartsOcrStatus('Reading photo...');
+          try {
+            const Tesseract = await loadTesseract();
+            setPartsOcrStatus('Recognizing text...');
+            const { data } = await Tesseract.recognize(file, 'eng', {
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
+            });
+            const parsed = parseOcrText(data.text || '');
+            if (!parsed.serial && !parsed.model) {
+              setPartsOcrStatus('No text found, try a clearer photo.', true);
+              return;
+            }
+            fillPartsFromOcr(parsed);
+            setPartsOcrStatus(`OCR ok. Serial: ${parsed.serial || 'n/a'}; Model: ${parsed.model || 'n/a'}; Batch: ${parsed.batch || 'n/a'}. Check and edit if needed.`);
+          } catch (err) {
+            setPartsOcrStatus(err.message || 'OCR failed.', true);
+          } finally {
+            if (partsOcrInput) partsOcrInput.value = '';
+          }
+        };
         const adminStatusEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-status]') : null;
         const adminProfileEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-profile]') : null;
         const DEFAULT_PAGE_WIDTH = 595.28;
@@ -5077,6 +5195,24 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             });
         };
 
+        if (formTypeSelectEl) {
+          formTypeSelectEl.addEventListener('change', () => applyFormTypeVisibility(formTypeSelectEl.value));
+          applyFormTypeVisibility(formTypeSelectEl.value);
+        } else {
+          applyFormTypeVisibility();
+        }
+
+        if (partsOcrButton && partsOcrInput) {
+          partsOcrButton.addEventListener('click', () => {
+            setPartsOcrStatus('');
+            partsOcrInput.click();
+          });
+          partsOcrInput.addEventListener('change', () => {
+            const file = partsOcrInput.files && partsOcrInput.files[0];
+            if (!file) return;
+            handlePartsOcrFile(file);
+          });
+        }
         const selectAdminTemplate = (templateId) => {
           if (!templateId) return;
           showAdminStatus('Activating template...');
