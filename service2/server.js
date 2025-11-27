@@ -3985,9 +3985,9 @@ ${renderTextInput('supplier_name', 'Supplier')}
           <div class="grid two-col">
 ${renderTextInput('acceptance_status', 'Acceptance status (accepted / with reservations)', { placeholder: 'accepted / accepted with reservations' })}
 ${renderTextInput('installation_participants', 'Participants (customer / contractor)', { placeholder: 'List participants' })}
-${renderTextArea('installation_defects', 'Defects (Annex 1)')}
-${renderTextArea('installation_remaining', 'Remaining activities')}
-${renderTextArea('installation_reservations', 'Reservations')}
+${renderTextInput('installation_defects', 'Defects (Annex 1)', { textarea: true })}
+${renderTextInput('installation_remaining', 'Remaining activities', { textarea: true })}
+${renderTextInput('installation_reservations', 'Reservations', { textarea: true })}
 ${renderTextInput('warranty_begin', 'Warranty begin', { type: 'date' })}
 ${renderTextInput('warranty_end', 'Warranty end', { type: 'date' })}
           </div>
