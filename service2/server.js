@@ -4272,6 +4272,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
    <script src="/service2/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
+        if (window.__pmInitDone) return;
+        window.__pmInitDone = true;
         const formEl = document.getElementById('pm-form');
         if (!formEl) return;
 
