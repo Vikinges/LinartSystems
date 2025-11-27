@@ -2389,6 +2389,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
     const headerHeight = 18;
     const dataHeight = 36;
+    const rowStride = headerHeight + dataHeight;
     const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20;
     const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
     drawSectionTitle(sectionLabel);
@@ -2397,7 +2398,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       const colIdx = idx < rowsPerCol ? 0 : 1;
       const rowIdx = idx % rowsPerCol;
       const x = colX[colIdx];
-      const y = cursorY - rowHeight * rowIdx;
+      const y = cursorY - rowStride * rowIdx;
       const headerY = y - headerHeight;
       const dataY = headerY - dataHeight;
 
