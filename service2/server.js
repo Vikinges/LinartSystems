@@ -620,6 +620,7 @@ const DEFAULT_SUGGESTIONS = {
   employee_role: ['Engineer', 'Service tech'],
 };
 const MAX_SUGGESTIONS_PER_FIELD = 12;
+const INSTALLATION_BLOCK_ONLY = ['installation_report'];
 
 function getSeedSuggestions(fieldName) {
   if (!fieldName || !suggestionStore || !suggestionStore.suggestions) {
@@ -676,6 +677,9 @@ const SIGN_OFF_CHECKLIST_ROWS = [
   },
 ];
 
+function isInstallation(templateType) {
+  return templateType === 'installation_report';
+}
 function normalizeSuggestionValue(value) {
   if (value === undefined || value === null) return '';
   return String(value).trim().replace(/\s+/g, ' ');
@@ -3989,16 +3993,6 @@ ${renderTextInput('installation_remaining', 'Remaining activities', { textarea: 
 ${renderTextInput('installation_reservations', 'Reservations', { textarea: true })}
 ${renderTextInput('warranty_begin', 'Warranty begin', { type: 'date' })}
 ${renderTextInput('warranty_end', 'Warranty end', { type: 'date' })}
-          </div>
-          <div class="grid two-col" style="margin-top:0.5rem">
-            <label class="checkbox">
-              <input type="checkbox" name="annex1_present" value="yes" />
-              <span>Annex 1 (Defects / remaining work) attached</span>
-            </label>
-            <label class="checkbox">
-              <input type="checkbox" name="annex2_present" value="yes" />
-              <span>Annex 2 (Spare parts) attached</span>
-            </label>
           </div>
         </section>
         <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
