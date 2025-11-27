@@ -2937,7 +2937,7 @@ ${rows.join('\n')}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Service report</title>
+    <title>PDF forms generator · v0.2 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -3931,7 +3931,7 @@ ${rows.join('\n')}
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>Service report</h1>
+        <h1>PDF forms generator · v0.2 Lin</h1>
         <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
