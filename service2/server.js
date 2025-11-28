@@ -4524,7 +4524,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             setPartsOcrStatus('Recognizing text...');
             const { data } = await Tesseract.recognize(file, 'eng', {
               tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
-              tessedit_char_blacklist: ':/\\\\()[]{}.,;\\"\\'\\`',
+              tessedit_char_blacklist: ':/\\\\()[]{}.,;\\"\\'',
             });
             const parsed = parseOcrText(data.text || '');
             if (!parsed.serial && !parsed.model) {
