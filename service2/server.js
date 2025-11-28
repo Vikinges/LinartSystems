@@ -4386,7 +4386,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const rawTokens = cleaned.split(/\s+/).map((t) => normalizeToken(t)).filter(Boolean);
           const compactText = text.replace(/[^A-Za-z0-9-]+/g, '').toUpperCase();
           const compactTokens = (compactText.match(/[A-Z0-9-]{3,}/g) || []).map((t) => t.toUpperCase());
-          const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 3);
+          const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 6);
           const expandedTokens = [...baseTokens];
           baseTokens.forEach((token) => {
             const joined = token.match(/^([A-Z]+[A-Z0-9-]{2,}?)(\d{6,})$/);
@@ -4400,16 +4400,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (!value) return -1;
             if (/^LED-[A-Z0-9]{3,}/i.test(value)) return 100;
             if (/^LD-[A-Z0-9]{3,}/i.test(value)) return 95;
-            if (/^FA0?\d+[A-Z0-9]*/i.test(value)) return 90;
-            if (value.length < 5) return 0;
-            if (/^[A-Z]\d-\d$/i.test(value)) return 0;
-            if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.includes('-')) return 70;
-            if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16) return 50;
-            return 0;
+            if (/^FA\d+[A-Z0-9]*/i.test(value)) return 90;
+            return -1;
           };
 
           const rankedCandidates = [];
-          const modelTokens = [...expandedTokens, ...compactTokens];
+          const modelTokens = [...expandedTokens, ...compactTokens.filter((t) => t.length >= 6)];
           modelTokens.forEach((token, idx) => rankedCandidates.push({ token, idx, score: modelScore(token) }));
           lines.forEach((line, idx) => {
             const normalized = normalizeToken(line).toUpperCase();
@@ -4424,7 +4420,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const compactModel = compactTokens.find((t) => /^LED-|^LD-|^FA0?\d+/i.test(t));
             if (compactModel) model = compactModel.toUpperCase();
           }
-          if (model && model.length < 5) {
+          if (model && model.length < 6) {
             model = '';
           }
           const modelIndex = bestModel ? bestModel.idx : -1;
@@ -4432,6 +4428,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const pickSerialFromTokens = (list, startIndex = 0) => {
             const candidates = list
               .slice(startIndex)
+              .map((t) => t.replace(/[^A-Z0-9-]/gi, ''))
               .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Z0-9]/gi, '').length >= 7);
             if (!candidates.length) return '';
             return candidates.sort((a, b) => b.length - a.length)[0];
