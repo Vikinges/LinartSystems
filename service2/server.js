@@ -4375,28 +4375,64 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             .split(/\\r?\\n/)
             .map((l) => l.trim())
             .filter(Boolean);
-          const tokens = text
-            .split(/\\s+/)
-            .map((t) => t.replace(/[^A-Za-z0-9-]/g, '').trim())
-            .filter(Boolean);
-          const model =
-            lines.find((l) => /LED-[A-Z0-9]/i.test(l)) ||
-            tokens.find((t) => /^LED-[A-Z0-9]/i.test(t)) ||
-            tokens.find((t) => /^[A-Z]{2}\\d{2,}/i.test(t)) ||
-            '';
-          const serialCandidate =
-            tokens
-              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Za-z0-9]/g, '').length >= 8)
-              .sort((a, b) => b.length - a.length)[0] || '';
-          let batch = '';
-          const serialUp = serialCandidate.toUpperCase();
-          for (let i = 0; i <= serialUp.length - 3; i += 1) {
-            const sub = serialUp.slice(i, i + 3);
-            if (/[A-Z]/.test(sub) && /[0-9].*[0-9]/.test(sub)) {
-              batch = sub;
-              break;
+          const normalizeToken = (t) =>
+            t
+              .replace(/[^A-Za-z0-9-]/g, ' ')
+              .replace(/\\s+/g, '')
+              .replace(/--+/g, '-')
+              .trim();
+          const rawTokens = text.split(/\\s+/).map(normalizeToken).filter(Boolean);
+          const tokens = rawTokens.map((t) => t.toUpperCase());
+
+          const looksLikeModel = (value) => {
+            if (!value) return false;
+            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return true;
+            if (/^FA0?\\d+[A-Z0-9]*/i.test(value)) return true;
+            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16;
+          };
+
+          let model = '';
+          let modelIndex = -1;
+          tokens.some((token, idx) => {
+            if (looksLikeModel(token)) {
+              model = token;
+              modelIndex = idx;
+              return true;
+            }
+            return false;
+          });
+          if (!model) {
+            const lineModel = lines.find((l) => looksLikeModel(normalizeToken(l).toUpperCase()));
+            if (lineModel) {
+              model = normalizeToken(lineModel).toUpperCase();
             }
           }
+
+          const pickSerialFromTokens = (list, startIndex = 0) => {
+            const candidates = list
+              .slice(startIndex)
+              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Z0-9]/gi, '').length >= 7);
+            if (!candidates.length) return '';
+            return candidates.sort((a, b) => b.length - a.length)[0];
+          };
+
+          let serialCandidate = pickSerialFromTokens(tokens, modelIndex >= 0 ? modelIndex + 1 : 0);
+          if (!serialCandidate) {
+            serialCandidate = pickSerialFromTokens(tokens, 0);
+          }
+
+          const extractBatch = (serial) => {
+            if (!serial) return '';
+            const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
+            const alphaNumMatch = cleaned.match(/[A-Z][A-Z0-9]{2,4}/);
+            if (alphaNumMatch) return alphaNumMatch[0];
+            if (cleaned.length >= 5) return cleaned.slice(0, 5);
+            if (cleaned.length >= 3) return cleaned.slice(0, 3);
+            return '';
+          };
+
+          const batch = extractBatch(serialCandidate);
+
           return { model, serial: serialCandidate, batch };
         };
 
