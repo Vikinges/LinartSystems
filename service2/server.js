@@ -4351,8 +4351,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const table = document.querySelector('[data-parts-table]');
           if (!table) return null;
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
-          // Заполняем самую последнюю показанную строку — обычно это только что добавленная.
-          return rows.length ? rows[rows.length - 1] : null;
+          return rows[0] || null;
         };
 
         const loadTesseract = () =>
@@ -4379,48 +4378,48 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const normalizeToken = (t) =>
             t
               .replace(/[^A-Za-z0-9-]/g, ' ')
-              .replace(/\s+/g, '')
+              .replace(/\\s+/g, '')
               .replace(/--+/g, '-')
               .trim();
-          const cleaned = text.replace(/[^A-Za-z0-9-]+/g, ' ').trim();
-          const compactText = text.replace(/[^A-Za-z0-9-]+/g, '').toUpperCase();
-          const rawTokens = cleaned.split(/\s+/).map((t) => normalizeToken(t)).filter(Boolean);
-          const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 6);
-          const compactTokens = (compactText.match(/[A-Z0-9-]{6,}/g) || []).map((t) => t.toUpperCase());
+          const rawTokens = text.split(/\\s+/).map(normalizeToken).filter(Boolean);
+          const tokens = rawTokens.map((t) => t.toUpperCase());
 
-          // Model: only explicit prefixes LED-, LD-, FA<digits>
-          const modelRegexes = [
-            /(LED-[A-Z0-9]{3,12})/i,
-            /(LD-[A-Z0-9]{3,12})/i,
-            /(FA\d{2,}[A-Z0-9]{0,8})/i,
-          ];
-          let model = '';
-          for (const rx of modelRegexes) {
-            const m = compactText.match(rx);
-            if (m && m[1]) {
-              model = m[1].toUpperCase();
-              break;
-            }
-          }
-          if (!model) {
-            const tokenModel = [...baseTokens, ...compactTokens].find((t) =>
-              /^LED-|^LD-|^FA\d+/i.test(t)
-            );
-            if (tokenModel) model = tokenModel.toUpperCase();
-          }
-
-          const modelClean = model ? model.replace(/-/g, '') : '';
-          const pickSerial = () => {
-            let searchText = compactText;
-            if (modelClean) {
-              searchText = searchText.replace(new RegExp(modelClean, 'g'), '');
-            }
-            const serials = (searchText.match(/[A-Z0-9]{8,}/g) || []).filter((s) => /\d/.test(s));
-            if (!serials.length) return '';
-            serials.sort((a, b) => b.length - a.length || (b.match(/\d/g)||[]).length - (a.match(/\d/g)||[]).length);
-            return serials[0];
+          const looksLikeModel = (value) => {
+            if (!value) return false;
+            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return true;
+            if (/^FA0?\\d+[A-Z0-9]*/i.test(value)) return true;
+            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16;
           };
-          const serialCandidate = pickSerial();
+
+          let model = '';
+          let modelIndex = -1;
+          tokens.some((token, idx) => {
+            if (looksLikeModel(token)) {
+              model = token;
+              modelIndex = idx;
+              return true;
+            }
+            return false;
+          });
+          if (!model) {
+            const lineModel = lines.find((l) => looksLikeModel(normalizeToken(l).toUpperCase()));
+            if (lineModel) {
+              model = normalizeToken(lineModel).toUpperCase();
+            }
+          }
+
+          const pickSerialFromTokens = (list, startIndex = 0) => {
+            const candidates = list
+              .slice(startIndex)
+              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Z0-9]/gi, '').length >= 7);
+            if (!candidates.length) return '';
+            return candidates.sort((a, b) => b.length - a.length)[0];
+          };
+
+          let serialCandidate = pickSerialFromTokens(tokens, modelIndex >= 0 ? modelIndex + 1 : 0);
+          if (!serialCandidate) {
+            serialCandidate = pickSerialFromTokens(tokens, 0);
+          }
 
           const extractBatch = (serial) => {
             if (!serial) return '';
@@ -4429,13 +4428,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (letterDigit3) return letterDigit3[0];
 
             const digitsOnly = cleaned.replace(/[^0-9]/g, '');
-            if (digitsOnly.length >= 5) {
-              const midChunk = digitsOnly.slice(2, 5);
-              if (midChunk) return midChunk;
-            } else if (digitsOnly.length >= 3) {
+            if (digitsOnly.length >= 3) {
               const start = Math.max(0, Math.min(digitsOnly.length - 3, Math.floor(digitsOnly.length / 2) - 1));
-              const midFallback = digitsOnly.slice(start, start + 3);
-              if (midFallback) return midFallback;
+              const midChunk = digitsOnly.slice(start, start + 3);
+              if (midChunk) return midChunk;
             }
 
             if (cleaned.length >= 5) return cleaned.slice(0, 5);
@@ -4467,23 +4463,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             batchDescInput.value = safeBatch;
           }
           const ledField = document.querySelector('input[name="led_display_model"]');
-          const batchField = document.querySelector('input[name="batch_number"]');
-          const combined = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel || '';
-          if (ledField && combined) {
-            const current = ledField.value ? ledField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
-            const have = new Set(current.map((s) => s.toUpperCase()));
-            if (!have.has(combined.toUpperCase())) {
-              current.push(combined);
-              ledField.value = current.join(', ');
-            }
+          if (safeModel && ledField && !ledField.value) {
+            ledField.value = safeModel;
           }
-          if (batchField && safeBatch) {
-            const currentBatch = batchField.value ? batchField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
-            const have = new Set(currentBatch.map((s) => s.toUpperCase()));
-            if (!have.has(safeBatch.toUpperCase())) {
-              currentBatch.push(safeBatch);
-              batchField.value = currentBatch.join(', ');
-            }
+          const batchField = document.querySelector('input[name="batch_number"]');
+          if (safeBatch && batchField && !batchField.value) {
+            batchField.value = safeBatch;
           }
           return true;
         };
@@ -4494,64 +4479,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           try {
             const Tesseract = await loadTesseract();
             setPartsOcrStatus('Recognizing text...');
-          const toOcrBlob = async (file) => {
-            return new Promise((resolve) => {
-              const img = new Image();
-              img.onload = () => {
-                const canvas = document.createElement('canvas');
-                canvas.width = img.width;
-                canvas.height = img.height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0);
-
-                const cropHeight = Math.max(16, Math.floor(img.height * 0.35));
-                let cropY = Math.floor(img.height * 0.6);
-                if (cropY + cropHeight > img.height) {
-                  cropY = Math.max(0, img.height - cropHeight);
-                }
-                const cropCanvas = document.createElement('canvas');
-                cropCanvas.width = img.width;
-                cropCanvas.height = cropHeight;
-                const cropCtx = cropCanvas.getContext('2d');
-                cropCtx.drawImage(canvas, 0, cropY, img.width, cropHeight, 0, 0, img.width, cropHeight);
-
-                const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
-                const data = imageData.data;
-                for (let i = 0; i < data.length; i += 4) {
-                  const r = data[i];
-                  const g = data[i + 1];
-                  const b = data[i + 2];
-                  const v = 0.299 * r + 0.587 * g + 0.114 * b;
-                  const t = v > 140 ? 255 : 0;
-                  data[i] = data[i + 1] = data[i + 2] = t;
-                }
-                cropCtx.putImageData(imageData, 0, 0);
-                cropCanvas.toBlob((blob) => resolve(blob || file), 'image/png');
-              };
-              img.onerror = () => resolve(file);
-              img.src = URL.createObjectURL(file);
+            const { data } = await Tesseract.recognize(file, 'eng', {
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
             });
-          };
-
-          const ocrInput = file && typeof HTMLCanvasElement !== 'undefined' ? await toOcrBlob(file) : file;
-
-          const runRecognize = async (inputFile) => {
-            return Tesseract.recognize(inputFile, 'eng', {
-              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
-              tessedit_char_blacklist: ':/\\\\()[]{}.,;\\"\\'',
-              tessedit_pageseg_mode: 7,
-              oem: 1,
-            });
-          };
-
-          let data;
-          try {
-            const res = await runRecognize(ocrInput);
-            data = res.data;
-          } catch (primaryErr) {
-            const res = await runRecognize(file);
-            data = res.data;
-          }
             const parsed = parseOcrText(data.text || '');
             if (!parsed.serial && !parsed.model) {
               setPartsOcrStatus('No text found, please try a clearer photo.', true);
