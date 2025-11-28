@@ -4439,11 +4439,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           if (!serialCandidate) {
             serialCandidate = pickSerialFromTokens(serialTokens, 0);
           }
-          if (!serialCandidate || serialCandidate.length < 7) {
-            const compactSerials = compactText.match(/[A-Z0-9]{7,}/g);
-            if (compactSerials && compactSerials.length) {
-              compactSerials.sort((a, b) => b.length - a.length);
-              serialCandidate = compactSerials[0];
+          let serialSearchText = compactText;
+          if (model) {
+            const modelClean = model.replace(/-/g, '');
+            serialSearchText = serialSearchText.replace(new RegExp(modelClean, 'g'), '');
+          }
+          const compactSerials = serialSearchText.match(/[A-Z0-9]{7,}/g);
+          if (compactSerials && compactSerials.length) {
+            compactSerials.sort((a, b) => b.length - a.length);
+            const bestCompact = compactSerials[0];
+            if (!serialCandidate || bestCompact.length > serialCandidate.length) {
+              serialCandidate = bestCompact;
             }
           }
 
