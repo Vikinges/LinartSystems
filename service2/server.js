@@ -4464,12 +4464,24 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             batchDescInput.value = safeBatch;
           }
           const ledField = document.querySelector('input[name="led_display_model"]');
-          if (safeModel && ledField && !ledField.value) {
-            ledField.value = safeModel;
-          }
           const batchField = document.querySelector('input[name="batch_number"]');
-          if (safeBatch && batchField && !batchField.value) {
-            batchField.value = safeBatch;
+          const combined = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel || '';
+          if (ledField && combined) {
+            const current = ledField.value ? ledField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+            const normalizedCombined = combined.toUpperCase();
+            const have = new Set(current.map((s) => s.toUpperCase()));
+            if (!have.has(normalizedCombined)) {
+              current.push(combined);
+              ledField.value = current.join(', ');
+            }
+          }
+          if (batchField && safeBatch) {
+            const currentBatch = batchField.value ? batchField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
+            const have = new Set(currentBatch.map((s) => s.toUpperCase()));
+            if (!have.has(safeBatch.toUpperCase())) {
+              currentBatch.push(safeBatch);
+              batchField.value = currentBatch.join(', ');
+            }
           }
           return true;
         };
