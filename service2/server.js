@@ -7509,10 +7509,10 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", OCR_CDN_HOST],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", OCR_CDN_HOST, 'blob:'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", OCR_CDN_HOST],
+        connectSrc: ["'self'", OCR_CDN_HOST, 'data:', 'blob:'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         workerSrc: ["'self'", 'blob:', OCR_CDN_HOST],
