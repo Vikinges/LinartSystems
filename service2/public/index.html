@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Service report</title>
+    <title>PDF forms generator · v0.2 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -997,7 +997,7 @@
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>Service report</h1>
+        <h1>PDF forms generator · v0.2 Lin</h1>
         <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
@@ -1011,6 +1011,15 @@
                 <option value="">Loading templates...</option>
               </select>
               <input type="hidden" name="template_slug" data-template-slug />
+            </label>
+            <label class="field" style="max-width:360px">
+              <span>Form type</span>
+              <select name="template_type" data-template-type>
+                <option value="service_report" selected>Service report</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="installation_report">Installation report</option>
+                <option value="calibration" disabled>Calibration (coming soon)</option>
+              </select>
             </label>
             <div class="template-details" data-template-info>
               <p data-template-status>Loading available templates...</p>
@@ -1033,12 +1042,12 @@
           <datalist id="suggest-site-location" data-suggest-list="site_location"></datalist>
         </label>
         <label class="field" for="led-display-model">
-          <span>LED display model</span>
-          <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model" />
+          <span>LED display model / batch</span>
+          <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model / batch" />
         </label>
         <label class="field" for="batch-number">
-          <span>Batch number</span>
-          <input type="text" id="batch-number" name="batch_number" placeholder="Batch number" />
+          <span>LSC Project number</span>
+          <input type="text" id="batch-number" name="batch_number" placeholder="LSC Project number" />
         </label>
         <label class="field" for="date-of-service">
           <span>Date of service</span>
@@ -1049,6 +1058,21 @@
           <input type="text" id="service-company-name" name="service_company_name" placeholder="Service company name" data-suggest-field="service_company_name" list="suggest-service-company-name" autocomplete="off" />
           <datalist id="suggest-service-company-name" data-suggest-list="service_company_name"></datalist>
         </label>
+<div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
+        <!-- Missing field: Supplier (supplier_name) -->
+</div>
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Installation details</h2>
+          <div class="grid two-col">
+        <!-- Missing field: Acceptance status (accepted / with reservations) (acceptance_status) -->
+        <!-- Missing field: Participants (customer / contractor) (installation_participants) -->
+        <!-- Missing field: Defects (Annex 1) (installation_defects) -->
+        <!-- Missing field: Remaining activities (installation_remaining) -->
+        <!-- Missing field: Reservations (installation_reservations) -->
+        <!-- Missing field: Warranty begin (warranty_begin) -->
+        <!-- Missing field: Warranty end (warranty_end) -->
           </div>
         </section>
         <section class="card employee-card" data-employees-section data-employee-max="20">
@@ -1418,7 +1442,10 @@
         <div class="parts-table-actions">
           <button type="button" class="button" data-action="parts-add-row">+ Add another part</button>
           <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <button type="button" class="button" data-parts-ocr>+ Add photo (OCR)</button>
+          <input type="file" data-parts-ocr-input accept="image/*" hidden />
           <p class="parts-table-hint">Maximum of 15 rows.</p>
+          <p class="parts-table-hint" data-parts-ocr-status></p>
         </div>
       </section>
       <section class="card">
@@ -1519,11 +1546,7 @@
               <input type="checkbox" data-debug-toggle />
               <span>Enable debug feedback</span>
             </label>
-            <label class="checkbox">
-              <input type="checkbox" data-debug-toggle />
-              <span>Autofill demo data</span>
-            </label>
-            <span class="debug-hint">Toggle to capture request details and auto-fill sample data.</span>
+            <span class="debug-hint">Toggle to capture request details for troubleshooting.</span>
           </div>
           <div class="debug-panel" data-debug-panel>
             <pre data-debug-log>Debug output will appear here once enabled.</pre>
@@ -1604,7 +1627,7 @@
       </div>
     </div>
   </section>
-   <script src="/vendor/pdfjs/pdf.min.js"></script>
+   <script src="/service2/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
         const formEl = document.getElementById('pm-form');
@@ -1628,6 +1651,10 @@
           ? templateInfoEl.querySelector('[data-template-description]')
           : null;
         const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
+        const formTypeSelectEl = document.querySelector('[data-template-type]');
+        const partsOcrButton = document.querySelector('[data-parts-ocr]');
+        const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
+        const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -1661,6 +1688,128 @@
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
+
+
+        const applyFormTypeVisibility = (formType) => {
+          const type = formType || (formTypeSelectEl ? formTypeSelectEl.value : '');
+          const targets = Array.from(document.querySelectorAll('[data-form-types]'));
+          targets.forEach((el) => {
+            const allowed = (el.getAttribute('data-form-types') || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const shouldShow = allowed.length === 0 || allowed.includes(type);
+            el.hidden = !shouldShow;
+            el.style.display = shouldShow ? '' : 'none';
+          });
+        };
+
+        const findFirstVisiblePartsRow = () => {
+          const table = document.querySelector('[data-parts-table]');
+          if (!table) return null;
+          const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
+          return rows[0] || null;
+        };
+
+        const loadTesseract = () =>
+          new Promise((resolve, reject) => {
+            if (window.Tesseract) return resolve(window.Tesseract);
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js';
+            script.onload = () => resolve(window.Tesseract);
+            script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+            document.head.appendChild(script);
+          });
+
+        const setPartsOcrStatus = (msg, isError = false) => {
+          if (!partsOcrStatus) return;
+          partsOcrStatus.textContent = msg || '';
+          partsOcrStatus.style.color = isError ? '#c1121f' : '#475569';
+        };
+
+        const parseOcrText = (text) => {
+          const lines = text
+            .split(/\r?\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+          const tokens = text
+            .split(/\s+/)
+            .map((t) => t.replace(/[^A-Za-z0-9-]/g, '').trim())
+            .filter(Boolean);
+          const model =
+            lines.find((l) => /LED-[A-Z0-9]/i.test(l)) ||
+            tokens.find((t) => /^LED-[A-Z0-9]/i.test(t)) ||
+            tokens.find((t) => /^[A-Z]{2}\d{2,}/i.test(t)) ||
+            '';
+          const serialCandidate =
+            tokens
+              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Za-z0-9]/g, '').length >= 8)
+              .sort((a, b) => b.length - a.length)[0] || '';
+          let batch = '';
+          const serialUp = serialCandidate.toUpperCase();
+          for (let i = 0; i <= serialUp.length - 3; i += 1) {
+            const sub = serialUp.slice(i, i + 3);
+            if (/[A-Z]/.test(sub) && /[0-9].*[0-9]/.test(sub)) {
+              batch = sub;
+              break;
+            }
+          }
+          return { model, serial: serialCandidate, batch };
+        };
+
+        const fillPartsFromOcr = (parsed) => {
+          const row = findFirstVisiblePartsRow();
+          if (!row) return false;
+          if (parsed.serial) {
+            const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
+            if (serialInput) serialInput.value = parsed.serial;
+          }
+          if (parsed.model) {
+            const partInput = row.querySelector('input[name^="parts_used_part_"]');
+            if (partInput) partInput.value = parsed.model;
+          }
+          const ledField = document.querySelector('input[name="led_display_model"]');
+          if (parsed.model && ledField && !ledField.value) {
+            ledField.value = parsed.model;
+          }
+          const batchField = document.querySelector('input[name="batch_number"]');
+          if (parsed.batch && batchField && !batchField.value) {
+            batchField.value = parsed.batch;
+          }
+          return true;
+        };
+
+        const handlePartsOcrFile = async (file) => {
+          if (!file) return;
+          setPartsOcrStatus('Reading photo...');
+          try {
+            const Tesseract = await loadTesseract();
+            setPartsOcrStatus('Recognizing text...');
+            const { data } = await Tesseract.recognize(file, 'eng', {
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
+            });
+            const parsed = parseOcrText(data.text || '');
+            if (!parsed.serial && !parsed.model) {
+              setPartsOcrStatus('No text found, please try a clearer photo.', true);
+              return;
+            }
+            fillPartsFromOcr(parsed);
+            const summary =
+              'OCR ok. Serial: ' +
+              (parsed.serial || 'n/a') +
+              '; Model: ' +
+              (parsed.model || 'n/a') +
+              '; Batch: ' +
+              (parsed.batch || 'n/a') +
+              '. Check and edit if needed.';
+            setPartsOcrStatus(summary);
+          } catch (err) {
+            setPartsOcrStatus(err.message || 'OCR failed.', true);
+          } finally {
+            if (partsOcrInput) partsOcrInput.value = '';
+          }
+        };
+
         const adminPreviewEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-preview]') : null;
         const adminPreviewLabelEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-label]')
@@ -1680,6 +1829,7 @@
         const adminPreviewBoundaryEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-template-boundary-line]')
           : null;
+
         const boundaryControlsEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-boundary-controls]')
           : null;
@@ -1792,11 +1942,17 @@
             }
             return;
           }
-          const wrapperHeight = adminPreviewFrameWrapper.clientHeight;
-          const wrapperWidth = adminPreviewFrameWrapper.clientWidth;
+          const wrapperRect = adminPreviewFrameWrapper.getBoundingClientRect();
+          const canvasRect = adminPreviewCanvas ? adminPreviewCanvas.getBoundingClientRect() : null;
+          const wrapperHeight = wrapperRect.height;
+          const wrapperWidth = wrapperRect.width;
+          const canvasHeight = canvasRect ? canvasRect.height : 0;
+          const canvasWidth = canvasRect ? canvasRect.width : 0;
           if (
             !wrapperHeight ||
             !wrapperWidth ||
+            !canvasHeight ||
+            !canvasWidth ||
             !Number.isFinite(boundaryState.pageHeight) ||
             boundaryState.pageHeight <= 0 ||
             !Number.isFinite(boundaryState.pageWidth) ||
@@ -1806,10 +1962,13 @@
             return;
           }
           const ratio = clampValue(boundaryState.value / boundaryState.pageHeight, 0, 1);
-          const aspect = boundaryState.pageHeight / boundaryState.pageWidth;
-          const displayHeight = Math.min(wrapperWidth * aspect, wrapperHeight);
-          const offsetTop = (wrapperHeight - displayHeight) / 2;
-          const topPosition = offsetTop + displayHeight * ratio;
+          const overlayTop = canvasRect.top - wrapperRect.top;
+          const overlayLeft = canvasRect.left - wrapperRect.left;
+          adminPreviewOverlayEl.style.top = overlayTop + 'px';
+          adminPreviewOverlayEl.style.left = overlayLeft + 'px';
+          adminPreviewOverlayEl.style.height = canvasHeight + 'px';
+          adminPreviewOverlayEl.style.width = canvasWidth + 'px';
+          const topPosition = overlayTop + canvasHeight * ratio;
           adminPreviewBoundaryEl.style.top = topPosition + 'px';
           adminPreviewOverlayEl.hidden = false;
         };
@@ -2043,7 +2202,7 @@
          const pdfjsLib =
           (window.pdfjsLib || (window['pdfjs-dist/build/pdf'] ? window['pdfjs-dist/build/pdf'] : null)) || null;
         if (pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
-        pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = '/service2/vendor/pdfjs/pdf.worker.min.js';
         }
         const adminUiState = {
           previewTemplateId: null,
@@ -2346,6 +2505,24 @@
             }
             colActions.appendChild(selectBtn);
 
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'link-button danger';
+            deleteBtn.textContent = 'Delete';
+            if (tpl.source === 'builtin') {
+              deleteBtn.disabled = true;
+              deleteBtn.title = 'Builtin template cannot be deleted';
+            } else {
+              deleteBtn.addEventListener('click', () => {
+                const proceed = window.confirm(
+                  'Delete template "' + (tpl.label || tpl.slug || tpl.id) + '"? This cannot be undone.',
+                );
+                if (!proceed) return;
+                deleteAdminTemplate(tpl.id);
+              });
+            }
+            colActions.appendChild(deleteBtn);
+
             row.appendChild(colInfo);
             row.appendChild(colStatus);
             row.appendChild(colActions);
@@ -2404,6 +2581,23 @@
             })
             .catch((err) => {
               showAdminStatus(err.message, true);
+            });
+        };
+
+        const deleteAdminTemplate = (templateId) => {
+          if (!templateId) return;
+          showAdminStatus('Deleting template...');
+          adminFetch('admin/templates/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ templateId }),
+          })
+            .then((payload) => {
+              showAdminStatus('Template deleted.');
+              renderAdminTemplates(payload);
+            })
+            .catch((err) => {
+              showAdminStatus(err.message || 'Unable to delete template.', true);
             });
         };
 
@@ -2962,21 +3156,21 @@
 
           const todayIso = new Date().toISOString().slice(0, 10);
           setIfEmpty(
-            '[name=\"end_customer_name\"]',
+            '[name="end_customer_name"]',
             firstOptionValue('suggest-end-customer-name') || 'Debug Customer GmbH',
           );
           setIfEmpty(
-            '[name=\"site_location\"]',
+            '[name="site_location"]',
             firstOptionValue('suggest-site-location') || 'Berlin, Teststrasse 1',
           );
           setIfEmpty(
-            '[name=\"led_display_model\"]',
+            '[name="led_display_model"]',
             firstOptionValue('suggest-led-display-model') || 'FA 1.5 / 1.9 / 2.5',
           );
-          setIfEmpty('[name=\"batch_number\"]', 'DBG-001');
-          setIfEmpty('[name=\"date_of_service\"]', todayIso);
+          setIfEmpty('[name="batch_number"]', 'DBG-001');
+          setIfEmpty('[name="date_of_service"]', todayIso);
           setIfEmpty(
-            '[name=\"service_company_name\"]',
+            '[name="service_company_name"]',
             firstOptionValue('suggest-service-company-name') || 'Sharp / NEC LED Solution Center',
           );
 
@@ -2996,7 +3190,7 @@
           const ensureEmployeeRow = () => {
             let rows = Array.from(document.querySelectorAll('[data-employee-row]'));
             if (!rows.length) {
-              const addBtn = document.querySelector('[data-action=\"employee-add\"]');
+              const addBtn = document.querySelector('[data-action="employee-add"]');
               if (addBtn) {
                 addBtn.click();
                 rows = Array.from(document.querySelectorAll('[data-employee-row]'));
@@ -3009,7 +3203,7 @@
           if (rows.length) {
             const row = rows[0];
             const setRowField = (field, value) => {
-              const input = row.querySelector('input[data-field=\"' + field + '\"]');
+              const input = row.querySelector('input[data-field="' + field + '"]');
               if (input && !input.value.trim()) {
                 input.value = value;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -3022,11 +3216,11 @@
             setRowField('role', employeeRoleSeed);
 
             const setDateTime = (field, iso) => {
-              const wrap = row.querySelector('[data-datetime-field=\"' + field + '\"]');
+              const wrap = row.querySelector('[data-datetime-field="' + field + '"]');
               if (!wrap) return;
-              const dateInput = wrap.querySelector('input[data-datetime-part=\"date\"]');
-              const timeInput = wrap.querySelector('input[data-datetime-part=\"time\"]');
-              const hiddenInput = wrap.querySelector('input[data-field=\"' + field + '\"]');
+              const dateInput = wrap.querySelector('input[data-datetime-part="date"]');
+              const timeInput = wrap.querySelector('input[data-datetime-part="time"]');
+              const hiddenInput = wrap.querySelector('input[data-field="' + field + '"]');
               const parts = iso.split('T');
               if (dateInput && !dateInput.value.trim()) {
                 dateInput.value = parts[0] || '';
@@ -3264,14 +3458,57 @@
             });
           }
 
-          if (removeButton) {
-            removeButton.addEventListener('click', (event) => {
-              event.preventDefault();
-              const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
-              if (visibleRows.length <= 1) return;
+        if (removeButton) {
+          removeButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+            if (visibleRows.length <= 1) return;
               const lastVisible = visibleRows[visibleRows.length - 1];
               disableRow(lastVisible, true);
-              refresh();
+            refresh();
+          });
+        }
+      }
+
+        function setupPartsOcr() {
+          if (!partsOcrButton && !partsOcrInput) return;
+          const friendlyHint =
+            'Upload a clear photo of the part label to auto-fill serial/model fields (OCR).';
+          if (partsOcrStatus && !partsOcrStatus.textContent.trim()) {
+            setPartsOcrStatus(friendlyHint);
+          }
+
+          const processFile = (file) => {
+            if (!file) {
+              setPartsOcrStatus('No photo selected.', true);
+              return;
+            }
+            recordDebug('parts-ocr-start', { name: file.name, size: file.size || 0 });
+            Promise.resolve(handlePartsOcrFile(file))
+              .then(() => {
+                recordDebug('parts-ocr-complete', { name: file.name });
+              })
+              .catch((err) => {
+                setPartsOcrStatus(err && err.message ? err.message : 'OCR failed.', true);
+                recordDebug('parts-ocr-error', { error: String(err && err.message ? err.message : err) });
+              });
+          };
+
+          if (partsOcrButton) {
+            partsOcrButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              if (partsOcrInput) {
+                partsOcrInput.click();
+              } else {
+                setPartsOcrStatus('Photo input is unavailable on this device.', true);
+              }
+            });
+          }
+
+          if (partsOcrInput) {
+            partsOcrInput.addEventListener('change', (event) => {
+              const files = event.target && event.target.files ? Array.from(event.target.files) : [];
+              processFile(files[0]);
             });
           }
         }
@@ -4420,6 +4657,7 @@
 
         setupAutoResizeTextareas();
         setupPartsTable();
+        setupPartsOcr();
         setupEmployees();
         setupPhotoUploads();
         setupSignaturePads();

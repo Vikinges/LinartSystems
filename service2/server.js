@@ -51,6 +51,7 @@ const HOST_URL_ENV = process.env.HOST_URL;
 const TEMPLATE_PATH_ENV = process.env.TEMPLATE_PATH;
 const MAX_FILE_SIZE_BYTES = 128 * 1024 * 1024;
 const MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024;
+const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
@@ -2177,21 +2178,20 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       employeeEntries.length === 0
         ? 'pending'
         : knownBreakCount > 0
-        ? employeeTotalBreakMinutes
-          ? formatEmployeeDuration(employeeTotalBreakMinutes)
-          : '0m'
-        : employeeBreakStats.UNKNOWN > 0
-        ? 'pending'
-        : '0m';
+          ? employeeTotalBreakMinutes
+            ? formatEmployeeDuration(employeeTotalBreakMinutes)
+            : '0m'
+          : employeeBreakStats.UNKNOWN > 0
+            ? 'pending'
+            : '0m';
     const breakDetails =
       knownBreakCount > 0
         ? formatBreakStatsSummary(employeeBreakStats)
         : employeeBreakStats.UNKNOWN > 0
-        ? `${employeeBreakStats.UNKNOWN} pending`
-        : '';
+          ? `${employeeBreakStats.UNKNOWN} pending`
+          : '';
     page.drawText(
-      `Total recorded time: ${durationSummary} across ${employeeEntries.length} ${
-        employeeEntries.length === 1 ? 'employee' : 'employees'
+      `Total recorded time: ${durationSummary} across ${employeeEntries.length} ${employeeEntries.length === 1 ? 'employee' : 'employees'
       }.`,
       {
         x: margin,
@@ -2397,6 +2397,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
     const headerHeight = 18;
     const dataHeight = 36;
+    const rowHeight = headerHeight + dataHeight;
     const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20;
     const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
     drawSectionTitle(sectionLabel);
@@ -2560,16 +2561,16 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
             page,
             value,
             font,
-          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
-          {
-            align: 'center',
-            paddingX: 10,
-            paddingY: 12,
-            color: textColor,
-            fontSize: layout.fontSize,
-            minFontSize: layout.fontSize,
-            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-            layout,
+            { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
+            {
+              align: 'center',
+              paddingX: 10,
+              paddingY: 12,
+              color: textColor,
+              fontSize: layout.fontSize,
+              minFontSize: layout.fontSize,
+              lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+              layout,
             },
           );
           cellX += cellWidth;
@@ -2760,28 +2761,28 @@ function generateIndexHtml() {
   const descriptorByName = new Map(fieldDescriptors.map((d) => [d.requestName, d]));
 
   const demoValues = new Map([
-  ['end_customer_name', ''],
-  ['site_location', ''],
-  ['led_display_model', ''],
-  ['batch_number', ''],
-  ['date_of_service', ''],
-  ['service_company_name', ''],
-  ['led_notes_1', ''],
-  ['led_notes_2', ''],
-  ['led_notes_3', ''],
-  ['control_notes_1', ''],
-  ['control_notes_3', ''],
-  ['spares_notes_1', ''],
-  ['spares_notes_2', ''],
-  ['general_notes', ''],
-  ['parts_removed_desc_1', ''],
-  ['parts_removed_part_1', ''],
-  ['parts_removed_serial_1', ''],
-  ['parts_used_part_1', ''],
-  ['parts_used_serial_1', ''],
-  ['signoff_notes_1', ''],
-  ['signoff_notes_2', ''],
-]);
+    ['end_customer_name', ''],
+    ['site_location', ''],
+    ['led_display_model', ''],
+    ['batch_number', ''],
+    ['date_of_service', ''],
+    ['service_company_name', ''],
+    ['led_notes_1', ''],
+    ['led_notes_2', ''],
+    ['led_notes_3', ''],
+    ['control_notes_1', ''],
+    ['control_notes_3', ''],
+    ['spares_notes_1', ''],
+    ['spares_notes_2', ''],
+    ['general_notes', ''],
+    ['parts_removed_desc_1', ''],
+    ['parts_removed_part_1', ''],
+    ['parts_removed_serial_1', ''],
+    ['parts_used_part_1', ''],
+    ['parts_used_serial_1', ''],
+    ['signoff_notes_1', ''],
+    ['signoff_notes_2', ''],
+  ]);
 
   const signatureSamples = new Map([
     ['engineer_signature', ''],
@@ -2922,7 +2923,10 @@ ${rows.join('\n')}
         <div class="parts-table-actions">
           <button type="button" class="button" data-action="parts-add-row">+ Add another part</button>
           <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <button type="button" class="button" data-parts-ocr>+ Add photo (OCR)</button>
+          <input type="file" data-parts-ocr-input accept="image/*" hidden />
           <p class="parts-table-hint">Maximum of ${PARTS_ROW_COUNT} rows.</p>
+          <p class="parts-table-hint" data-parts-ocr-status></p>
         </div>
       </section>`;
   };
@@ -4289,6 +4293,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           ? templateInfoEl.querySelector('[data-template-description]')
           : null;
         const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
+        const formTypeSelectEl = document.querySelector('[data-template-type]');
+        const partsOcrButton = document.querySelector('[data-parts-ocr]');
+        const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
+        const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -4322,6 +4330,128 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
+
+
+        const applyFormTypeVisibility = (formType) => {
+          const type = formType || (formTypeSelectEl ? formTypeSelectEl.value : '');
+          const targets = Array.from(document.querySelectorAll('[data-form-types]'));
+          targets.forEach((el) => {
+            const allowed = (el.getAttribute('data-form-types') || '')
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+            const shouldShow = allowed.length === 0 || allowed.includes(type);
+            el.hidden = !shouldShow;
+            el.style.display = shouldShow ? '' : 'none';
+          });
+        };
+
+        const findFirstVisiblePartsRow = () => {
+          const table = document.querySelector('[data-parts-table]');
+          if (!table) return null;
+          const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
+          return rows[0] || null;
+        };
+
+        const loadTesseract = () =>
+          new Promise((resolve, reject) => {
+            if (window.Tesseract) return resolve(window.Tesseract);
+            const script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js';
+            script.onload = () => resolve(window.Tesseract);
+            script.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+            document.head.appendChild(script);
+          });
+
+        const setPartsOcrStatus = (msg, isError = false) => {
+          if (!partsOcrStatus) return;
+          partsOcrStatus.textContent = msg || '';
+          partsOcrStatus.style.color = isError ? '#c1121f' : '#475569';
+        };
+
+        const parseOcrText = (text) => {
+          const lines = text
+            .split(/\\r?\\n/)
+            .map((l) => l.trim())
+            .filter(Boolean);
+          const tokens = text
+            .split(/\\s+/)
+            .map((t) => t.replace(/[^A-Za-z0-9-]/g, '').trim())
+            .filter(Boolean);
+          const model =
+            lines.find((l) => /LED-[A-Z0-9]/i.test(l)) ||
+            tokens.find((t) => /^LED-[A-Z0-9]/i.test(t)) ||
+            tokens.find((t) => /^[A-Z]{2}\\d{2,}/i.test(t)) ||
+            '';
+          const serialCandidate =
+            tokens
+              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Za-z0-9]/g, '').length >= 8)
+              .sort((a, b) => b.length - a.length)[0] || '';
+          let batch = '';
+          const serialUp = serialCandidate.toUpperCase();
+          for (let i = 0; i <= serialUp.length - 3; i += 1) {
+            const sub = serialUp.slice(i, i + 3);
+            if (/[A-Z]/.test(sub) && /[0-9].*[0-9]/.test(sub)) {
+              batch = sub;
+              break;
+            }
+          }
+          return { model, serial: serialCandidate, batch };
+        };
+
+        const fillPartsFromOcr = (parsed) => {
+          const row = findFirstVisiblePartsRow();
+          if (!row) return false;
+          if (parsed.serial) {
+            const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
+            if (serialInput) serialInput.value = parsed.serial;
+          }
+          if (parsed.model) {
+            const partInput = row.querySelector('input[name^="parts_used_part_"]');
+            if (partInput) partInput.value = parsed.model;
+          }
+          const ledField = document.querySelector('input[name="led_display_model"]');
+          if (parsed.model && ledField && !ledField.value) {
+            ledField.value = parsed.model;
+          }
+          const batchField = document.querySelector('input[name="batch_number"]');
+          if (parsed.batch && batchField && !batchField.value) {
+            batchField.value = parsed.batch;
+          }
+          return true;
+        };
+
+        const handlePartsOcrFile = async (file) => {
+          if (!file) return;
+          setPartsOcrStatus('Reading photo...');
+          try {
+            const Tesseract = await loadTesseract();
+            setPartsOcrStatus('Recognizing text...');
+            const { data } = await Tesseract.recognize(file, 'eng', {
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
+            });
+            const parsed = parseOcrText(data.text || '');
+            if (!parsed.serial && !parsed.model) {
+              setPartsOcrStatus('No text found, please try a clearer photo.', true);
+              return;
+            }
+            fillPartsFromOcr(parsed);
+            const summary =
+              'OCR ok. Serial: ' +
+              (parsed.serial || 'n/a') +
+              '; Model: ' +
+              (parsed.model || 'n/a') +
+              '; Batch: ' +
+              (parsed.batch || 'n/a') +
+              '. Check and edit if needed.';
+            setPartsOcrStatus(summary);
+          } catch (err) {
+            setPartsOcrStatus(err.message || 'OCR failed.', true);
+          } finally {
+            if (partsOcrInput) partsOcrInput.value = '';
+          }
+        };
+
         const adminPreviewEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-preview]') : null;
         const adminPreviewLabelEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-preview-label]')
@@ -4341,6 +4471,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const adminPreviewBoundaryEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-template-boundary-line]')
           : null;
+
         const boundaryControlsEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-boundary-controls]')
           : null;
@@ -5969,14 +6100,57 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             });
           }
 
-          if (removeButton) {
-            removeButton.addEventListener('click', (event) => {
-              event.preventDefault();
-              const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
-              if (visibleRows.length <= 1) return;
+        if (removeButton) {
+          removeButton.addEventListener('click', (event) => {
+            event.preventDefault();
+            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+            if (visibleRows.length <= 1) return;
               const lastVisible = visibleRows[visibleRows.length - 1];
               disableRow(lastVisible, true);
-              refresh();
+            refresh();
+          });
+        }
+      }
+
+        function setupPartsOcr() {
+          if (!partsOcrButton && !partsOcrInput) return;
+          const friendlyHint =
+            'Upload a clear photo of the part label to auto-fill serial/model fields (OCR).';
+          if (partsOcrStatus && !partsOcrStatus.textContent.trim()) {
+            setPartsOcrStatus(friendlyHint);
+          }
+
+          const processFile = (file) => {
+            if (!file) {
+              setPartsOcrStatus('No photo selected.', true);
+              return;
+            }
+            recordDebug('parts-ocr-start', { name: file.name, size: file.size || 0 });
+            Promise.resolve(handlePartsOcrFile(file))
+              .then(() => {
+                recordDebug('parts-ocr-complete', { name: file.name });
+              })
+              .catch((err) => {
+                setPartsOcrStatus(err && err.message ? err.message : 'OCR failed.', true);
+                recordDebug('parts-ocr-error', { error: String(err && err.message ? err.message : err) });
+              });
+          };
+
+          if (partsOcrButton) {
+            partsOcrButton.addEventListener('click', (event) => {
+              event.preventDefault();
+              if (partsOcrInput) {
+                partsOcrInput.click();
+              } else {
+                setPartsOcrStatus('Photo input is unavailable on this device.', true);
+              }
+            });
+          }
+
+          if (partsOcrInput) {
+            partsOcrInput.addEventListener('change', (event) => {
+              const files = event.target && event.target.files ? Array.from(event.target.files) : [];
+              processFile(files[0]);
             });
           }
         }
@@ -7125,6 +7299,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         setupAutoResizeTextareas();
         setupPartsTable();
+        setupPartsOcr();
         setupEmployees();
         setupPhotoUploads();
         setupSignaturePads();
@@ -7334,12 +7509,14 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", OCR_CDN_HOST],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'"],
+        connectSrc: ["'self'", OCR_CDN_HOST],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
+        workerSrc: ["'self'", 'blob:', OCR_CDN_HOST],
+        childSrc: ["'self'", 'blob:', OCR_CDN_HOST],
       },
     },
   }),
@@ -8015,113 +8192,113 @@ app.post('/submit', (req, res, next) => {
 
     if (form) {
       for (const descriptor of fieldDescriptors) {
-      const rawValue = req.body ? req.body[descriptor.requestName] : undefined;
-      const value = toSingleValue(rawValue);
-      const skipOriginalField = SIGN_OFF_REQUEST_FIELDS.has(descriptor.requestName);
-      try {
-        if (descriptor.type === 'checkbox') {
-          if (skipOriginalField) {
-            continue;
-          }
-          const checkbox = form.getCheckBox(descriptor.acroName);
-          if (normalizeCheckboxValue(rawValue)) {
-            checkbox.check();
-          } else {
-            checkbox.uncheck();
-          }
-        } else if (descriptor.type === 'text') {
-          const textField = form.getTextField(descriptor.acroName);
-          const signatureData =
-            typeof rawValue === 'string'
-              ? rawValue
-              : typeof value === 'string'
-              ? value
-              : null;
-          if (/signature/i.test(descriptor.acroName) && signatureData && signatureData.startsWith('data:image/')) {
-            signatureImages.push({ acroName: descriptor.acroName, data: signatureData });
-            textField.setText('');
+        const rawValue = req.body ? req.body[descriptor.requestName] : undefined;
+        const value = toSingleValue(rawValue);
+        const skipOriginalField = SIGN_OFF_REQUEST_FIELDS.has(descriptor.requestName);
+        try {
+          if (descriptor.type === 'checkbox') {
             if (skipOriginalField) {
               continue;
             }
-          } else {
-            const normalizedValue =
-              value !== undefined && value !== null ? String(value).replace(/\r\n/g, '\n') : '';
-            const style = resolveTextFieldStyle(descriptor.acroName);
-            const widgets =
-              textField.acroField && typeof textField.acroField.getWidgets === 'function'
-                ? textField.acroField.getWidgets()
-                : [];
-            const primaryWidget = widgets && widgets.length ? widgets[0] : null;
-            const layout = layoutTextForField({
-              value: normalizedValue,
-              font: helveticaFont,
-              fontSize: style.fontSize,
-              multiline: style.multiline,
-              lineHeightMultiplier:
-                style.lineHeightMultiplier || DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-              widget: primaryWidget,
-              minFontSize: style.minFontSize,
-            });
-            const multilineNeeded =
-              style.multiline || layout.displayedLines > 1 || layout.fieldText.includes('\n');
-            if (!skipOriginalField) {
-              if (multilineNeeded) {
+            const checkbox = form.getCheckBox(descriptor.acroName);
+            if (normalizeCheckboxValue(rawValue)) {
+              checkbox.check();
+            } else {
+              checkbox.uncheck();
+            }
+          } else if (descriptor.type === 'text') {
+            const textField = form.getTextField(descriptor.acroName);
+            const signatureData =
+              typeof rawValue === 'string'
+                ? rawValue
+                : typeof value === 'string'
+                  ? value
+                  : null;
+            if (/signature/i.test(descriptor.acroName) && signatureData && signatureData.startsWith('data:image/')) {
+              signatureImages.push({ acroName: descriptor.acroName, data: signatureData });
+              textField.setText('');
+              if (skipOriginalField) {
+                continue;
+              }
+            } else {
+              const normalizedValue =
+                value !== undefined && value !== null ? String(value).replace(/\r\n/g, '\n') : '';
+              const style = resolveTextFieldStyle(descriptor.acroName);
+              const widgets =
+                textField.acroField && typeof textField.acroField.getWidgets === 'function'
+                  ? textField.acroField.getWidgets()
+                  : [];
+              const primaryWidget = widgets && widgets.length ? widgets[0] : null;
+              const layout = layoutTextForField({
+                value: normalizedValue,
+                font: helveticaFont,
+                fontSize: style.fontSize,
+                multiline: style.multiline,
+                lineHeightMultiplier:
+                  style.lineHeightMultiplier || DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+                widget: primaryWidget,
+                minFontSize: style.minFontSize,
+              });
+              const multilineNeeded =
+                style.multiline || layout.displayedLines > 1 || layout.fieldText.includes('\n');
+              if (!skipOriginalField) {
+                if (multilineNeeded) {
+                  try {
+                    textField.enableMultiline();
+                  } catch (enableErr) {
+                    console.warn(`[server] Unable to enable multiline for ${descriptor.acroName}: ${enableErr.message}`);
+                  }
+                } else {
+                  try {
+                    textField.disableMultiline();
+                  } catch (disableErr) {
+                    // ignore
+                  }
+                }
+                const displayText =
+                  layout.fieldText && layout.fieldText.trim().length
+                    ? layout.fieldText
+                    : normalizedValue;
+                textField.setText(displayText || '');
                 try {
-                  textField.enableMultiline();
-                } catch (enableErr) {
-                  console.warn(`[server] Unable to enable multiline for ${descriptor.acroName}: ${enableErr.message}`);
+                  textField.updateAppearances(helveticaFont, {
+                    fontSize: layout.appliedFontSize || style.fontSize,
+                  });
+                } catch (appearanceErr) {
+                  console.warn(`[server] Unable to update appearance for ${descriptor.acroName}: ${appearanceErr.message}`);
                 }
               } else {
                 try {
-                  textField.disableMultiline();
-                } catch (disableErr) {
+                  textField.setText('');
+                } catch (clearErr) {
                   // ignore
                 }
               }
-              const displayText =
-                layout.fieldText && layout.fieldText.trim().length
-                  ? layout.fieldText
-                  : normalizedValue;
-              textField.setText(displayText || '');
-              try {
-                textField.updateAppearances(helveticaFont, {
+              if (layout.overflowDetected && layout.overflowText && layout.overflowText.trim().length) {
+                overflowTextEntries.push({
+                  acroName: descriptor.acroName,
+                  requestName: descriptor.requestName,
+                  label: descriptor.label || descriptor.acroName,
+                  text: layout.overflowText,
                   fontSize: layout.appliedFontSize || style.fontSize,
                 });
-              } catch (appearanceErr) {
-                console.warn(`[server] Unable to update appearance for ${descriptor.acroName}: ${appearanceErr.message}`);
-              }
-            } else {
-              try {
-                textField.setText('');
-              } catch (clearErr) {
-                // ignore
               }
             }
-            if (layout.overflowDetected && layout.overflowText && layout.overflowText.trim().length) {
-              overflowTextEntries.push({
-                acroName: descriptor.acroName,
-                requestName: descriptor.requestName,
-                label: descriptor.label || descriptor.acroName,
-                text: layout.overflowText,
-                fontSize: layout.appliedFontSize || style.fontSize,
-              });
+          } else if (descriptor.type === 'dropdown') {
+            const dropdown = form.getDropdown(descriptor.acroName);
+            if (value) dropdown.select(String(value));
+          } else if (descriptor.type === 'option-list') {
+            const optionList = form.getOptionList(descriptor.acroName);
+            if (Array.isArray(rawValue)) {
+              optionList.select(...rawValue.map((item) => String(item)));
+            } else if (value) {
+              optionList.select(String(value));
             }
           }
-        } else if (descriptor.type === 'dropdown') {
-          const dropdown = form.getDropdown(descriptor.acroName);
-          if (value) dropdown.select(String(value));
-        } else if (descriptor.type === 'option-list') {
-          const optionList = form.getOptionList(descriptor.acroName);
-          if (Array.isArray(rawValue)) {
-            optionList.select(...rawValue.map((item) => String(item)));
-          } else if (value) {
-            optionList.select(String(value));
-          }
+        } catch (err) {
+          console.warn(`[server] Unable to populate field ${descriptor.acroName}: ${err.message}`);
         }
-      } catch (err) {
-        console.warn(`[server] Unable to populate field ${descriptor.acroName}: ${err.message}`);
       }
-    }
     }
 
     const imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles);
@@ -8296,8 +8473,8 @@ app.post('/submit', (req, res, next) => {
       err && Object.prototype.hasOwnProperty.call(err, 'statusCode')
         ? err.statusCode
         : err && Object.prototype.hasOwnProperty.call(err, 'status')
-        ? err.status
-        : undefined;
+          ? err.status
+          : undefined;
     const statusNumber = Number(statusCandidate);
     const status = Number.isFinite(statusNumber) ? statusNumber : 500;
     return res
