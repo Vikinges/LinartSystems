@@ -4424,8 +4424,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const extractBatch = (serial) => {
             if (!serial) return '';
             const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-            const alphaNumMatch = cleaned.match(/[A-Z][0-9]{2}/);
-            if (alphaNumMatch) return alphaNumMatch[0];
+            const letterDigit3 = cleaned.match(/[A-Z][0-9]{2}/);
+            if (letterDigit3) return letterDigit3[0];
 
             const digitsOnly = cleaned.replace(/[^0-9]/g, '');
             if (digitsOnly.length >= 3) {
@@ -4447,21 +4447,28 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const fillPartsFromOcr = (parsed) => {
           const row = findFirstVisiblePartsRow();
           if (!row) return false;
+          const safeModel = parsed.model || '';
+          const safeBatch = parsed.batch || '';
+          const safeSerial = parsed.serial || '';
           if (parsed.serial) {
             const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
-            if (serialInput) serialInput.value = parsed.serial;
+            if (serialInput) serialInput.value = safeSerial;
           }
           if (parsed.model) {
             const partInput = row.querySelector('input[name^="parts_used_part_"]');
-            if (partInput) partInput.value = parsed.model;
+            if (partInput) partInput.value = safeModel;
+          }
+          const batchDescInput = row.querySelector('input[name^="parts_removed_desc_"]');
+          if (safeBatch && batchDescInput && !batchDescInput.value.trim()) {
+            batchDescInput.value = safeBatch;
           }
           const ledField = document.querySelector('input[name="led_display_model"]');
-          if (parsed.model && ledField && !ledField.value) {
-            ledField.value = parsed.model;
+          if (safeModel && ledField && !ledField.value) {
+            ledField.value = safeModel;
           }
           const batchField = document.querySelector('input[name="batch_number"]');
-          if (parsed.batch && batchField && !batchField.value) {
-            batchField.value = parsed.batch;
+          if (safeBatch && batchField && !batchField.value) {
+            batchField.value = safeBatch;
           }
           return true;
         };
