@@ -4504,8 +4504,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0);
 
-                const cropHeight = Math.max(16, Math.floor(img.height * 0.5));
-                const cropY = Math.max(0, Math.floor((img.height - cropHeight) / 2));
+                const cropHeight = Math.max(16, Math.floor(img.height * 0.35));
+                let cropY = Math.floor(img.height * 0.6);
+                if (cropY + cropHeight > img.height) {
+                  cropY = Math.max(0, img.height - cropHeight);
+                }
                 const cropCanvas = document.createElement('canvas');
                 cropCanvas.width = img.width;
                 cropCanvas.height = cropHeight;
@@ -4536,6 +4539,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             return Tesseract.recognize(inputFile, 'eng', {
               tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
               tessedit_char_blacklist: ':/\\\\()[]{}.,;\\"\\'',
+              tessedit_pageseg_mode: 7,
+              oem: 1,
             });
           };
 
