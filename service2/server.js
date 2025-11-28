@@ -4383,75 +4383,44 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               .replace(/--+/g, '-')
               .trim();
           const cleaned = text.replace(/[^A-Za-z0-9-]+/g, ' ').trim();
-          const rawTokens = cleaned.split(/\s+/).map((t) => normalizeToken(t)).filter(Boolean);
           const compactText = text.replace(/[^A-Za-z0-9-]+/g, '').toUpperCase();
-          const compactTokens = (compactText.match(/[A-Z0-9-]{3,}/g) || []).map((t) => t.toUpperCase());
+          const rawTokens = cleaned.split(/\s+/).map((t) => normalizeToken(t)).filter(Boolean);
           const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 6);
-          const expandedTokens = [...baseTokens];
-          baseTokens.forEach((token) => {
-            const joined = token.match(/^([A-Z]+[A-Z0-9-]{2,}?)(\d{6,})$/);
-            if (joined) {
-              expandedTokens.push(joined[1]);
-              expandedTokens.push(joined[2]);
-            }
-          });
+          const compactTokens = (compactText.match(/[A-Z0-9-]{6,}/g) || []).map((t) => t.toUpperCase());
 
-          const modelScore = (value) => {
-            if (!value) return -1;
-            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return 100;
-            if (/^LD-[A-Z0-9]{3,}/i.test(value)) return 95;
-            if (/^FA\d+[A-Z0-9]*/i.test(value)) return 90;
-            return -1;
-          };
-
-          const rankedCandidates = [];
-          const modelTokens = [...expandedTokens, ...compactTokens.filter((t) => t.length >= 6)];
-          modelTokens.forEach((token, idx) => rankedCandidates.push({ token, idx, score: modelScore(token) }));
-          lines.forEach((line, idx) => {
-            const normalized = normalizeToken(line).toUpperCase();
-            rankedCandidates.push({ token: normalized, idx, score: modelScore(normalized) + 5 });
-          });
-          rankedCandidates.sort((a, b) => b.score - a.score || a.idx - b.idx);
+          // Model: only explicit prefixes LED-, LD-, FA<digits>
+          const modelRegexes = [
+            /(LED-[A-Z0-9]{3,12})/i,
+            /(LD-[A-Z0-9]{3,12})/i,
+            /(FA\d{2,}[A-Z0-9]{0,8})/i,
+          ];
           let model = '';
-          const bestModel = rankedCandidates.find((c) => c.score > 0);
-          if (bestModel) {
-            model = bestModel.token;
-          } else {
-            const compactModel = compactTokens.find((t) => /^LED-|^LD-|^FA0?\d+/i.test(t));
-            if (compactModel) model = compactModel.toUpperCase();
-          }
-          if (model && model.length < 6) {
-            model = '';
-          }
-          const modelIndex = bestModel ? bestModel.idx : -1;
-
-          const pickSerialFromTokens = (list, startIndex = 0) => {
-            const candidates = list
-              .slice(startIndex)
-              .map((t) => t.replace(/[^A-Z0-9-]/gi, ''))
-              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Z0-9]/gi, '').length >= 7);
-            if (!candidates.length) return '';
-            return candidates.sort((a, b) => b.length - a.length)[0];
-          };
-
-          const serialTokens = [...expandedTokens, ...compactTokens];
-          let serialCandidate = pickSerialFromTokens(serialTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
-          if (!serialCandidate) {
-            serialCandidate = pickSerialFromTokens(serialTokens, 0);
-          }
-          let serialSearchText = compactText;
-          if (model) {
-            const modelClean = model.replace(/-/g, '');
-            serialSearchText = serialSearchText.replace(new RegExp(modelClean, 'g'), '');
-          }
-          const compactSerials = serialSearchText.match(/[A-Z0-9]{7,}/g);
-          if (compactSerials && compactSerials.length) {
-            compactSerials.sort((a, b) => b.length - a.length);
-            const bestCompact = compactSerials[0];
-            if (!serialCandidate || bestCompact.length > serialCandidate.length) {
-              serialCandidate = bestCompact;
+          for (const rx of modelRegexes) {
+            const m = compactText.match(rx);
+            if (m && m[1]) {
+              model = m[1].toUpperCase();
+              break;
             }
           }
+          if (!model) {
+            const tokenModel = [...baseTokens, ...compactTokens].find((t) =>
+              /^LED-|^LD-|^FA\d+/i.test(t)
+            );
+            if (tokenModel) model = tokenModel.toUpperCase();
+          }
+
+          const modelClean = model ? model.replace(/-/g, '') : '';
+          const pickSerial = () => {
+            let searchText = compactText;
+            if (modelClean) {
+              searchText = searchText.replace(new RegExp(modelClean, 'g'), '');
+            }
+            const serials = (searchText.match(/[A-Z0-9]{8,}/g) || []).filter((s) => /\d/.test(s));
+            if (!serials.length) return '';
+            serials.sort((a, b) => b.length - a.length || (b.match(/\d/g)||[]).length - (a.match(/\d/g)||[]).length);
+            return serials[0];
+          };
+          const serialCandidate = pickSerial();
 
           const extractBatch = (serial) => {
             if (!serial) return '';
