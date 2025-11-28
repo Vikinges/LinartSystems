@@ -4462,7 +4462,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           }
           const ledField = document.querySelector('input[name="led_display_model"]');
           const batchField = document.querySelector('input[name="batch_number"]');
-          const combined = safeModel && safeBatch ? `${safeModel}/${safeBatch}` : safeModel || '';
+          const combined = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel || '';
           if (ledField && combined) {
             const current = ledField.value ? ledField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
             const have = new Set(current.map((s) => s.toUpperCase()));
