@@ -4383,7 +4383,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               .replace(/--+/g, '-')
               .trim();
           const cleaned = text.replace(/[^A-Za-z0-9-]+/g, ' ').trim();
-          const rawTokens = cleaned.split(/\s+/).map(normalizeToken).filter(Boolean);
+          const rawTokens = cleaned.split(/\s+/).map((t) => normalizeToken(t)).filter(Boolean);
           const compactText = text.replace(/[^A-Za-z0-9-]+/g, '').toUpperCase();
           const compactTokens = (compactText.match(/[A-Z0-9-]{3,}/g) || []).map((t) => t.toUpperCase());
           const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 3);
@@ -4523,7 +4523,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const Tesseract = await loadTesseract();
             setPartsOcrStatus('Recognizing text...');
             const { data } = await Tesseract.recognize(file, 'eng', {
-              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
+              tessedit_char_blacklist: ':/\\\\()[]{}.,;\"\\'' + '`' + '`',
             });
             const parsed = parseOcrText(data.text || '');
             if (!parsed.serial && !parsed.model) {
