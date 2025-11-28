@@ -4379,11 +4379,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const normalizeToken = (t) =>
             t
               .replace(/[^A-Za-z0-9-]/g, ' ')
-              .replace(/\\s+/g, '')
+              .replace(/\s+/g, '')
               .replace(/--+/g, '-')
               .trim();
-          const rawTokens = text.split(/\\s+/).map(normalizeToken).filter(Boolean);
-          const tokens = rawTokens.map((t) => t.toUpperCase());
+          const rawTokens = text.split(/\s+/).map(normalizeToken).filter(Boolean);
+          const baseTokens = rawTokens.map((t) => t.toUpperCase());
+          const expandedTokens = [...baseTokens];
+          baseTokens.forEach((token) => {
+            const joined = token.match(/^([A-Z]+[A-Z0-9-]{2,}?)(\d{6,})$/);
+            if (joined) {
+              expandedTokens.push(joined[1]);
+              expandedTokens.push(joined[2]);
+            }
+          });
 
           const modelScore = (value) => {
             if (!value) return -1;
@@ -4396,7 +4404,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           };
 
           const rankedCandidates = [];
-          tokens.forEach((token, idx) => rankedCandidates.push({ token, idx, score: modelScore(token) }));
+          expandedTokens.forEach((token, idx) => rankedCandidates.push({ token, idx, score: modelScore(token) }));
           lines.forEach((line, idx) => {
             const normalized = normalizeToken(line).toUpperCase();
             rankedCandidates.push({ token: normalized, idx, score: modelScore(normalized) + 5 });
@@ -4414,9 +4422,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             return candidates.sort((a, b) => b.length - a.length)[0];
           };
 
-          let serialCandidate = pickSerialFromTokens(tokens, modelIndex >= 0 ? modelIndex + 1 : 0);
+          let serialCandidate = pickSerialFromTokens(expandedTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
           if (!serialCandidate) {
-            serialCandidate = pickSerialFromTokens(tokens, 0);
+            serialCandidate = pickSerialFromTokens(expandedTokens, 0);
           }
 
           const extractBatch = (serial) => {
@@ -4426,10 +4434,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (letterDigit3) return letterDigit3[0];
 
             const digitsOnly = cleaned.replace(/[^0-9]/g, '');
-            if (digitsOnly.length >= 3) {
-              const start = Math.max(0, Math.min(digitsOnly.length - 3, Math.floor(digitsOnly.length / 2) - 1));
-              const midChunk = digitsOnly.slice(start, start + 3);
+            if (digitsOnly.length >= 5) {
+              const midChunk = digitsOnly.slice(2, 5);
               if (midChunk) return midChunk;
+            } else if (digitsOnly.length >= 3) {
+              const start = Math.max(0, Math.min(digitsOnly.length - 3, Math.floor(digitsOnly.length / 2) - 1));
+              const midFallback = digitsOnly.slice(start, start + 3);
+              if (midFallback) return midFallback;
             }
 
             if (cleaned.length >= 5) return cleaned.slice(0, 5);
