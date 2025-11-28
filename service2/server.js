@@ -4525,10 +4525,59 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           try {
             const Tesseract = await loadTesseract();
             setPartsOcrStatus('Recognizing text...');
-            const { data } = await Tesseract.recognize(file, 'eng', {
+          const toOcrBlob = async (file) => {
+            return new Promise((resolve) => {
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+
+                const cropHeight = Math.max(16, Math.floor(img.height * 0.5));
+                const cropY = Math.max(0, Math.floor((img.height - cropHeight) / 2));
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = img.width;
+                cropCanvas.height = cropHeight;
+                const cropCtx = cropCanvas.getContext('2d');
+                cropCtx.drawImage(canvas, 0, cropY, img.width, cropHeight, 0, 0, img.width, cropHeight);
+
+                const imageData = cropCtx.getImageData(0, 0, cropCanvas.width, cropCanvas.height);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                  const r = data[i];
+                  const g = data[i + 1];
+                  const b = data[i + 2];
+                  const v = 0.299 * r + 0.587 * g + 0.114 * b;
+                  const t = v > 140 ? 255 : 0;
+                  data[i] = data[i + 1] = data[i + 2] = t;
+                }
+                cropCtx.putImageData(imageData, 0, 0);
+                cropCanvas.toBlob((blob) => resolve(blob || file), 'image/png');
+              };
+              img.onerror = () => resolve(file);
+              img.src = URL.createObjectURL(file);
+            });
+          };
+
+          const ocrInput = file && typeof HTMLCanvasElement !== 'undefined' ? await toOcrBlob(file) : file;
+
+          const runRecognize = async (inputFile) => {
+            return Tesseract.recognize(inputFile, 'eng', {
               tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789- ',
               tessedit_char_blacklist: ':/\\\\()[]{}.,;\\"\\'',
             });
+          };
+
+          let data;
+          try {
+            const res = await runRecognize(ocrInput);
+            data = res.data;
+          } catch (primaryErr) {
+            const res = await runRecognize(file);
+            data = res.data;
+          }
             const parsed = parseOcrText(data.text || '');
             if (!parsed.serial && !parsed.model) {
               setPartsOcrStatus('No text found, please try a clearer photo.', true);
