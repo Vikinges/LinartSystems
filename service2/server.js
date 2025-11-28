@@ -4351,7 +4351,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const table = document.querySelector('[data-parts-table]');
           if (!table) return null;
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
-          return rows[0] || null;
+          // Заполняем самую последнюю показанную строку — обычно это только что добавленная.
+          return rows.length ? rows[rows.length - 1] : null;
         };
 
         const loadTesseract = () =>
