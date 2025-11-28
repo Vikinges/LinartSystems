@@ -4398,6 +4398,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (/^LED-[A-Z0-9]{3,}/i.test(value)) return 100;
             if (/^LD-[A-Z0-9]{3,}/i.test(value)) return 95;
             if (/^FA0?\d+[A-Z0-9]*/i.test(value)) return 90;
+            if (value.length < 5) return 0;
+            if (/^[A-Z]\d-\d$/i.test(value)) return 0;
             if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.includes('-')) return 70;
             if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16) return 50;
             return 0;
