@@ -4382,12 +4382,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
               .replace(/\s+/g, '')
               .replace(/--+/g, '-')
               .trim();
-          const rawTokens = text.split(/\s+/).map(normalizeToken).filter(Boolean);
-          const compactText = text.replace(/\s+/g, '').toUpperCase();
-          const compactTokens = (compactText.match(/[A-Z0-9]{3,}/g) || []).map((t) => t.toUpperCase());
-          const baseTokens = rawTokens
-            .map((t) => t.toUpperCase())
-            .filter((t) => t.length >= 3);
+          const cleaned = text.replace(/[^A-Za-z0-9-]+/g, ' ').trim();
+          const rawTokens = cleaned.split(/\s+/).map(normalizeToken).filter(Boolean);
+          const compactText = text.replace(/[^A-Za-z0-9-]+/g, '').toUpperCase();
+          const compactTokens = (compactText.match(/[A-Z0-9-]{3,}/g) || []).map((t) => t.toUpperCase());
+          const baseTokens = rawTokens.map((t) => t.toUpperCase()).filter((t) => t.length >= 3);
           const expandedTokens = [...baseTokens];
           baseTokens.forEach((token) => {
             const joined = token.match(/^([A-Z]+[A-Z0-9-]{2,}?)(\d{6,})$/);
@@ -4417,15 +4416,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             rankedCandidates.push({ token: normalized, idx, score: modelScore(normalized) + 5 });
           });
           rankedCandidates.sort((a, b) => b.score - a.score || a.idx - b.idx);
+          let model = '';
           const bestModel = rankedCandidates.find((c) => c.score > 0);
-          let model = bestModel ? bestModel.token : '';
-          const compactMatch = compactText.match(/(LED-[A-Z0-9]{3,}|LD-[A-Z0-9]{3,}|FA0?\d+[A-Z0-9]*)/i);
-          if (!model && compactMatch) {
-            model = compactMatch[1].toUpperCase();
-          }
-          if (!model) {
-            const fallbackModel = modelTokens.find((t) => /[A-Z]/.test(t) && /[0-9]/.test(t) && t.length >= 6);
-            if (fallbackModel) model = fallbackModel;
+          if (bestModel) {
+            model = bestModel.token;
+          } else {
+            const compactModel = compactTokens.find((t) => /^LED-|^LD-|^FA0?\d+/i.test(t));
+            if (compactModel) model = compactModel.toUpperCase();
           }
           if (model && model.length < 5) {
             model = '';
