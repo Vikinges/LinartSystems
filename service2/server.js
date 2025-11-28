@@ -4384,29 +4384,25 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const rawTokens = text.split(/\\s+/).map(normalizeToken).filter(Boolean);
           const tokens = rawTokens.map((t) => t.toUpperCase());
 
-          const looksLikeModel = (value) => {
-            if (!value) return false;
-            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return true;
-            if (/^FA0?\\d+[A-Z0-9]*/i.test(value)) return true;
-            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16;
+          const modelScore = (value) => {
+            if (!value) return -1;
+            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return 100;
+            if (/^FA0?\d+[A-Z0-9]*/i.test(value)) return 90;
+            if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.includes('-')) return 70;
+            if (/[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16) return 50;
+            return 0;
           };
 
-          let model = '';
-          let modelIndex = -1;
-          tokens.some((token, idx) => {
-            if (looksLikeModel(token)) {
-              model = token;
-              modelIndex = idx;
-              return true;
-            }
-            return false;
+          const rankedCandidates = [];
+          tokens.forEach((token, idx) => rankedCandidates.push({ token, idx, score: modelScore(token) }));
+          lines.forEach((line, idx) => {
+            const normalized = normalizeToken(line).toUpperCase();
+            rankedCandidates.push({ token: normalized, idx, score: modelScore(normalized) + 5 });
           });
-          if (!model) {
-            const lineModel = lines.find((l) => looksLikeModel(normalizeToken(l).toUpperCase()));
-            if (lineModel) {
-              model = normalizeToken(lineModel).toUpperCase();
-            }
-          }
+          rankedCandidates.sort((a, b) => b.score - a.score || a.idx - b.idx);
+          const bestModel = rankedCandidates.find((c) => c.score > 0);
+          const model = bestModel ? bestModel.token : '';
+          const modelIndex = bestModel ? bestModel.idx : -1;
 
           const pickSerialFromTokens = (list, startIndex = 0) => {
             const candidates = list
