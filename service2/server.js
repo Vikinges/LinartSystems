@@ -4385,6 +4385,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const rawTokens = text.split(/\s+/).map(normalizeToken).filter(Boolean);
           const baseTokens = rawTokens.map((t) => t.toUpperCase());
           const expandedTokens = [...baseTokens];
+          const compactText = text.replace(/\s+/g, '').toUpperCase();
           baseTokens.forEach((token) => {
             const joined = token.match(/^([A-Z]+[A-Z0-9-]{2,}?)(\d{6,})$/);
             if (joined) {
@@ -4413,7 +4414,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
           rankedCandidates.sort((a, b) => b.score - a.score || a.idx - b.idx);
           const bestModel = rankedCandidates.find((c) => c.score > 0);
-          const model = bestModel ? bestModel.token : '';
+          let model = bestModel ? bestModel.token : '';
+          const compactMatch = compactText.match(/(LED-[A-Z0-9]{3,}|LD-[A-Z0-9]{3,}|FA0?\d+[A-Z0-9]*)/i);
+          if (!model && compactMatch) {
+            model = compactMatch[1].toUpperCase();
+          }
+          if (model && model.length < 5) {
+            model = '';
+          }
           const modelIndex = bestModel ? bestModel.idx : -1;
 
           const pickSerialFromTokens = (list, startIndex = 0) => {
@@ -4427,6 +4435,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           let serialCandidate = pickSerialFromTokens(expandedTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
           if (!serialCandidate) {
             serialCandidate = pickSerialFromTokens(expandedTokens, 0);
+          }
+          if (!serialCandidate || serialCandidate.length < 7) {
+            const compactSerials = compactText.match(/[A-Z0-9]{7,}/g);
+            if (compactSerials && compactSerials.length) {
+              compactSerials.sort((a, b) => b.length - a.length);
+              serialCandidate = compactSerials[0];
+            }
           }
 
           const extractBatch = (serial) => {
