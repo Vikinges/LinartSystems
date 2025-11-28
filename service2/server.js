@@ -4424,8 +4424,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           const extractBatch = (serial) => {
             if (!serial) return '';
             const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
-            const alphaNumMatch = cleaned.match(/[A-Z][A-Z0-9]{2,4}/);
+            const alphaNumMatch = cleaned.match(/[A-Z][0-9]{2}/);
             if (alphaNumMatch) return alphaNumMatch[0];
+
+            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
+            if (digitsOnly.length >= 3) {
+              const start = Math.max(0, Math.min(digitsOnly.length - 3, Math.floor(digitsOnly.length / 2) - 1));
+              const midChunk = digitsOnly.slice(start, start + 3);
+              if (midChunk) return midChunk;
+            }
+
             if (cleaned.length >= 5) return cleaned.slice(0, 5);
             if (cleaned.length >= 3) return cleaned.slice(0, 3);
             return '';
