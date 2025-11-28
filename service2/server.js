@@ -52,6 +52,7 @@ const TEMPLATE_PATH_ENV = process.env.TEMPLATE_PATH;
 const MAX_FILE_SIZE_BYTES = 128 * 1024 * 1024;
 const MAX_TOTAL_UPLOAD_BYTES = 512 * 1024 * 1024;
 const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
+const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
 fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
@@ -7512,7 +7513,7 @@ app.use(
         scriptSrc: ["'self'", "'unsafe-inline'", "'wasm-unsafe-eval'", OCR_CDN_HOST, 'blob:'],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", "data:", "blob:"],
-        connectSrc: ["'self'", OCR_CDN_HOST, 'data:', 'blob:'],
+        connectSrc: ["'self'", OCR_CDN_HOST, OCR_DATA_HOST, 'data:', 'blob:'],
         fontSrc: ["'self'"],
         objectSrc: ["'none'"],
         workerSrc: ["'self'", 'blob:', OCR_CDN_HOST],
