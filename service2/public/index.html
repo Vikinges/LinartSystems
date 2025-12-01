@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF forms generator · v0.3 Lin</title>
+    <title>PDF forms generator · v0.31 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -522,8 +522,8 @@
       .signature-pad canvas {
         width: 100%;
         height: 100%;
-        min-height: 150px;
-        max-height: 200px;
+        min-height: 140px;
+        max-height: 260px;
         touch-action: none;
         background: white;
         border-radius: 8px;
@@ -596,14 +596,52 @@
       }
       .mobile-mode body {
         overflow-x: hidden;
+        display: flex;
+        justify-content: center;
       }
-      .mobile-mode .container {
-        transform: scale(0.7);
+      .mobile-mode body > .container {
+        transform: scale(var(--mobile-scale, 0.7));
         transform-origin: top center;
-        width: calc(100vw / 0.7);
-        max-width: none;
+        width: calc(100vw / var(--mobile-scale, 0.7));
+        max-width: 100vw;
+        min-width: 100vw;
         margin: 0;
         padding: 0 8px;
+      }
+      .mobile-scale-row {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+        margin-top: 0.4rem;
+      }
+      .mobile-scale-row small {
+        font-weight: 600;
+        color: #1f2937;
+      }
+      .mobile-scale-buttons {
+        display: inline-flex;
+        gap: 0.5rem;
+      }
+      .mobile-scale-buttons button {
+        border: 1px solid #cbd5e1;
+        background: #e5e7eb;
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      }
+      .mobile-scale-debug {
+        display: block;
+        margin-top: 0.25rem;
+        font-size: 0.85rem;
+        color: #475569;
       }
       @media (max-width: 640px) {
         .signature-pad {
@@ -1052,7 +1090,7 @@
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>PDF forms generator · v0.3 Lin</h1>
+        <h1>PDF forms generator · v0.31 Lin</h1>
         <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
@@ -1076,12 +1114,20 @@
                 <option value="calibration" disabled>Calibration (coming soon)</option>
               </select>
             </label>
-            <label class="field" style="max-width:220px">
+            <label class="field" style="max-width:260px">
               <span>Mobile mode</span>
               <label class="checkbox" style="margin-top:8px; display:flex; align-items:center; gap:8px;">
                 <input type="checkbox" data-mobile-mode />
                 <span>Rotate signature + 70% scale</span>
               </label>
+              <div class="mobile-scale-row">
+                <small data-mobile-scale-label>Scale: 70%</small>
+                <div class="mobile-scale-buttons">
+                  <button type="button" data-mobile-scale-dec>-5%</button>
+                  <button type="button" data-mobile-scale-inc>+5%</button>
+                </div>
+                <small class="mobile-scale-debug" data-mobile-scale-debug></small>
+              </div>
             </label>
             <div class="template-details" data-template-info>
               <p data-template-status>Loading available templates...</p>
@@ -1904,6 +1950,7 @@
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
         const MOBILE_MODE_KEY = 'pm-form-mobile-mode';
+        const MOBILE_SCALE_KEY = 'pm-form-mobile-scale';
         const templateSelectEl = document.querySelector('[data-template-select]');
         const templateSlugInput = document.querySelector('[data-template-slug]');
         const templateInfoEl = document.querySelector('[data-template-info]');
@@ -1914,6 +1961,10 @@
         const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
         const formTypeSelectEl = document.querySelector('[data-template-type]');
         const mobileModeToggle = document.querySelector('[data-mobile-mode]');
+        const mobileScaleLabel = document.querySelector('[data-mobile-scale-label]');
+        const mobileScaleDecBtn = document.querySelector('[data-mobile-scale-dec]');
+        const mobileScaleIncBtn = document.querySelector('[data-mobile-scale-inc]');
+        const mobileScaleDebug = document.querySelector('[data-mobile-scale-debug]');
         const partsOcrButton = document.querySelector('[data-parts-ocr]');
         const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
         const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
@@ -1955,10 +2006,44 @@
           return mobileModeToggle ? mobileModeToggle.checked : false;
         };
 
-        const applyMobileMode = (enabled) => {
+        const clampScale = (val) => {
+          const num = Number(val);
+          if (!Number.isFinite(num)) return 0.7;
+          return Math.min(1.0, Math.max(0.4, num));
+        };
+
+        const updateMobileScaleLabel = (scale) => {
+          if (mobileScaleLabel) {
+            mobileScaleLabel.textContent = 'Scale: ' + Math.round(scale * 100) + '%';
+          }
+          if (mobileScaleDebug) {
+            const container = document.querySelector('.container');
+            const rect = container ? container.getBoundingClientRect() : null;
+            const appliedScale = getComputedStyle(document.body).getPropertyValue('--mobile-scale').trim() || scale;
+            mobileScaleDebug.textContent =
+              'Applied: ' +
+              appliedScale +
+              ' | rect: ' +
+              (rect ? Math.round(rect.width) + 'px' : 'n/a') +
+              ' / viewport ' +
+              Math.round(window.innerWidth) +
+              'px';
+          }
+        };
+
+        const applyMobileMode = (enabled, overrideScale) => {
+          const scale = clampScale(overrideScale !== undefined ? overrideScale : window.localStorage.getItem(MOBILE_SCALE_KEY) || 0.7);
+          document.body.style.setProperty('--mobile-scale', scale);
+          updateMobileScaleLabel(scale);
+          recordDebug('mobile-scale', {
+            enabled,
+            scale,
+            viewport: { width: window.innerWidth, height: window.innerHeight },
+          });
           if (enabled) {
             document.body.classList.add('mobile-mode');
             window.localStorage.setItem(MOBILE_MODE_KEY, '1');
+            window.localStorage.setItem(MOBILE_SCALE_KEY, String(scale));
           } else {
             document.body.classList.remove('mobile-mode');
             window.localStorage.removeItem(MOBILE_MODE_KEY);
@@ -1967,11 +2052,34 @@
 
         if (mobileModeToggle) {
           const storedMobile = window.localStorage.getItem(MOBILE_MODE_KEY);
+          const storedScale = clampScale(window.localStorage.getItem(MOBILE_SCALE_KEY) || 0.7);
           mobileModeToggle.checked = storedMobile === '1';
-          applyMobileMode(mobileModeToggle.checked);
+          applyMobileMode(mobileModeToggle.checked, storedScale);
           mobileModeToggle.addEventListener('change', (event) => {
             applyMobileMode(event.target.checked);
           });
+          const adjustScale = (delta) => {
+            const current = clampScale(document.body.style.getPropertyValue('--mobile-scale') || storedScale);
+            const next = clampScale(current + delta);
+            if (mobileModeToggle && !mobileModeToggle.checked) {
+              mobileModeToggle.checked = true;
+            }
+            applyMobileMode(mobileModeToggle ? mobileModeToggle.checked : true, next);
+          };
+          if (mobileScaleDecBtn) {
+            mobileScaleDecBtn.addEventListener('click', (event) => {
+              event.preventDefault();
+              adjustScale(-0.05);
+            });
+          }
+          if (mobileScaleIncBtn) {
+            mobileScaleIncBtn.addEventListener('click', (event) => {
+              event.preventDefault();
+              adjustScale(0.05);
+            });
+          }
+        } else {
+          updateMobileScaleLabel(0.7);
         }
 
 
@@ -4680,6 +4788,28 @@
             drawing: false,
           };
 
+          const logSignatureMetrics = (info) => {
+            try {
+              console.log('[signature-metrics]', info);
+            } catch (e) {
+              // ignore
+            }
+            try {
+              recordDebug('signature-metrics', info);
+            } catch (e) {
+              // ignore
+            }
+          };
+
+          const drawImageFitted = (ctx, img, targetW, targetH) => {
+            const scale = Math.min(targetW / img.width, targetH / img.height, 1);
+            const drawW = img.width * scale;
+            const drawH = img.height * scale;
+            const offsetX = (targetW - drawW) / 2;
+            const offsetY = (targetH - drawH) / 2;
+            ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+          };
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
             overlayState.active = true;
             overlayState.targetPad = pad;
@@ -4707,7 +4837,7 @@
               if (hiddenInput.value) {
                 const img = new Image();
                 img.onload = () => {
-                  overlayCtx.drawImage(img, 0, 0, w, h);
+                  drawImageFitted(overlayCtx, img, w, h);
                 };
                 img.src = hiddenInput.value;
               } else if (sampleText) {
@@ -4813,12 +4943,19 @@
             // Preserve aspect ratio when placing into target canvas
             const img = new Image();
             img.onload = () => {
-              const scale = Math.min(w / img.width, h / img.height, 1);
-              const drawW = img.width * scale;
-              const drawH = img.height * scale;
-              const offsetX = (w - drawW) / 2;
-              const offsetY = (h - drawH) / 2;
-              targetCtx.drawImage(img, offsetX, offsetY, drawW, drawH);
+              drawImageFitted(targetCtx, img, w, h);
+              logSignatureMetrics({
+                label: 'signature-apply',
+                naturalWidth: img.width,
+                naturalHeight: img.height,
+                targetWidth: w,
+                targetHeight: h,
+                targetCanvasWidth: targetCanvas.width,
+                targetCanvasHeight: targetCanvas.height,
+                overlayWidth: overlayCanvas.width,
+                overlayHeight: overlayCanvas.height,
+                mobileMode: isMobileMode(),
+              });
             };
             img.src = dataUrl;
             closeOverlay();
@@ -4862,7 +4999,7 @@
               const img = new Image();
               img.onload = () => {
                 setPenDefaults();
-                ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+                drawImageFitted(ctx, img, canvasWidth, canvasHeight);
               };
               img.src = dataUrl;
             };
@@ -4879,7 +5016,8 @@
             const resizeCanvas = () => {
               const wrapper = pad.querySelector('.signature-canvas-wrapper');
               canvasWidth = wrapper.clientWidth || 340;
-              canvasHeight = wrapper.clientHeight || 160;
+              const idealHeight = Math.max(canvasWidth * 0.45, 140);
+              canvasHeight = Math.min(Math.max(idealHeight, 140), 260);
               canvas.width = canvasWidth * ratio;
               canvas.height = canvasHeight * ratio;
               canvas.style.width = canvasWidth + 'px';
