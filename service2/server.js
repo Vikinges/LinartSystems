@@ -4373,7 +4373,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
 
         const parseOcrText = (text) => {
           const lines = text
-            .split(/\\r?\\n/)
+            .split('\\n')
             .map((l) => l.trim())
             .filter(Boolean);
           const normalizeToken = (t) =>
