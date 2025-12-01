@@ -3732,10 +3732,10 @@ ${rows.join('\n')}
       .mobile-mode .container {
         transform: scale(0.7);
         transform-origin: top center;
-        width: 100%;
-        max-width: 100vw;
-        margin: 0 auto;
-        padding: 0 12px;
+        width: calc(100vw / 0.7);
+        max-width: none;
+        margin: 0;
+        padding: 0 8px;
       }
       @media (max-width: 640px) {
         .signature-pad {
