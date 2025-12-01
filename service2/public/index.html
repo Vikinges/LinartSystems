@@ -594,6 +594,17 @@
         background: #fff;
         touch-action: none;
       }
+      .mobile-mode body {
+        overflow-x: hidden;
+      }
+      .mobile-mode .container {
+        transform: scale(0.7);
+        transform-origin: top center;
+        width: 100%;
+        max-width: 100vw;
+        margin: 0 auto;
+        padding: 0 12px;
+      }
       .mobile-mode .container {
         transform: scale(0.7);
         transform-origin: top center;
@@ -4806,7 +4817,12 @@
             targetCtx.scale(targetRatio, targetRatio);
             const img = new Image();
             img.onload = () => {
-              targetCtx.drawImage(img, 0, 0, w, h);
+              const scale = Math.min(w / img.width, h / img.height, 1);
+              const drawW = img.width * scale;
+              const drawH = img.height * scale;
+              const offsetX = (w - drawW) / 2;
+              const offsetY = (h - drawH) / 2;
+              targetCtx.drawImage(img, offsetX, offsetY, drawW, drawH);
             };
             img.src = dataUrl;
             closeOverlay();

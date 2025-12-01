@@ -2826,7 +2826,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   }
 
   // Подписи крупные, но занимают меньше высоты.
-  const signatureHeight = 140;
+  const signatureHeight = 160;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
@@ -3726,10 +3726,16 @@ ${rows.join('\n')}
         background: #fff;
         touch-action: none;
       }
+      .mobile-mode body {
+        overflow-x: hidden;
+      }
       .mobile-mode .container {
         transform: scale(0.7);
         transform-origin: top center;
-        width: calc(100% / 0.7);
+        width: 100%;
+        max-width: 100vw;
+        margin: 0 auto;
+        padding: 0 12px;
       }
       @media (max-width: 640px) {
         .signature-pad {
@@ -7450,9 +7456,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             targetCtx.setTransform(1, 0, 0, 1, 0, 0);
             targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
             targetCtx.scale(targetRatio, targetRatio);
+            // Preserve aspect ratio when placing into target canvas
             const img = new Image();
             img.onload = () => {
-              targetCtx.drawImage(img, 0, 0, w, h);
+              const scale = Math.min(w / img.width, h / img.height, 1);
+              const drawW = img.width * scale;
+              const drawH = img.height * scale;
+              const offsetX = (w - drawW) / 2;
+              const offsetY = (h - drawH) / 2;
+              targetCtx.drawImage(img, offsetX, offsetY, drawW, drawH);
             };
             img.src = dataUrl;
             closeOverlay();
