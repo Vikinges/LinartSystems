@@ -1,8 +1,8 @@
-Linart Systems — Central Hub + Demo Services
+Linart Systems — Central Hub + Example Services
 
 What I added
 - A small central "hub" web app in `hub/` that serves a static main page and proxies/redirects to demo services
-- Two demo microservices in `service1/` and `service2/`
+- Two example microservices in `service1/` and `service2/`
 - `docker-compose.yml` to build and run all three containers
 
 Run locally (requires Docker & Docker Compose):

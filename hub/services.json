@@ -11,8 +11,8 @@
     "name": "service2",
     "target": "http://service2:3001",
     "prefix": "/service2",
-    "displayName": "Demo service 2",
-    "description": "Another example service",
+    "displayName": "Another example service",
+    "description": "Example LED/PDF generator",
     "logo": "/static/logo2.svg"
   }
 ]
