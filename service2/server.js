@@ -679,8 +679,21 @@ const SIGN_OFF_CHECKLIST_ROWS = [
   },
 ];
 
+const SERVICE_EQUIPMENT_ROWS = [
+  { action: 'Power supply OK', checkbox: 'equip_power_ok', notes: 'equip_power_notes' },
+  { action: 'Controllers OK', checkbox: 'equip_controllers_ok', notes: 'equip_controllers_notes' },
+  { action: 'Cables OK', checkbox: 'equip_cables_ok', notes: 'equip_cables_notes' },
+  { action: 'Fans OK', checkbox: 'equip_fans_ok', notes: 'equip_fans_notes' },
+  { action: 'Modules OK', checkbox: 'equip_modules_ok', notes: 'equip_modules_notes' },
+  { action: 'Visual inspection OK', checkbox: 'equip_visual_ok', notes: 'equip_visual_notes' },
+];
+
 function isInstallation(templateType) {
   return templateType === 'installation_report';
+}
+
+function isServiceReport(templateType) {
+  return templateType === 'service_report';
 }
 function normalizeSuggestionValue(value) {
   if (value === undefined || value === null) return '';
@@ -1946,6 +1959,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       service_report: 'Service Report',
     }[templateType] || 'Service Report';
   const isInstallation = templateType === 'installation_report';
+  const isService = isServiceReport(templateType);
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
@@ -2216,7 +2230,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= 26;
   };
 
-  const drawChecklistSection = (section) => {
+  const drawChecklistSection = (section, opts = {}) => {
+    const alwaysRender = opts.alwaysRender || false;
     const columnWidths = [tableWidth * 0.55, tableWidth * 0.12, tableWidth * 0.33];
     const headerHeight = 18;
     const rowBaseHeight = 24;
@@ -2250,12 +2265,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     const filteredRows = section.rows.filter((row) => {
       const checked = normalizeCheckboxValue(body?.[row.checkbox]);
       const note = toSingleValue(body?.[row.notes]);
-      return checked || (note && String(note).trim().length > 0);
+      return alwaysRender || checked || (note && String(note).trim().length > 0);
     });
     if (!filteredRows.length) return;
 
-    const headingLabel =
-      ensureSpace(headerHeight + rowBaseHeight + 12) ? `${section.title} (cont.)` : section.title;
+    const totalHeightEstimate = headerHeight + rowBaseHeight * filteredRows.length + 12;
+    const movedPage = ensureSpace(totalHeightEstimate);
+    const headingLabel = movedPage ? `${section.title} (cont.)` : section.title;
     drawSectionTitle(headingLabel);
     drawHeaderRow();
 
@@ -2377,10 +2393,119 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         },
       );
 
-      cursorY -= rowHeight;
+    cursorY -= rowHeight;
     });
 
     cursorY -= 18;
+  };
+
+  const drawServiceSummary = () => {
+    const summaryFields = [
+      { label: 'Service type', value: toSingleValue(body?.service_type) || '' },
+      { label: 'Problem description', value: toSingleValue(body?.problem_description) || '' },
+      { label: 'Work performed', value: toSingleValue(body?.work_performed) || '' },
+      { label: 'Root cause', value: toSingleValue(body?.root_cause) || '' },
+      { label: 'Recommendations', value: toSingleValue(body?.recommendations) || '' },
+    ].filter((field) => field.value && String(field.value).trim());
+    if (!summaryFields.length) return;
+    let sectionStarted = false;
+    summaryFields.forEach((field, index) => {
+      const content = String(field.value || '').trim();
+      const layout = layoutMultilineText(content, font, tableWidth - 12, {
+        fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+        minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+        lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+      });
+      let blockHeight = Math.max(40, Math.ceil(layout.totalHeight + 18));
+      if (!Number.isFinite(blockHeight) || blockHeight <= 0) {
+        blockHeight = 40;
+      }
+      if (ensureSpace(blockHeight + 8, sectionStarted ? 'Service summary (cont.)' : 'Service summary')) {
+        sectionStarted = false;
+      }
+      if (!sectionStarted) {
+        drawSectionTitle(sectionStarted ? 'Service summary (cont.)' : index === 0 ? 'Service summary' : 'Service summary (cont.)');
+        sectionStarted = true;
+      }
+      page.drawRectangle({
+        x: margin,
+        y: cursorY - blockHeight,
+        width: tableWidth,
+        height: blockHeight,
+        color: rgb(1, 1, 1),
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+      });
+      page.drawText(field.label, {
+        x: margin + 6,
+        y: cursorY - 12,
+        size: 9,
+        font,
+        color: headingColor,
+      });
+      drawCenteredTextBlock(
+        page,
+        content,
+        font,
+        { x: margin + 4, y: cursorY - blockHeight, width: tableWidth - 8, height: blockHeight },
+        {
+          align: 'left',
+          verticalAlign: 'middle',
+          paddingX: 6,
+          paddingY: 18,
+          color: textColor,
+          fontSize: layout.fontSize,
+          minFontSize: layout.fontSize,
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+          layout,
+        },
+      );
+      cursorY -= blockHeight + 6;
+    });
+    cursorY -= 4;
+  };
+
+  const drawNotesBlock = (label, value) => {
+    const textValue = toSingleValue(value) || '';
+    if (!textValue || !String(textValue).trim()) return;
+    const layout = layoutMultilineText(String(textValue), font, tableWidth - 12, {
+      fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+      minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+      lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+    });
+    let blockHeight = Math.max(48, Math.ceil(layout.totalHeight + 20));
+    if (ensureSpace(blockHeight + 8, `${label} (cont.)`)) {
+      drawSectionTitle(`${label} (cont.)`);
+    } else {
+      drawSectionTitle(label);
+    }
+    page.drawRectangle({
+      x: margin,
+      y: cursorY - blockHeight,
+      width: tableWidth,
+      height: blockHeight,
+      color: rgb(1, 1, 1),
+      borderWidth: TABLE_BORDER_WIDTH,
+      borderColor: TABLE_BORDER_COLOR,
+    });
+    drawCenteredTextBlock(
+      page,
+      String(textValue),
+      font,
+      { x: margin + 4, y: cursorY - blockHeight, width: tableWidth - 8, height: blockHeight },
+      {
+        align: 'left',
+        verticalAlign: 'middle',
+        paddingX: 8,
+        paddingY: 10,
+        color: textColor,
+        fontSize: layout.fontSize,
+        minFontSize: layout.fontSize,
+        lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+        layout,
+      },
+    );
+    cursorY -= blockHeight + 10;
   };
 
   // Сначала Site information (две колонки)
@@ -2463,9 +2588,16 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   // Затем employees и чеклисты
   renderEmployeesSection();
-  const checklistSections = isInstallation ? [] : CHECKLIST_SECTIONS;
+
+  if (isService) {
+    drawServiceSummary();
+  }
+  if (isService) {
+    drawChecklistSection({ title: 'Equipment condition check', rows: SERVICE_EQUIPMENT_ROWS });
+  }
+  const checklistSections = isInstallation || isService ? [] : CHECKLIST_SECTIONS;
   checklistSections.forEach((section) => drawChecklistSection(section));
-  const signoffRows = isInstallation ? [] : SIGN_OFF_CHECKLIST_ROWS;
+  const signoffRows = isInstallation || isService ? [] : SIGN_OFF_CHECKLIST_ROWS;
   if (signoffRows.length) {
     drawChecklistSection({ title: 'Sign-off checklist', rows: signoffRows });
   }
@@ -2473,16 +2605,21 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   // Parts record — в самом конце перед Sign-off details
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
   if (partsUsedRows.length) {
-    const columnWidths = [0.32, 0.18, 0.18, 0.18, 0.14].map((ratio) => tableWidth * ratio);
+    const isServiceParts = isService;
+    const columnWidths = (isServiceParts ? [0.26, 0.34, 0.16, 0.24] : [0.32, 0.18, 0.18, 0.18, 0.14]).map(
+      (ratio) => tableWidth * ratio,
+    );
     const headerHeight = 18;
-    const rowHeightBase = 30;
-    const headers = [
-      'Part removed (description)',
-      'Part number',
-      'Serial number (removed)',
-      'Part used in display',
-      'Serial number (used)',
-    ];
+    const rowHeightBase = isServiceParts ? 28 : 30;
+    const headers = isServiceParts
+      ? ['Part number', 'Description', 'Quantity', 'Reason']
+      : [
+          'Part removed (description)',
+          'Part number',
+          'Serial number (removed)',
+          'Part used in display',
+          'Serial number (used)',
+        ];
     const drawPartsHeader = () => {
       let headerX = margin;
       headers.forEach((label, index) => {
@@ -2509,21 +2646,29 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     };
     const usedRowsFiltered = partsUsedRows.filter((row) => row.hasData);
     if (usedRowsFiltered.length) {
+      const partsTitle = isServiceParts ? 'Parts used / replaced' : 'Parts record';
       const headerLabel =
         ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 8)
-          ? 'Parts record (cont.)'
-          : 'Parts record';
+          ? `${partsTitle} (cont.)`
+          : partsTitle;
       drawSectionTitle(headerLabel);
       drawPartsHeader();
 
       usedRowsFiltered.forEach((row) => {
-        const cellValues = [
-          row.fields[`parts_removed_desc_${row.number}`] || '',
-          row.fields[`parts_removed_part_${row.number}`] || '',
-          row.fields[`parts_removed_serial_${row.number}`] || '',
-          row.fields[`parts_used_part_${row.number}`] || '',
-          row.fields[`parts_used_serial_${row.number}`] || '',
-        ];
+        const cellValues = isServiceParts
+          ? [
+              row.fields[`parts_used_part_${row.number}`] || '',
+              row.fields[`parts_removed_desc_${row.number}`] || '',
+              row.fields[`parts_removed_part_${row.number}`] || '',
+              row.fields[`parts_used_serial_${row.number}`] || '',
+            ]
+          : [
+              row.fields[`parts_removed_desc_${row.number}`] || '',
+              row.fields[`parts_removed_part_${row.number}`] || '',
+              row.fields[`parts_removed_serial_${row.number}`] || '',
+              row.fields[`parts_used_part_${row.number}`] || '',
+              row.fields[`parts_used_serial_${row.number}`] || '',
+            ];
         const cellLayouts = cellValues.map((value, index) => {
           const layout = layoutTextForWidth({
             value,
@@ -2543,7 +2688,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           rowHeight = rowHeightBase;
         }
         if (ensureSpace(rowHeight + 6)) {
-          drawSectionTitle('Parts record (cont.)');
+          drawSectionTitle(`${partsTitle} (cont.)`);
           drawPartsHeader();
         }
         let cellX = margin;
@@ -2581,7 +2726,15 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= 8;
     }
   }
-  addPageWithHeading('Sign-off details');
+  if (isService) {
+    drawNotesBlock('Customer comments', body?.customer_comments || body?.general_notes);
+    // Avoid duplicating template heading; just ensure space for signatures.
+    ensureSpace(260, 'Sign-off details');
+  } else {
+    drawNotesBlock('Additional notes', body?.general_notes);
+    addPageWithHeading('Sign-off details');
+    drawSectionTitle('Sign-off details');
+  }
 
   const engineerDetails = [
     { label: 'On-site engineer company', value: toSingleValue(body?.engineer_company) || '' },
@@ -2801,19 +2954,24 @@ function generateIndexHtml() {
     'signoff_complete_1',
   ]);
 
-  const renderTextInput = (name, label, { type = 'text', textarea = false, placeholder = '' } = {}) => {
+  const renderTextInput = (
+    name,
+    label,
+    { type = 'text', textarea = false, placeholder = '', allowUnknown = false } = {},
+  ) => {
     const descriptor = descriptorByName.get(name);
-    if (!descriptor) {
+    if (!descriptor && !allowUnknown) {
       return `        <!-- Missing field: ${escapeHtml(label)} (${escapeHtml(name)}) -->`;
     }
-    const id = toHtmlId(name) || `field-${toHtmlId(descriptor.acroName)}`;
+    const requestName = descriptor ? descriptor.requestName : name;
+    const id = toHtmlId(name) || `field-${toHtmlId(descriptor ? descriptor.acroName : name)}`;
     const initial = demoValues.get(name);
     if (textarea) {
       const rows = type === 'textarea-lg' ? 8 : 4;
       const content = initial ? escapeHtml(initial) : '';
       return `        <label class="field" for="${id}">
           <span>${escapeHtml(label)}</span>
-          <textarea id="${id}" name="${escapeHtml(descriptor.requestName)}" rows="${rows}" placeholder="${escapeHtml(placeholder || label)}" data-auto-resize>${content}</textarea>
+          <textarea id="${id}" name="${escapeHtml(requestName)}" rows="${rows}" placeholder="${escapeHtml(placeholder || label)}" data-auto-resize>${content}</textarea>
         </label>`;
     }
     const valueAttr = initial ? ` value="${escapeHtml(initial)}"` : '';
@@ -2842,12 +3000,12 @@ function generateIndexHtml() {
     }
     return `        <label class="field" for="${id}">
           <span>${escapeHtml(label)}</span>
-          <input type="${escapeHtml(actualType)}" id="${id}" name="${escapeHtml(descriptor.requestName)}"${valueAttr} placeholder="${escapeHtml(resolvedPlaceholder)}"${suggestionAttrs}${extraAttrs} />${datalistMarkup}
+          <input type="${escapeHtml(actualType)}" id="${id}" name="${escapeHtml(requestName)}"${valueAttr} placeholder="${escapeHtml(resolvedPlaceholder)}"${suggestionAttrs}${extraAttrs} />${datalistMarkup}
         </label>`;
   };
 
-  const renderChecklistSection = (title, rows) => {
-    const header = `      <section class="card">
+  const renderChecklistSection = (title, rows, options = {}) => {
+    const header = `      <section class="card"${options.dataFormTypes ? ` data-form-types="${options.dataFormTypes}"` : ''}>
         <h2>${escapeHtml(title)}</h2>
         <table class="checklist-table">
           <thead>
@@ -2861,14 +3019,16 @@ function generateIndexHtml() {
     const body = rows.map((row) => {
       const checkbox = descriptorByName.get(row.checkbox);
       const notes = descriptorByName.get(row.notes);
-      const checkboxId = checkbox ? toHtmlId(checkbox.requestName) || `check-${checkbox.requestName}` : `missing-${row.checkbox}`;
+      const checkboxRequest = checkbox ? checkbox.requestName : row.checkbox;
+      const notesRequest = notes ? notes.requestName : row.notes;
+      const checkboxId = checkbox ? toHtmlId(checkbox.requestName) || `check-${checkbox.requestName}` : toHtmlId(row.checkbox) || `check-${row.checkbox}`;
       const isChecked = row.checked || demoChecked.has(row.checkbox);
-      const checkboxMarkup = checkbox
-        ? `<input type="checkbox" id="${checkboxId}" name="${escapeHtml(checkbox.requestName)}"${isChecked ? ' checked' : ''} />`
+      const checkboxMarkup = checkbox || options.allowUnknown
+        ? `<input type="checkbox" id="${checkboxId}" name="${escapeHtml(checkboxRequest)}"${isChecked ? ' checked' : ''} />`
         : `<span class="missing">Missing field</span>`;
       const notesInitial = row.notesValue ?? (notes ? demoValues.get(notes.requestName) : '');
-      const notesMarkup = notes
-        ? `<textarea name="${escapeHtml(notes.requestName)}" data-auto-resize rows="1" placeholder="Add notes">${notesInitial ? escapeHtml(notesInitial) : ''}</textarea>`
+      const notesMarkup = notes || options.allowUnknown
+        ? `<textarea name="${escapeHtml(notesRequest)}" data-auto-resize rows="1" placeholder="Add notes">${notesInitial ? escapeHtml(notesInitial) : ''}</textarea>`
         : `<span class="missing">Missing notes field</span>`;
       const checkboxLabelStart = checkbox ? `<label class="check-wrapper" for="${checkboxId}">` : '<div class="check-wrapper">';
       const checkboxLabelEnd = checkbox ? '</label>' : '</div>';
@@ -2895,26 +3055,39 @@ function generateIndexHtml() {
     return `<input type="text" name="${escapeHtml(descriptor.requestName)}"${valueAttr} />`;
   };
 
-  const partsTable = () => {
+  const partsTable = (options = {}) => {
+    const { isService = false, dataAttr = '' } = options;
     const rows = [];
     for (let i = 1; i <= PARTS_ROW_COUNT; i += 1) {
       const rowClass = i === 1 ? 'parts-row' : 'parts-row is-hidden-row';
-      rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+      if (isService) {
+        rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+              <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_used_serial_${i}`)}</td>
+            </tr>`);
+      } else {
+        rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
               <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
               <td>${renderInlineInput(`parts_removed_part_${i}`)}</td>
               <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
               <td>${renderInlineInput(`parts_used_serial_${i}`)}</td>
             </tr>`);
+      }
     }
-    return `      <section class="card">
-        <h2>Parts record</h2>
+    const headers = isService
+      ? ['Part / Batch', 'Description', 'Quantity', 'Reason']
+      : ['Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
+    return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
+        <h2>${isService ? 'Parts used / replaced' : 'Parts record'}</h2>
         <table class="parts-table" data-parts-table>
           <thead>
             <tr>
-              <th>Part batch (description)</th>
-              <th>Part number</th>
-              <th>Part used in display</th>
-              <th>Serial number</th>
+              <th>${headers[0]}</th>
+              <th>${headers[1]}</th>
+              <th>${headers[2]}</th>
+              <th>${headers[3]}</th>
             </tr>
           </thead>
           <tbody>
@@ -4115,10 +4288,38 @@ ${renderTextInput('warranty_end', 'Warranty end', { type: 'date' })}
           <datalist id="suggest-employee-name" data-suggest-list="employee_name"></datalist>
           <datalist id="suggest-employee-role" data-suggest-list="employee_role"></datalist>
         </section>
-${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, section.rows)).join('\n')}
+        <section class="card" data-form-types="service_report">
+          <h2>Service summary</h2>
+          <div class="grid two-col">
+            <label class="field" style="max-width:360px">
+              <span>Service type</span>
+              <select name="service_type">
+                <option value="">Select type</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="repair">Repair</option>
+                <option value="troubleshooting">Troubleshooting</option>
+                <option value="inspection">Inspection</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+          </div>
+${renderTextInput('problem_description', 'Problem description', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
+${renderTextInput('work_performed', 'Work performed', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
+${renderTextInput('root_cause', 'Root cause', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
+${renderTextInput('recommendations', 'Recommendations', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
+        </section>
+${partsTable({ isService: true, dataAttr: 'service_report' })}
+${renderChecklistSection('Equipment condition check', SERVICE_EQUIPMENT_ROWS, { dataFormTypes: 'service_report', allowUnknown: true })}
+${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, section.rows, { dataFormTypes: 'maintenance' })).join('\n')}
         <section class="card">
-          <h2>Additional notes</h2>
+          <div data-form-types="service_report">
+            <h2>Customer comments</h2>
+${renderTextInput('customer_comments', 'Customer comments', { textarea: true, type: 'textarea-lg', placeholder: 'Add customer feedback', allowUnknown: true })}
+          </div>
+          <div data-form-types="maintenance,installation_report">
+            <h2>Additional notes</h2>
 ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'textarea-lg', placeholder: 'Record any observations or follow-up actions' })}
+          </div>
         </section>
         <section class="card photos-card">
           <h2>Photos</h2>
@@ -4159,8 +4360,8 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
             <small>JPEG/PNG only, up to 20 images.</small>
           </div>
         </section>
-${partsTable()}
-${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
+${partsTable({ dataAttr: 'maintenance,installation_report' })}
+${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
 
         <section class="card">
           <h2>Signatures</h2>
@@ -4344,11 +4545,35 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             const shouldShow = allowed.length === 0 || allowed.includes(type);
             el.hidden = !shouldShow;
             el.style.display = shouldShow ? '' : 'none';
+            const inputs = el.querySelectorAll('input, select, textarea, button');
+            inputs.forEach((node) => {
+              if (node.hasAttribute('data-admin-open') || node.hasAttribute('data-admin-close')) return;
+              node.disabled = !shouldShow;
+            });
           });
+        };
+        if (formTypeSelectEl) {
+          formTypeSelectEl.addEventListener('change', (event) => {
+            applyFormTypeVisibility(event.target.value);
+          });
+          applyFormTypeVisibility(formTypeSelectEl.value);
+        } else {
+          applyFormTypeVisibility();
+        }
+
+        const findActivePartsSection = () => {
+          const sections = Array.from(document.querySelectorAll('[data-parts-section]'));
+          return sections.find((section) => !section.hidden && section.style.display !== 'none') || null;
+        };
+
+        const findActivePartsTable = () => {
+          const section = findActivePartsSection();
+          if (!section) return null;
+          return section.querySelector('[data-parts-table]');
         };
 
         const findFirstVisiblePartsRow = () => {
-          const table = document.querySelector('[data-parts-table]');
+          const table = findActivePartsTable();
           if (!table) return null;
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
           // Заполняем последнюю открытую строку (обычно только что добавленная)
@@ -4366,9 +4591,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
           });
 
         const setPartsOcrStatus = (msg, isError = false) => {
-          if (!partsOcrStatus) return;
-          partsOcrStatus.textContent = msg || '';
-          partsOcrStatus.style.color = isError ? '#c1121f' : '#475569';
+          const section = findActivePartsSection();
+          const statusEl = (section && section.querySelector('[data-parts-ocr-status]')) || partsOcrStatus;
+          if (!statusEl) return;
+          statusEl.textContent = msg || '';
+          statusEl.style.color = isError ? '#c1121f' : '#475569';
         };
 
         const parseOcrText = (text) => {
@@ -4448,23 +4675,36 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         const fillPartsFromOcr = (parsed) => {
           const row = findFirstVisiblePartsRow();
           if (!row) return false;
+          const formType = formTypeSelectEl ? formTypeSelectEl.value : '';
+          const isServiceForm = formType === 'service_report';
           const safeModel = parsed.model || '';
           const safeBatch = parsed.batch || '';
           const safeSerial = parsed.serial || '';
-          if (parsed.serial) {
-            const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
-            if (serialInput) serialInput.value = safeSerial;
-          }
-          if (parsed.model) {
+          const combinedModelBatch = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel;
+          if (isServiceForm) {
             const partInput = row.querySelector('input[name^="parts_used_part_"]');
-            if (partInput) partInput.value = safeModel;
-          }
-          const batchDescInput = row.querySelector('input[name^="parts_removed_desc_"]');
-          if (safeBatch && batchDescInput && !batchDescInput.value.trim()) {
-            batchDescInput.value = safeBatch;
+            if (partInput && combinedModelBatch) partInput.value = combinedModelBatch;
+            const descInput = row.querySelector('input[name^="parts_removed_desc_"]');
+            if (descInput && safeSerial && !descInput.value.trim()) descInput.value = safeSerial;
+            const reasonInput = row.querySelector('input[name^="parts_used_serial_"]');
+            if (reasonInput && safeSerial && !reasonInput.value.trim() && !descInput?.value.trim()) {
+              reasonInput.value = safeSerial;
+            }
+          } else {
+            if (parsed.serial) {
+              const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
+              if (serialInput) serialInput.value = safeSerial;
+            }
+            if (parsed.model) {
+              const partInput = row.querySelector('input[name^="parts_used_part_"]');
+              if (partInput) partInput.value = safeModel;
+            }
+            const batchDescInput = row.querySelector('input[name^="parts_removed_desc_"]');
+            if (safeBatch && batchDescInput && !batchDescInput.value.trim()) {
+              batchDescInput.value = safeBatch;
+            }
           }
           const ledField = document.querySelector('input[name="led_display_model"]');
-          const batchField = document.querySelector('input[name="batch_number"]');
           const combined = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel || '';
           if (ledField && combined) {
             const current = ledField.value ? ledField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
@@ -4473,14 +4713,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             if (!have.has(normalizedCombined)) {
               current.push(combined);
               ledField.value = current.join(', ');
-            }
-          }
-          if (batchField && safeBatch) {
-            const currentBatch = batchField.value ? batchField.value.split(',').map((s) => s.trim()).filter(Boolean) : [];
-            const have = new Set(currentBatch.map((s) => s.toUpperCase()));
-            if (!have.has(safeBatch.toUpperCase())) {
-              currentBatch.push(safeBatch);
-              batchField.value = currentBatch.join(', ');
             }
           }
           return true;
@@ -6107,85 +6339,95 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
         }
 
         function setupPartsTable() {
-          const table = document.querySelector('[data-parts-table]');
-          if (!table) return;
-          const rows = Array.from(table.querySelectorAll('.parts-row'));
-          const addButton = document.querySelector('[data-action="parts-add-row"]');
-          const removeButton = document.querySelector('[data-action="parts-remove-row"]');
           const hiddenClass = 'is-hidden-row';
+          const sections = Array.from(document.querySelectorAll('[data-parts-section]'));
+          if (!sections.length) return;
 
-          const enableRow = (row) => {
-            row.classList.remove(hiddenClass);
-            row.querySelectorAll('input, textarea').forEach((input) => {
-              input.disabled = false;
+          sections.forEach((section) => {
+            const table = section.querySelector('[data-parts-table]');
+            if (!table) return;
+            const rows = Array.from(table.querySelectorAll('.parts-row'));
+            const addButton = section.querySelector('[data-action="parts-add-row"]');
+            const removeButton = section.querySelector('[data-action="parts-remove-row"]');
+
+            const enableRow = (row) => {
+              row.classList.remove(hiddenClass);
+              row.querySelectorAll('input, textarea').forEach((input) => {
+                input.disabled = false;
+              });
+            };
+
+            const disableRow = (row, clear = false) => {
+              row.classList.add(hiddenClass);
+              row.querySelectorAll('input, textarea').forEach((input) => {
+                if (clear) input.value = '';
+                input.disabled = true;
+              });
+            };
+
+            const refresh = () => {
+              const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+              if (addButton) {
+                addButton.disabled = visibleRows.length >= rows.length;
+              }
+              if (removeButton) {
+                removeButton.disabled = visibleRows.length <= 1;
+              }
+            };
+
+            rows.forEach((row, index) => {
+              if (index === 0) {
+                enableRow(row);
+              } else if (
+                Array.from(row.querySelectorAll('input, textarea')).some((input) => input.value.trim().length)
+              ) {
+                enableRow(row);
+              } else {
+                disableRow(row, true);
+              }
             });
-          };
 
-          const disableRow = (row, clear = false) => {
-            row.classList.add(hiddenClass);
-            row.querySelectorAll('input, textarea').forEach((input) => {
-              if (clear) input.value = '';
-              input.disabled = true;
-            });
-          };
-
-          const refresh = () => {
-            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
-            if (addButton) {
-              addButton.disabled = visibleRows.length >= rows.length;
-            }
-            if (removeButton) {
-              removeButton.disabled = visibleRows.length <= 1;
-            }
-          };
-
-          rows.forEach((row, index) => {
-            if (index === 0) {
-              enableRow(row);
-            } else if (
-              Array.from(row.querySelectorAll('input, textarea')).some((input) => input.value.trim().length)
-            ) {
-              enableRow(row);
-            } else {
-              disableRow(row, true);
-            }
-          });
-
-          refresh();
-
-          if (addButton) {
-            addButton.addEventListener('click', (event) => {
-              event.preventDefault();
-              const nextHidden = rows.find((row) => row.classList.contains(hiddenClass));
-              if (!nextHidden) return;
-              enableRow(nextHidden);
-              const firstInput = nextHidden.querySelector('input, textarea');
-              if (firstInput) firstInput.focus();
-              refresh();
-            });
-          }
-
-        if (removeButton) {
-          removeButton.addEventListener('click', (event) => {
-            event.preventDefault();
-            const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
-            if (visibleRows.length <= 1) return;
-              const lastVisible = visibleRows[visibleRows.length - 1];
-              disableRow(lastVisible, true);
             refresh();
+
+            if (addButton) {
+              addButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                const nextHidden = rows.find((row) => row.classList.contains(hiddenClass));
+                if (!nextHidden) return;
+                enableRow(nextHidden);
+                refresh();
+              });
+            }
+
+            if (removeButton) {
+              removeButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                const visibleRows = rows.filter((row) => !row.classList.contains(hiddenClass));
+                if (visibleRows.length <= 1) return;
+                const lastVisible = visibleRows[visibleRows.length - 1];
+                disableRow(lastVisible, true);
+                refresh();
+              });
+            }
           });
         }
-      }
 
         function setupPartsOcr() {
-          if (!partsOcrButton && !partsOcrInput) return;
-          const friendlyHint =
-            'Upload a clear photo of the part label to auto-fill serial/model fields (OCR).';
-          if (partsOcrStatus && !partsOcrStatus.textContent.trim()) {
-            setPartsOcrStatus(friendlyHint);
-          }
+          const anyTrigger = document.querySelector('[data-parts-ocr]');
+          if (!anyTrigger) return;
+          const friendlyHint = 'Upload a clear photo of the part label to auto-fill serial/model fields (OCR).';
 
-          const processFile = (file) => {
+          const ensureHint = () => {
+            const section = findActivePartsSection();
+            const statusEl = section ? section.querySelector('[data-parts-ocr-status]') : null;
+            if (statusEl && !statusEl.textContent.trim()) {
+              statusEl.textContent = friendlyHint;
+              statusEl.style.color = '#475569';
+            }
+          };
+          ensureHint();
+
+          const processFile = (file, inputEl) => {
             if (!file) {
               setPartsOcrStatus('No photo selected.', true);
               return;
@@ -6199,25 +6441,32 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
                 setPartsOcrStatus(err && err.message ? err.message : 'OCR failed.', true);
                 recordDebug('parts-ocr-error', { error: String(err && err.message ? err.message : err) });
               });
+            if (inputEl) {
+              inputEl.value = '';
+            }
           };
 
-          if (partsOcrButton) {
-            partsOcrButton.addEventListener('click', (event) => {
-              event.preventDefault();
-              if (partsOcrInput) {
-                partsOcrInput.click();
-              } else {
-                setPartsOcrStatus('Photo input is unavailable on this device.', true);
-              }
-            });
-          }
+          document.addEventListener('click', (event) => {
+            const button = event.target.closest('[data-parts-ocr]');
+            if (!button) return;
+            event.preventDefault();
+            const section = button.closest('[data-parts-section]') || findActivePartsSection();
+            const inputEl = section ? section.querySelector('[data-parts-ocr-input]') : null;
+            if (inputEl) {
+              inputEl.click();
+            } else {
+              setPartsOcrStatus('Photo input is unavailable on this device.', true);
+            }
+          });
 
-          if (partsOcrInput) {
-            partsOcrInput.addEventListener('change', (event) => {
-              const files = event.target && event.target.files ? Array.from(event.target.files) : [];
-              processFile(files[0]);
-            });
-          }
+          document.addEventListener('change', (event) => {
+            const input = event.target && event.target.closest ? event.target.closest('[data-parts-ocr-input]') : null;
+            if (!input) return;
+            const section = input.closest('[data-parts-section]');
+            if (section && (section.hidden || section.style.display === 'none')) return;
+            const files = event.target && event.target.files ? Array.from(event.target.files) : [];
+            processFile(files[0], input);
+          });
         }
 
         function setupEmployees() {
@@ -7409,6 +7658,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             input.value = normalized.iso;
           });
 
+          // Ensure parts inputs are enabled only for the active section to avoid empty overrides.
+          const activePartsSection = findActivePartsSection ? findActivePartsSection() : null;
+          const allPartsSections = Array.from(document.querySelectorAll('[data-parts-section]'));
+          allPartsSections.forEach((section) => {
+            const isActive = section === activePartsSection;
+            const inputs = section.querySelectorAll('input, select, textarea');
+            inputs.forEach((el) => {
+              el.disabled = !isActive;
+            });
+          });
+          if (activePartsSection) {
+            const activeRows = Array.from(
+              activePartsSection.querySelectorAll('[data-parts-table] tbody tr:not(.is-hidden-row)'),
+            );
+            activeRows.forEach((row) => {
+              row.querySelectorAll('input, select, textarea').forEach((el) => {
+                el.disabled = false;
+              });
+            });
+          }
+
           const formData = new FormData(formEl);
           dateTimeSnapshots.forEach(({ input, normalized }) => {
             input.value = normalized.display;
@@ -7432,6 +7702,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS)}
             totalFields: Array.from(formData.keys()).length,
             totalUploadBytes: totalBytes,
           });
+          if (debugState.enabled) {
+            const partsEntries = [];
+            formData.forEach((value, key) => {
+              if (!key.startsWith('parts_')) return;
+              if (value instanceof File) return;
+              const v = String(value || '').trim();
+              if (v) partsEntries.push({ key, value: v });
+            });
+            const visiblePartsTable = document.querySelector('[data-parts-section]:not([hidden]) [data-parts-table]');
+            const visibleRows = visiblePartsTable
+              ? Array.from(visiblePartsTable.querySelectorAll('tbody tr')).filter(
+                  (row) => !row.classList.contains('is-hidden-row'),
+                ).length
+              : 0;
+            recordDebug('form-parts-snapshot', {
+              formType: formTypeSelectEl ? formTypeSelectEl.value : '',
+              partsEntries,
+              visibleRows,
+              totalPartsFields: partsEntries.length,
+            });
+          }
 
           const xhr = new XMLHttpRequest();
           xhr.open('POST', buildAppUrl('submit'));
@@ -8469,6 +8760,11 @@ app.post('/submit', (req, res, next) => {
       partsRowsUsed: partsRowsRendered,
       partsRowsHidden: hiddenPartRows,
       partsRowsRendered,
+      partsDebug: (partsRowUsage || []).map((row) => ({
+        number: row.number,
+        hasData: row.hasData,
+        fields: row.fields,
+      })),
       employees: employeeSummary.entries.map((entry) => ({
         index: entry.index,
         name: entry.name,
