@@ -3626,6 +3626,7 @@ ${rows.join('\n')}
         display: flex;
         flex-direction: column;
         gap: 0.75rem;
+        max-width: 520px;
       }
       .signature-pad__label {
         display: flex;
@@ -3648,10 +3649,13 @@ ${rows.join('\n')}
         border-radius: 12px;
         padding: 0.5rem;
         background: white;
+        min-height: 150px;
       }
       .signature-pad canvas {
         width: 100%;
-        height: 180px;
+        height: 100%;
+        min-height: 150px;
+        max-height: 200px;
         touch-action: none;
         background: white;
         border-radius: 8px;
@@ -3680,7 +3684,7 @@ ${rows.join('\n')}
       }
       .signature-overlay__panel {
         width: min(960px, 100%);
-        height: min(80vh, 700px);
+        height: min(85vh, 720px);
         background: #fff;
         border-radius: 12px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
@@ -3721,6 +3725,51 @@ ${rows.join('\n')}
         border-radius: 10px;
         background: #fff;
         touch-action: none;
+      }
+      .mobile-mode .container {
+        transform: scale(0.7);
+        transform-origin: top center;
+        width: calc(100% / 0.7);
+      }
+      @media (max-width: 640px) {
+        .signature-pad {
+          max-width: 100%;
+        }
+        .signature-canvas-wrapper {
+          min-height: 130px;
+        }
+        .signature-pad canvas {
+          min-height: 130px;
+          max-height: 160px;
+        }
+        .signature-overlay__panel {
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+        }
+        .signature-overlay__actions {
+          flex-wrap: wrap;
+        }
+      }
+      @media (max-width: 640px) {
+        .signature-pad {
+          max-width: 100%;
+        }
+        .signature-canvas-wrapper {
+          min-height: 130px;
+        }
+        .signature-pad canvas {
+          min-height: 130px;
+          max-height: 160px;
+        }
+        .signature-overlay__panel {
+          width: 100%;
+          height: 100%;
+          border-radius: 0;
+        }
+        .signature-overlay__actions {
+          flex-wrap: wrap;
+        }
       }
       .footer-actions {
         display: flex;
@@ -4153,6 +4202,13 @@ ${rows.join('\n')}
                 <option value="calibration" disabled>Calibration (coming soon)</option>
               </select>
             </label>
+            <label class="field" style="max-width:220px">
+              <span>Mobile mode</span>
+              <label class="checkbox" style="margin-top:8px; display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" data-mobile-mode />
+                <span>Rotate signature + 70% scale</span>
+              </label>
+            </label>
             <div class="template-details" data-template-info>
               <p data-template-status>Loading available templates...</p>
               <p class="template-description" data-template-description hidden></p>
@@ -4358,7 +4414,7 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
               <span>No files selected yet.</span>
             </div>
             <small>JPEG/PNG only, up to 20 images.</small>
-          </div>
+      </div>
         </section>
 ${partsTable({ dataAttr: 'maintenance,installation_report' })}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
@@ -4487,6 +4543,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         const debugPanelEl = document.querySelector('[data-debug-panel]');
         const debugLogEl = document.querySelector('[data-debug-log]');
         const DEBUG_KEY = 'pm-form-debug-enabled';
+        const MOBILE_MODE_KEY = 'pm-form-mobile-mode';
         const templateSelectEl = document.querySelector('[data-template-select]');
         const templateSlugInput = document.querySelector('[data-template-slug]');
         const templateInfoEl = document.querySelector('[data-template-info]');
@@ -4496,6 +4553,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           : null;
         const templatePreviewLink = templateInfoEl ? templateInfoEl.querySelector('[data-template-preview]') : null;
         const formTypeSelectEl = document.querySelector('[data-template-type]');
+        const mobileModeToggle = document.querySelector('[data-mobile-mode]');
         const partsOcrButton = document.querySelector('[data-parts-ocr]');
         const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
         const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
@@ -4532,6 +4590,29 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
+
+        const isMobileMode = () => {
+          return mobileModeToggle ? mobileModeToggle.checked : false;
+        };
+
+        const applyMobileMode = (enabled) => {
+          if (enabled) {
+            document.body.classList.add('mobile-mode');
+            window.localStorage.setItem(MOBILE_MODE_KEY, '1');
+          } else {
+            document.body.classList.remove('mobile-mode');
+            window.localStorage.removeItem(MOBILE_MODE_KEY);
+          }
+        };
+
+        if (mobileModeToggle) {
+          const storedMobile = window.localStorage.getItem(MOBILE_MODE_KEY);
+          mobileModeToggle.checked = storedMobile === '1';
+          applyMobileMode(mobileModeToggle.checked);
+          mobileModeToggle.addEventListener('change', (event) => {
+            applyMobileMode(event.target.checked);
+          });
+        }
 
 
         const applyFormTypeVisibility = (formType) => {
@@ -7182,6 +7263,29 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         function setupSignaturePads() {
           const ratio = window.devicePixelRatio || 1;
+          const rotateSignatureDataUrl = (dataUrl, targetWidth, targetHeight) => {
+            return new Promise((resolve) => {
+              if (!dataUrl || !dataUrl.startsWith('data:image/')) {
+                return resolve(null);
+              }
+              const img = new Image();
+              img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = targetHeight * ratio;
+                canvas.height = targetWidth * ratio;
+                const ctx = canvas.getContext('2d');
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.rotate(Math.PI / 2);
+                ctx.translate(-canvas.height / 2, -canvas.width / 2);
+                ctx.drawImage(img, 0, 0, canvas.height, canvas.width);
+                resolve(canvas.toDataURL('image/png'));
+              };
+              img.onerror = () => resolve(null);
+              img.src = dataUrl;
+            });
+          };
           let overlay = document.querySelector('[data-signature-overlay]');
           if (!overlay) {
             overlay = document.createElement('div');
@@ -7319,20 +7423,26 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             closeOverlay();
           });
 
-          overlayApply.addEventListener('click', (event) => {
+          overlayApply.addEventListener('click', async (event) => {
             event.preventDefault();
             if (!overlayState.active || !overlayState.targetPad || !overlayState.hiddenInput) {
               closeOverlay();
               return;
             }
-            const dataUrl = overlayCanvas.toDataURL('image/png');
-            overlayState.hiddenInput.value = dataUrl;
+            let dataUrl = overlayCanvas.toDataURL('image/png');
             const targetCanvas = overlayState.targetPad.querySelector('canvas');
             const targetCtx = targetCanvas.getContext('2d');
             const wrapper = overlayState.targetPad.querySelector('.signature-canvas-wrapper');
             const w = wrapper.clientWidth || 340;
             const h = wrapper.clientHeight || 160;
             const targetRatio = window.devicePixelRatio || 1;
+            if (isMobileMode()) {
+              const rotatedUrl = await rotateSignatureDataUrl(dataUrl, w, h);
+              if (rotatedUrl) {
+                dataUrl = rotatedUrl;
+              }
+            }
+            overlayState.hiddenInput.value = dataUrl;
             targetCanvas.width = w * targetRatio;
             targetCanvas.height = h * targetRatio;
             targetCanvas.style.width = w + 'px';
