@@ -6,6 +6,8 @@ const { createProxyMiddleware } = require('http-proxy-middleware');
 const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const fs = require('fs');
+const { exec } = require('child_process');
+const { exec } = require('child_process');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
@@ -41,6 +43,7 @@ const SERVICES_FILE = path.join(__dirname, 'services.json');
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const ADMIN_STORE_FILE = path.join(__dirname, 'admin.json');
 const UPLOAD_DIR = path.join(__dirname, 'static', 'uploads');
+const TEMP_DIR = path.join(UPLOAD_DIR, 'tmp');
 const DEFAULT_CONFIG = {
   siteLogo: '/static/logo1.svg',
   siteTitle: 'Linart Systems',
@@ -62,6 +65,7 @@ const DEFAULT_CONFIG = {
 const DEFAULT_ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD || 'admin';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(TEMP_DIR, { recursive: true });
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -215,6 +219,35 @@ function saveAdminCredentials(credentials) {
   adminCredentials = credentials;
 }
 
+function getNextPort() {
+  const services = loadServices();
+  let maxPort = 3000;
+  services.forEach((svc) => {
+    try {
+      const url = new URL(svc.target);
+      const p = Number(url.port || '0');
+      if (p > maxPort) maxPort = p;
+    } catch (err) {
+      // ignore
+    }
+  });
+  return maxPort + 1;
+}
+
+async function stopContainer(name) {
+  if (!name) return;
+  try {
+    await execAsync(`docker rm -f ${name}`);
+  } catch (err) {
+    // ignore
+  }
+}
+
+function getProjectNetwork() {
+  const project = process.env.COMPOSE_PROJECT_NAME || 'linartsystems';
+  return `${project}_default`;
+}
+
 let adminCredentials = loadAdminCredentials();
 
 const allowedImageTypes = new Map([
@@ -225,6 +258,18 @@ const allowedImageTypes = new Map([
   ['image/gif', '.gif'],
   ['image/webp', '.webp'],
 ]);
+
+function execAsync(cmd, opts = {}) {
+  return new Promise((resolve, reject) => {
+    exec(cmd, { maxBuffer: 10 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
+      if (err) {
+        err.stderr = stderr;
+        return reject(err);
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
 
 const allowedVideoTypes = new Map([
   ['video/mp4', '.mp4'],
@@ -549,6 +594,77 @@ app.post('/admin/password', requireAuth, async (req, res) => {
     console.error('[hub] Failed to update password', err);
     res.status(500).json({ ok: false, error: 'update_failed' });
   }
+});
+
+// Upload a test service ZIP, build and run on next free port (admin-only)
+app.post('/admin/upload-service', requireAuth, upload.single('bundle'), async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ ok: false, error: 'missing_file' });
+  }
+  const ts = Date.now();
+  const zipPath = req.file.path;
+  const workDir = path.join(TEMP_DIR, `svc-${ts}`);
+  fs.mkdirSync(workDir, { recursive: true });
+
+  try {
+    await execAsync(`unzip -q "${zipPath}" -d "${workDir}"`);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'unzip_failed', detail: err.stderr || err.message });
+  }
+
+  const dockerfilePath = path.join(workDir, 'Dockerfile');
+  if (!fs.existsSync(dockerfilePath)) {
+    return res.status(400).json({ ok: false, error: 'dockerfile_missing' });
+  }
+
+  const imageTag = `linartsystems-service-test:${ts}`;
+  try {
+    await execAsync(`docker build -t ${imageTag} "${workDir}"`);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'build_failed', detail: err.stderr || err.message });
+  }
+
+  let services = loadServices();
+  const existingTest = services.find((s) => s.name === 'service-test');
+  if (existingTest) {
+    try {
+      const u = new URL(existingTest.target);
+      await stopContainer(u.hostname);
+    } catch (e) {
+      // ignore
+    }
+    services = services.filter((s) => s.name !== 'service-test');
+  }
+
+  const containerName = `linart_service_test_${ts}`;
+  const network = getProjectNetwork();
+  try {
+    await execAsync(`docker run -d --name ${containerName} --network ${network} ${imageTag}`);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'run_failed', detail: err.stderr || err.message });
+  }
+
+  const target = `http://${containerName}:3001`;
+  const nextPort = getNextPort();
+  const testService = normalizeService({
+    name: 'service-test',
+    target,
+    prefix: '/service-test',
+    displayName: 'Test service',
+    description: `Uploaded at ${new Date(ts).toISOString()} (port hint ${nextPort})`,
+  });
+  services.push(testService);
+  saveServices(services);
+  registerProxies(app);
+
+  res.json({
+    ok: true,
+    service: testService,
+    container: containerName,
+    image: imageTag,
+    network,
+    portHint: nextPort,
+  });
 });
 
 app.get('/admin/config', requireAuth, (req, res) => {
