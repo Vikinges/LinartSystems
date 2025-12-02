@@ -4597,6 +4597,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         const DEBUG_KEY = 'pm-form-debug-enabled';
         const MOBILE_MODE_KEY = 'pm-form-mobile-mode';
         const MOBILE_SCALE_KEY = 'pm-form-mobile-scale';
+        let debugState = { enabled: false, timeline: [] };
         const templateSelectEl = document.querySelector('[data-template-select]');
         const templateSlugInput = document.querySelector('[data-template-slug]');
         const templateInfoEl = document.querySelector('[data-template-info]');
@@ -4681,11 +4682,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const scale = clampScale(overrideScale !== undefined ? overrideScale : window.localStorage.getItem(MOBILE_SCALE_KEY) || 0.7);
           document.body.style.setProperty('--mobile-scale', scale);
           updateMobileScaleLabel(scale);
-          recordDebug('mobile-scale', {
+          const rect = getContainerRect();
+          const info = {
             enabled,
             scale,
+            rect,
             viewport: { width: window.innerWidth, height: window.innerHeight },
-          });
+          };
+          console.log('[mobile-scale]', info);
           if (enabled) {
             document.body.classList.add('mobile-mode');
             window.localStorage.setItem(MOBILE_MODE_KEY, '1');
@@ -4727,6 +4731,31 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         } else {
           updateMobileScaleLabel(0.7);
         }
+
+        const getContainerRect = () => {
+          const container = document.querySelector('.container');
+          const rect = container ? container.getBoundingClientRect() : null;
+          return rect
+            ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+            : { width: null, height: null };
+        };
+
+        window.pmTools = {
+          setMobile: (enabled = true, scale = 0.7) => {
+            if (mobileModeToggle) mobileModeToggle.checked = !!enabled;
+            applyMobileMode(enabled, scale);
+            console.log('[pmTools] setMobile', { enabled, scale });
+          },
+          logSizes: () => {
+            const rect = getContainerRect();
+            const scale =
+              getComputedStyle(document.body).getPropertyValue('--mobile-scale').trim() || 'n/a';
+            const mobile = isMobileMode();
+            const viewport = { width: window.innerWidth, height: window.innerHeight };
+            console.log('[pmTools] sizes', { mobile, scale, rect, viewport });
+            return { mobile, scale, rect, viewport };
+          },
+        };
 
 
         const applyFormTypeVisibility = (formType) => {
@@ -5854,7 +5883,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         const selectedFiles = new Map();
         const previewUrls = new Map();
-        const debugState = { enabled: false, timeline: [] };
+        debugState = { enabled: false, timeline: [] };
         const DATETIME_TEXT_SELECTOR = '[data-datetime-text]';
         const TIME_INPUT_SELECTOR = 'input[data-datetime-part="time"]';
         const TIME_PRESET_LIST_ID = 'time-presets';
