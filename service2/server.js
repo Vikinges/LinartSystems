@@ -3147,10 +3147,12 @@ ${rows.join('\n')}
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         background: #f5f5fb;
         color: #1c1c1e;
+        --control-scale: 1;
       }
       body {
         margin: 0;
         padding: 1.5rem;
+        font-size: 16px;
       }
       .container {
         max-width: 960px;
@@ -3222,17 +3224,18 @@ ${rows.join('\n')}
       textarea,
       select {
         font: inherit;
-        padding: 0.75rem;
+        font-size: calc(1rem * var(--control-scale, 1));
+        padding: calc(0.75rem * var(--control-scale, 1));
         border: 1px solid #d8d8e5;
         border-radius: 10px;
         background: #fafafe;
       }
       select {
-        min-height: 48px;
+        min-height: calc(48px * var(--control-scale, 1));
       }
       textarea {
         resize: vertical;
-        min-height: 120px;
+        min-height: calc(120px * var(--control-scale, 1));
       }
       input[type="time"],
       input[type="datetime-local"] {
@@ -3649,13 +3652,13 @@ ${rows.join('\n')}
         border-radius: 12px;
         padding: 0.5rem;
         background: white;
-        min-height: 150px;
+        min-height: calc(150px * var(--control-scale, 1));
       }
       .signature-pad canvas {
         width: 100%;
         height: 100%;
-        min-height: 140px;
-        max-height: 260px;
+        min-height: calc(140px * var(--control-scale, 1));
+        max-height: calc(260px * var(--control-scale, 1));
         touch-action: none;
         background: white;
         border-radius: 8px;
@@ -3727,9 +3730,11 @@ ${rows.join('\n')}
         touch-action: none;
       }
       body.mobile-mode {
+        --control-scale: var(--mobile-scale, 0.7);
         overflow-x: hidden;
         display: flex;
         justify-content: center;
+        font-size: calc(16px * var(--mobile-scale, 0.7));
       }
       body.mobile-mode > .container {
         transform: scale(var(--mobile-scale, 0.7));
