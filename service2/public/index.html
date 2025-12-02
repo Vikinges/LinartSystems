@@ -609,6 +609,10 @@
         background: #e5e7eb;
         color: #111827;
       }
+      .signature-overlay__actions .secondary.is-active {
+        background: #2563eb;
+        color: #fff;
+      }
       .signature-overlay__actions .primary {
         background: #2563eb;
         color: #fff;
@@ -4920,6 +4924,12 @@
             }
           };
 
+          const updateRotateButton = () => {
+            if (!overlayRotateBtn) return;
+            const active = overlayState.rotateDeg % 180 !== 0;
+            overlayRotateBtn.classList.toggle('is-active', active);
+          };
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
             overlayState.active = true;
             overlayState.targetPad = pad;
@@ -4929,6 +4939,9 @@
             document.body.style.overflow = 'hidden';
             overlayState.rotateDeg = 0;
             setOverlayOrientation(overlayState.orientation);
+            updateRotateButton();
+            updateRotateButton();
+            updateRotateButton();
 
             const resizeOverlayCanvas = () => {
               const isLandscape = overlayState.orientation === 'landscape';
@@ -5035,7 +5048,8 @@
           if (overlayRotateBtn) {
             overlayRotateBtn.addEventListener('click', (event) => {
               event.preventDefault();
-              overlayState.rotateDeg = (overlayState.rotateDeg + 90) % 360;
+              overlayState.rotateDeg = overlayState.rotateDeg ? 0 : 90;
+              updateRotateButton();
             });
           }
 
