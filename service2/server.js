@@ -3726,12 +3726,12 @@ ${rows.join('\n')}
         background: #fff;
         touch-action: none;
       }
-      .mobile-mode body {
+      body.mobile-mode {
         overflow-x: hidden;
         display: flex;
         justify-content: center;
       }
-      .mobile-mode body > .container {
+      body.mobile-mode > .container {
         transform: scale(var(--mobile-scale, 0.7));
         transform-origin: top center;
         width: calc(100vw / var(--mobile-scale, 0.7));
