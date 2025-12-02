@@ -3684,7 +3684,7 @@ ${rows.join('\n')}
         width: 100%;
         height: 100%;
         min-height: calc(140px * var(--control-scale, 1));
-        max-height: calc(260px * var(--control-scale, 1));
+        max-height: calc(320px * var(--control-scale, 1));
         touch-action: none;
         background: white;
         border-radius: 8px;
@@ -3720,6 +3720,10 @@ ${rows.join('\n')}
         display: flex;
         flex-direction: column;
         padding: 0.75rem;
+      }
+      .signature-overlay[data-orientation="landscape"] .signature-overlay__panel {
+        width: min(96vw, 1100px);
+        height: min(70vh, 640px);
       }
       .signature-overlay__actions {
         display: flex;
@@ -7491,6 +7495,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               '<div class="signature-overlay__actions">' +
               '<span>Draw signature</span>' +
               '<span class="spacer"></span>' +
+              '<button type="button" class="secondary" data-overlay-rotate>Rotate 90°</button>' +
+              '<button type="button" class="secondary" data-overlay-orientation>Landscape</button>' +
               '<button type="button" class="secondary" data-overlay-clear>Clear</button>' +
               '<button type="button" class="secondary" data-overlay-cancel>Cancel</button>' +
               '<button type="button" class="primary" data-overlay-apply>Apply</button>' +
@@ -7505,6 +7511,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const overlayApply = overlay.querySelector('[data-overlay-apply]');
           const overlayCancel = overlay.querySelector('[data-overlay-cancel]');
           const overlayClear = overlay.querySelector('[data-overlay-clear]');
+          const overlayOrientationBtn = overlay.querySelector('[data-overlay-orientation]');
+          const overlayRotateBtn = overlay.querySelector('[data-overlay-rotate]');
 
           const overlayState = {
             active: false,
@@ -7512,6 +7520,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             hiddenInput: null,
             sampleText: '',
             drawing: false,
+            orientation: 'portrait',
+            rotateDeg: 0,
           };
 
           const logSignatureMetrics = (info) => {
@@ -7528,12 +7538,31 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           };
 
           const drawImageFitted = (ctx, img, targetW, targetH) => {
-            const scale = Math.min(targetW / img.width, targetH / img.height, 1);
+            const scale = Math.min(targetW / img.width, targetH / img.height);
             const drawW = img.width * scale;
             const drawH = img.height * scale;
             const offsetX = (targetW - drawW) / 2;
             const offsetY = (targetH - drawH) / 2;
             ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
+          };
+
+          const resizeCanvasToImage = (canvas, img, maxW, maxH, ratio = 1) => {
+            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+            const targetW = Math.max(140, Math.min(img.width * scale, maxW));
+            const targetH = Math.max(140, Math.min(img.height * scale, maxH));
+            canvas.width = targetW * ratio;
+            canvas.height = targetH * ratio;
+            canvas.style.width = targetW + 'px';
+            canvas.style.height = targetH + 'px';
+          };
+
+          const setOverlayOrientation = (mode = 'portrait') => {
+            overlayState.orientation = mode === 'landscape' ? 'landscape' : 'portrait';
+            overlay.dataset.orientation = overlayState.orientation;
+            if (overlayOrientationBtn) {
+              overlayOrientationBtn.textContent =
+                overlayState.orientation === 'landscape' ? 'Portrait' : 'Landscape';
+            }
           };
 
           const openOverlay = (pad, hiddenInput, sampleText) => {
@@ -7543,14 +7572,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             overlayState.sampleText = sampleText || '';
             overlay.hidden = false;
             document.body.style.overflow = 'hidden';
+            overlayState.rotateDeg = 0;
+            setOverlayOrientation(overlayState.orientation);
 
             const resizeOverlayCanvas = () => {
+              const isLandscape = overlayState.orientation === 'landscape';
               const w = Math.max(overlay.clientWidth - 32, 320);
               const h = Math.max(overlay.clientHeight - 96, 240);
-              overlayCanvas.width = w * ratio;
-              overlayCanvas.height = h * ratio;
-              overlayCanvas.style.width = w + 'px';
-              overlayCanvas.style.height = h + 'px';
+              const deviceW = isLandscape ? Math.max(w, h) : w;
+              const deviceH = isLandscape ? Math.min(w, h) : h;
+              overlayCanvas.width = deviceW * ratio;
+              overlayCanvas.height = deviceH * ratio;
+              overlayCanvas.style.width = deviceW + 'px';
+              overlayCanvas.style.height = deviceH + 'px';
               overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
               overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
               overlayCtx.scale(ratio, ratio);
@@ -7563,12 +7597,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               if (hiddenInput.value) {
                 const img = new Image();
                 img.onload = () => {
-                  drawImageFitted(overlayCtx, img, w, h);
+                  drawImageFitted(overlayCtx, img, deviceW, deviceH);
                 };
                 img.src = hiddenInput.value;
               } else if (sampleText) {
                 overlayCtx.font = '28px "Segoe Script", cursive';
-                overlayCtx.fillText(sampleText, 24, h / 2 + 10);
+                overlayCtx.fillText(sampleText, 24, deviceH / 2 + 10);
               }
             };
 
@@ -7634,6 +7668,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             overlayCtx.fillStyle = '#1f2937';
           });
 
+          if (overlayOrientationBtn) {
+            overlayOrientationBtn.addEventListener('click', (event) => {
+              event.preventDefault();
+              const next = overlayState.orientation === 'landscape' ? 'portrait' : 'landscape';
+              setOverlayOrientation(next);
+              const resizeEvt = new Event('resize');
+              window.dispatchEvent(resizeEvt);
+            });
+          }
+          if (overlayRotateBtn) {
+            overlayRotateBtn.addEventListener('click', (event) => {
+              event.preventDefault();
+              overlayState.rotateDeg = (overlayState.rotateDeg + 90) % 360;
+            });
+          }
+
           overlayCancel.addEventListener('click', (event) => {
             event.preventDefault();
             closeOverlay();
@@ -7652,11 +7702,21 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             const w = wrapper.clientWidth || 340;
             const h = wrapper.clientHeight || 160;
             const targetRatio = window.devicePixelRatio || 1;
-            if (isMobileMode()) {
-              const rotatedUrl = await rotateSignatureDataUrl(dataUrl, w, h);
-              if (rotatedUrl) {
-                dataUrl = rotatedUrl;
+            if (overlayState.rotateDeg) {
+              let rotatedUrl = dataUrl;
+              const turns = (overlayState.rotateDeg / 90) % 4;
+              let currentW = w;
+              let currentH = h;
+              for (let i = 0; i < turns; i += 1) {
+                const rotated = await rotateSignatureDataUrl(rotatedUrl, currentH, currentW);
+                if (rotated) {
+                  rotatedUrl = rotated;
+                }
+                const tmp = currentW;
+                currentW = currentH;
+                currentH = tmp;
               }
+              dataUrl = rotatedUrl;
             }
             overlayState.hiddenInput.value = dataUrl;
             targetCanvas.width = w * targetRatio;
@@ -7669,13 +7729,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             // Preserve aspect ratio when placing into target canvas
             const img = new Image();
             img.onload = () => {
-              drawImageFitted(targetCtx, img, w, h);
+              resizeCanvasToImage(targetCanvas, img, w, h, targetRatio);
+              targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+              targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+              targetCtx.scale(targetRatio, targetRatio);
+              drawImageFitted(
+                targetCtx,
+                img,
+                targetCanvas.width / targetRatio,
+                targetCanvas.height / targetRatio,
+              );
               logSignatureMetrics({
                 label: 'signature-apply',
                 naturalWidth: img.width,
                 naturalHeight: img.height,
-                targetWidth: w,
-                targetHeight: h,
+                targetWidth: targetCanvas.width,
+                targetHeight: targetCanvas.height,
                 targetCanvasWidth: targetCanvas.width,
                 targetCanvasHeight: targetCanvas.height,
                 overlayWidth: overlayCanvas.width,
@@ -7724,8 +7793,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               if (!dataUrl || !dataUrl.startsWith('data:image/')) return;
               const img = new Image();
               img.onload = () => {
+                resizeCanvasToImage(canvas, img, canvasWidth, 320, ratio);
                 setPenDefaults();
-                drawImageFitted(ctx, img, canvasWidth, canvasHeight);
+                drawImageFitted(ctx, img, canvas.width / ratio, canvas.height / ratio);
               };
               img.src = dataUrl;
             };
@@ -7743,7 +7813,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               const wrapper = pad.querySelector('.signature-canvas-wrapper');
               canvasWidth = wrapper.clientWidth || 340;
               const idealHeight = Math.max(canvasWidth * 0.45, 140);
-              canvasHeight = Math.min(Math.max(idealHeight, 140), 260);
+              canvasHeight = Math.min(Math.max(idealHeight, 140), 320);
               canvas.width = canvasWidth * ratio;
               canvas.height = canvasHeight * ratio;
               canvas.style.width = canvasWidth + 'px';
