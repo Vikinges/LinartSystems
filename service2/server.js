@@ -3747,6 +3747,10 @@ ${rows.join('\n')}
         background: #e5e7eb;
         color: #111827;
       }
+      .signature-overlay__actions .secondary.is-active {
+        background: #2563eb;
+        color: #fff;
+      }
       .signature-overlay__actions .primary {
         background: #2563eb;
         color: #fff;
@@ -7565,6 +7569,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             }
           };
 
+          const updateRotateButton = () => {
+            if (!overlayRotateBtn) return;
+            const active = overlayState.rotateDeg % 180 !== 0;
+            overlayRotateBtn.classList.toggle('is-active', active);
+          };
+
+          const resizeCanvasToImage = (canvas, img, maxW, maxH, ratio = 1) => {
+            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+            const targetW = Math.max(140, Math.min(img.width * scale, maxW));
+            const targetH = Math.max(140, Math.min(img.height * scale, maxH));
+            canvas.width = targetW * ratio;
+            canvas.height = targetH * ratio;
+            canvas.style.width = targetW + 'px';
+            canvas.style.height = targetH + 'px';
+          };
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
             overlayState.active = true;
             overlayState.targetPad = pad;
@@ -7574,6 +7594,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             document.body.style.overflow = 'hidden';
             overlayState.rotateDeg = 0;
             setOverlayOrientation(overlayState.orientation);
+            updateRotateButton();
+            updateRotateButton();
 
             const resizeOverlayCanvas = () => {
               const isLandscape = overlayState.orientation === 'landscape';
@@ -7680,7 +7702,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           if (overlayRotateBtn) {
             overlayRotateBtn.addEventListener('click', (event) => {
               event.preventDefault();
-              overlayState.rotateDeg = (overlayState.rotateDeg + 90) % 360;
+              overlayState.rotateDeg = overlayState.rotateDeg ? 0 : 90;
+              updateRotateButton();
             });
           }
 
