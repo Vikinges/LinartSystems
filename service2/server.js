@@ -7550,25 +7550,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
           };
 
-          const resizeCanvasToImage = (canvas, img, maxW, maxH, ratio = 1) => {
-            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-            const targetW = Math.max(140, Math.min(img.width * scale, maxW));
-            const targetH = Math.max(140, Math.min(img.height * scale, maxH));
-            canvas.width = targetW * ratio;
-            canvas.height = targetH * ratio;
-            canvas.style.width = targetW + 'px';
-            canvas.style.height = targetH + 'px';
-          };
-
-          const setOverlayOrientation = (mode = 'portrait') => {
-            overlayState.orientation = mode === 'landscape' ? 'landscape' : 'portrait';
-            overlay.dataset.orientation = overlayState.orientation;
-            if (overlayOrientationBtn) {
-              overlayOrientationBtn.textContent =
-                overlayState.orientation === 'landscape' ? 'Portrait' : 'Landscape';
-            }
-          };
-
           const updateRotateButton = () => {
             if (!overlayRotateBtn) return;
             const active = overlayState.rotateDeg % 180 !== 0;
