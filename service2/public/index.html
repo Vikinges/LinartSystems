@@ -182,7 +182,7 @@
       .parts-table th,
       .parts-table td {
         border: 1px solid #d8d8e5;
-        padding: 0.6rem;
+        padding: 0.25rem 0.35rem;
         background: white;
       }
       .parts-table th {
@@ -193,10 +193,15 @@
       .parts-table td textarea {
         width: 100%;
         box-sizing: border-box;
-        padding: 0.5rem;
+        padding: 0.25rem 0.35rem;
         border-radius: 8px;
         border: 1px solid #d8d8e5;
         background: #fafafe;
+      }
+      .parts-table td:nth-child(3) input {
+        padding: 2px !important;
+        min-height: 1.6rem;
+        font-size: 0.95rem;
       }
       .parts-table td textarea {
         resize: vertical;
@@ -1368,7 +1373,7 @@
           </colgroup>
           <thead>
             <tr>
-              <th>Part</th>
+              <th>Part / Batch</th>
               <th>Desc</th>
               <th>Qty</th>
               <th>Reason</th>

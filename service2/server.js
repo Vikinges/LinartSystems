@@ -3077,7 +3077,7 @@ function generateIndexHtml() {
       }
     }
     const headers = isService
-      ? ['Part', 'Desc', 'Qty', 'Reason']
+      ? ['Part / Batch', 'Desc', 'Qty', 'Reason']
       : ['Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
         <h2>${isService ? 'Parts used / replaced' : 'Parts record'}</h2>
@@ -3320,21 +3320,26 @@ ${rows.join('\n')}
       .parts-table th,
       .parts-table td {
         border: 1px solid #d8d8e5;
-        padding: 0.6rem;
+        padding: 0.25rem 0.35rem;
         background: white;
       }
       .parts-table th {
         background: #eef1fb;
-        font-size: 0.9rem;
+        font-size: 0.8rem;
       }
       .parts-table td input,
       .parts-table td textarea {
         width: 100%;
         box-sizing: border-box;
-        padding: 0.5rem;
+        padding: 0.25rem 0.35rem;
         border-radius: 8px;
         border: 1px solid #d8d8e5;
         background: #fafafe;
+      }
+      .parts-table td:nth-child(3) input {
+        padding: 2px !important;
+        min-height: 1.6rem;
+        font-size: 0.95rem;
       }
       .parts-table td textarea {
         resize: vertical;
