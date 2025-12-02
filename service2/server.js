@@ -3160,6 +3160,7 @@ ${rows.join('\n')}
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+        width: 100%;
       }
       header {
         background: white;
@@ -3735,15 +3736,14 @@ ${rows.join('\n')}
         display: flex;
         justify-content: center;
         font-size: calc(16px * var(--mobile-scale, 0.7));
+        padding: 0.5rem;
       }
       body.mobile-mode > .container {
-        transform: scale(var(--mobile-scale, 0.7));
-        transform-origin: top center;
-        width: calc(100vw / var(--mobile-scale, 0.7));
+        width: 100vw;
         max-width: 100vw;
         min-width: 100vw;
         margin: 0;
-        padding: 0 8px;
+        padding: 0 0.5rem;
       }
       .mobile-scale-row {
         display: flex;
