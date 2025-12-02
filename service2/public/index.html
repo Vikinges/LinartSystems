@@ -2032,15 +2032,26 @@
           }
         };
 
+        const getContainerRect = () => {
+          const container = document.querySelector('.container');
+          const rect = container ? container.getBoundingClientRect() : null;
+          return rect
+            ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+            : { width: null, height: null };
+        };
+
         const applyMobileMode = (enabled, overrideScale) => {
           const scale = clampScale(overrideScale !== undefined ? overrideScale : window.localStorage.getItem(MOBILE_SCALE_KEY) || 0.7);
           document.body.style.setProperty('--mobile-scale', scale);
           updateMobileScaleLabel(scale);
-          recordDebug('mobile-scale', {
+          const rect = getContainerRect();
+          const info = {
             enabled,
             scale,
+            rect,
             viewport: { width: window.innerWidth, height: window.innerHeight },
-          });
+          };
+          console.log('[mobile-scale]', info);
           if (enabled) {
             document.body.classList.add('mobile-mode');
             window.localStorage.setItem(MOBILE_MODE_KEY, '1');
@@ -2082,14 +2093,6 @@
         } else {
           updateMobileScaleLabel(0.7);
         }
-
-        const getContainerRect = () => {
-          const container = document.querySelector('.container');
-          const rect = container ? container.getBoundingClientRect() : null;
-          return rect
-            ? { width: Math.round(rect.width), height: Math.round(rect.height) }
-            : { width: null, height: null };
-        };
 
         window.pmTools = {
           setMobile: (enabled = true, scale = 0.7) => {

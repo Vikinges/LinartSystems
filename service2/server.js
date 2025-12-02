@@ -4678,6 +4678,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           }
         };
 
+        const getContainerRect = () => {
+          const container = document.querySelector('.container');
+          const rect = container ? container.getBoundingClientRect() : null;
+          return rect
+            ? { width: Math.round(rect.width), height: Math.round(rect.height) }
+            : { width: null, height: null };
+        };
+
         const applyMobileMode = (enabled, overrideScale) => {
           const scale = clampScale(overrideScale !== undefined ? overrideScale : window.localStorage.getItem(MOBILE_SCALE_KEY) || 0.7);
           document.body.style.setProperty('--mobile-scale', scale);
@@ -4731,14 +4739,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         } else {
           updateMobileScaleLabel(0.7);
         }
-
-        const getContainerRect = () => {
-          const container = document.querySelector('.container');
-          const rect = container ? container.getBoundingClientRect() : null;
-          return rect
-            ? { width: Math.round(rect.width), height: Math.round(rect.height) }
-            : { width: null, height: null };
-        };
 
         window.pmTools = {
           setMobile: (enabled = true, scale = 0.7) => {
