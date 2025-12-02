@@ -16,11 +16,12 @@
         background: #f5f5fb;
         color: #1c1c1e;
         --control-scale: 1;
+        --base-font-size: 16px;
       }
       body {
         margin: 0;
         padding: 1.5rem;
-        font-size: 16px;
+        font-size: var(--base-font-size);
       }
       .container {
         max-width: 960px;
@@ -600,10 +601,11 @@
       }
       body.mobile-mode {
         --control-scale: var(--mobile-scale, 0.7);
+        --base-font-size: calc(16px * var(--mobile-scale, 0.7));
         overflow-x: hidden;
         display: flex;
         justify-content: center;
-        font-size: calc(16px * var(--mobile-scale, 0.7));
+        font-size: var(--base-font-size);
         padding: 0.5rem;
       }
       body.mobile-mode > .container {
@@ -612,6 +614,26 @@
         min-width: 100vw;
         margin: 0;
         padding: 0 0.5rem;
+      }
+      h1,
+      h2,
+      h3,
+      p,
+      label,
+      .field > span {
+        font-size: calc(1rem * var(--control-scale, 1));
+      }
+      header h1 {
+        font-size: calc(1.75rem * var(--control-scale, 1));
+      }
+      .card h2,
+      .card h1 {
+        font-size: calc(1.3rem * var(--control-scale, 1));
+      }
+      button,
+      .btn,
+      .upload-button {
+        font-size: calc(1rem * var(--control-scale, 1));
       }
       .mobile-scale-row {
         display: flex;
