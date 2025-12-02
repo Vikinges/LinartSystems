@@ -177,6 +177,7 @@
       .parts-table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
       .parts-table th,
       .parts-table td {
@@ -201,6 +202,18 @@
         resize: vertical;
         min-height: 2.75rem;
         font: inherit;
+      }
+      .parts-table colgroup col[data-col="part"] {
+        width: 40%;
+      }
+      .parts-table colgroup col[data-col="desc"] {
+        width: 32%;
+      }
+      .parts-table colgroup col[data-col="qty"] {
+        width: 10%;
+      }
+      .parts-table colgroup col[data-col="reason"] {
+        width: 18%;
       }
       .parts-table .is-hidden-row {
         display: none;
@@ -1347,6 +1360,12 @@
       <section class="card" data-parts-section data-form-types="service_report">
         <h2>Parts used / replaced</h2>
         <table class="parts-table" data-parts-table>
+          <colgroup>
+            <col data-col="part" />
+            <col data-col="desc" />
+            <col data-col="qty" />
+            <col data-col="reason" />
+          </colgroup>
           <thead>
             <tr>
               <th>Part / Batch</th>
