@@ -2606,7 +2606,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
   if (partsUsedRows.length) {
     const isServiceParts = isService;
-    const columnWidths = (isServiceParts ? [0.26, 0.34, 0.16, 0.24] : [0.32, 0.18, 0.18, 0.18, 0.14]).map(
+    const columnWidths = (isServiceParts ? [0.4, 0.32, 0.1, 0.18] : [0.32, 0.18, 0.18, 0.18, 0.14]).map(
       (ratio) => tableWidth * ratio,
     );
     const headerHeight = 18;
@@ -2826,7 +2826,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   }
 
   // Подписи крупные, но занимают меньше высоты.
-  const signatureHeight = 160;
+  const signatureHeight = 180;
   const signatureHeading =
     ensureSpace(signatureHeight + 80, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
@@ -2860,7 +2860,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
               : await pdfDoc.embedJpg(decoded.buffer);
           const availableWidth = signatureWidth - 12;
           const availableHeight = signatureHeight - 12;
-          const scale = Math.min(availableWidth / image.width, availableHeight / image.height, 1);
+          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
           const drawWidth = image.width * scale;
           const drawHeight = image.height * scale;
           const offsetX = boxRect.x + 6 + (availableWidth - drawWidth) / 2;
@@ -3077,11 +3077,17 @@ function generateIndexHtml() {
       }
     }
     const headers = isService
-      ? ['Part / Batch', 'Description', 'Quantity', 'Reason']
+      ? ['Part', 'Desc', 'Qty', 'Reason']
       : ['Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
         <h2>${isService ? 'Parts used / replaced' : 'Parts record'}</h2>
         <table class="parts-table" data-parts-table>
+          ${isService ? `<colgroup>
+            <col data-col="part" />
+            <col data-col="desc" />
+            <col data-col="qty" />
+            <col data-col="reason" />
+          </colgroup>` : ''}
           <thead>
             <tr>
               <th>${headers[0]}</th>
@@ -3309,6 +3315,7 @@ ${rows.join('\n')}
       .parts-table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
       .parts-table th,
       .parts-table td {
@@ -3333,6 +3340,18 @@ ${rows.join('\n')}
         resize: vertical;
         min-height: 2.75rem;
         font: inherit;
+      }
+      .parts-table colgroup col[data-col="part"] {
+        width: 40%;
+      }
+      .parts-table colgroup col[data-col="desc"] {
+        width: 32%;
+      }
+      .parts-table colgroup col[data-col="qty"] {
+        width: 10%;
+      }
+      .parts-table colgroup col[data-col="reason"] {
+        width: 18%;
       }
       .parts-table .is-hidden-row {
         display: none;
