@@ -28,6 +28,7 @@ const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const OUTPUT_DIR = path.join(ROOT_DIR, 'out');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const SUGGESTION_STORE_PATH = path.join(DATA_DIR, 'store.json');
+const PROJECTS_STORE_PATH = path.join(DATA_DIR, 'projects.json');
 const ADMIN_CREDENTIALS_PATH = path.join(DATA_DIR, 'admin.json');
 const ADMIN_LOG_PATH = path.join(DATA_DIR, 'admin.log');
 const TEMPLATE_STORAGE_DIR = path.join(PUBLIC_DIR, 'templates');
@@ -38,6 +39,28 @@ const ADMIN_DEFAULT_USERNAME = 'admin';
 const ADMIN_DEFAULT_PASSWORD = 'admin';
 const DEFAULT_PAGE_WIDTH = 595.28;
 const DEFAULT_PAGE_HEIGHT = 841.89;
+
+function loadProjectsStore() {
+  try {
+    if (!fs.existsSync(PROJECTS_STORE_PATH)) return {};
+    const raw = fs.readFileSync(PROJECTS_STORE_PATH, 'utf8');
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' ? data : {};
+  } catch (err) {
+    console.warn('[server] Unable to read projects store:', err.message);
+    return {};
+  }
+}
+
+function saveProjectsStore(store) {
+  try {
+    fs.writeFileSync(PROJECTS_STORE_PATH, JSON.stringify(store || {}, null, 2));
+    return true;
+  } catch (err) {
+    console.warn('[server] Unable to write projects store:', err.message);
+    return false;
+  }
+}
 
 function clampNumber(value, min, max) {
   if (!Number.isFinite(value)) return min;
@@ -58,6 +81,7 @@ fsExtra.ensureDirSync(PUBLIC_DIR);
 fsExtra.ensureDirSync(OUTPUT_DIR);
 fsExtra.ensureDirSync(DATA_DIR);
 fsExtra.ensureDirSync(TEMPLATE_STORAGE_DIR);
+fsExtra.ensureFileSync(PROJECTS_STORE_PATH);
 
 function formatBytesHuman(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) {
@@ -4282,7 +4306,7 @@ ${rows.join('\n')}
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
         <h1>PDF forms generator · v0.32 Lin</h1>
-        <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
+        <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
         <section class="card" data-template-selector>
@@ -5120,6 +5144,124 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const normalized = (path || '').replace(/^\/+/, '');
           return new URL(normalized || '.', appBaseUrl).toString();
         };
+
+        const debounce = (fn, delay = 250) => {
+          let timer = null;
+          return (...args) => {
+            if (timer) {
+              window.clearTimeout(timer);
+            }
+            timer = window.setTimeout(() => fn(...args), delay);
+          };
+        };
+
+        const projectFields = {
+          batch_number: formEl.querySelector('input[name="batch_number"]'),
+          end_customer_name: formEl.querySelector('input[name="end_customer_name"]'),
+          site_location: formEl.querySelector('input[name="site_location"]'),
+          led_display_model: formEl.querySelector('input[name="led_display_model"]'),
+          date_of_service: formEl.querySelector('input[name="date_of_service"]'),
+          service_company_name: formEl.querySelector('input[name="service_company_name"]'),
+        };
+
+        const projectStatusEl = (() => {
+          const parentField = projectFields.batch_number ? projectFields.batch_number.closest('.field') : null;
+          if (!parentField) return null;
+          const hint = document.createElement('small');
+          hint.className = 'field-hint project-status-hint';
+          hint.style.color = '#475569';
+          hint.style.fontWeight = '400';
+          hint.style.marginTop = '-6px';
+          hint.hidden = true;
+          parentField.appendChild(hint);
+          return hint;
+        })();
+
+        const updateProjectStatus = (message, isError = false) => {
+          if (!projectStatusEl) return;
+          projectStatusEl.textContent = message || '';
+          projectStatusEl.hidden = !message;
+          projectStatusEl.style.color = isError ? '#b91c1c' : '#475569';
+        };
+
+        const applyProjectCard = (card) => {
+          if (!card || typeof card !== 'object') return;
+          const mapping = {
+            batch_number: card.batch_number || card.lsc_project_number || '',
+            end_customer_name: card.end_customer_name,
+            site_location: card.site_location,
+            led_display_model: card.led_display_model,
+            date_of_service: card.date_of_service,
+            service_company_name: card.service_company_name,
+          };
+          Object.entries(mapping).forEach(([name, value]) => {
+            const input = projectFields[name];
+            if (!input || value === undefined || value === null) return;
+            const next = String(value);
+            if (input.value !== next) {
+              input.value = next;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          });
+        };
+
+        const fetchProjectCard = (projectNumber) => {
+          const key = (projectNumber || '').trim();
+          if (!key) {
+            updateProjectStatus('');
+            return Promise.resolve(null);
+          }
+          updateProjectStatus('Loading saved project...');
+          const url = buildAppUrl('projects/' + encodeURIComponent(key));
+          return fetch(url)
+            .then((response) => {
+              if (response.status === 404) {
+                const notFound = new Error('Not found');
+                notFound.code = 'NOT_FOUND';
+                throw notFound;
+              }
+              if (!response.ok) {
+                throw new Error('Lookup failed');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (payload && payload.ok && payload.project) {
+                applyProjectCard(payload.project);
+                updateProjectStatus('Loaded saved project data.');
+                return payload.project;
+              }
+              throw new Error('Invalid response');
+            })
+            .catch((err) => {
+              if (err && err.code === 'NOT_FOUND') {
+                updateProjectStatus('No saved data for this project yet.', true);
+                return null;
+              }
+              updateProjectStatus('Project lookup failed.', true);
+              return null;
+            });
+        };
+
+        const triggerProjectLookup = debounce(() => {
+          const projectNumber = projectFields.batch_number ? projectFields.batch_number.value : '';
+          const key = (projectNumber || '').trim();
+          if (!key) {
+            updateProjectStatus('');
+            return;
+          }
+          fetchProjectCard(key);
+        }, 350);
+
+        if (projectFields.batch_number) {
+          ['change', 'blur'].forEach((eventName) => {
+            projectFields.batch_number.addEventListener(eventName, triggerProjectLookup);
+          });
+          const initialKey = (projectFields.batch_number.value || '').trim();
+          if (initialKey) {
+            triggerProjectLookup();
+          }
+        }
 
         const setTemplateStatus = (message, isError = false) => {
           if (!templateStatusEl) return;
@@ -8615,6 +8757,20 @@ app.get('/suggest', (req, res) => {
   });
 });
 
+const projectRoutes = ['/projects/:projectKey', '/service2/projects/:projectKey'];
+app.get(projectRoutes, (req, res) => {
+  const projectKey = typeof req.params.projectKey === 'string' ? req.params.projectKey.trim() : '';
+  if (!projectKey) {
+    return res.status(400).json({ ok: false, error: 'Project number is required.' });
+  }
+  const projects = loadProjectsStore();
+  const card = projects ? projects[projectKey] : null;
+  if (!card) {
+    return res.status(404).json({ ok: false, error: 'Project not found.' });
+  }
+  return res.json({ ok: true, project: card });
+});
+
 app.post('/suggest/save', (req, res) => {
   const fieldName = typeof req.body?.field === 'string' ? req.body.field.trim() : '';
   const value = typeof req.body?.value === 'string' ? req.body.value : '';
@@ -8879,6 +9035,10 @@ app.post('/submit', (req, res, next) => {
   let overflowPlacements = [];
   let hiddenPartRows = [];
   let partsRowsRendered = [];
+  let projectsStore = loadProjectsStore();
+  const projectKey =
+    (req.body && typeof req.body.lsc_project_number === 'string' && req.body.lsc_project_number.trim()) ||
+    null;
 
   if (req.body && typeof req.body === 'object') {
     for (const [key, value] of Object.entries(req.body)) {
@@ -8967,6 +9127,24 @@ app.post('/submit', (req, res, next) => {
       form = null;
     }
     const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    // Persist project card by LSC Project number
+    if (projectKey) {
+      projectsStore = projectsStore || {};
+      const siteInfoCard = {
+        end_customer_name: toSingleValue(req.body?.end_customer_name) || '',
+        site_location: toSingleValue(req.body?.site_location) || '',
+        led_display_model: toSingleValue(req.body?.led_display_model) || '',
+        batch_number: toSingleValue(req.body?.batch_number) || '',
+        lsc_project_number: projectKey,
+        date_of_service: toSingleValue(req.body?.date_of_service) || '',
+        service_company_name: toSingleValue(req.body?.service_company_name) || '',
+        form_type: toSingleValue(req.body?.template_type) || '',
+        updated_at: new Date().toISOString(),
+      };
+      projectsStore[projectKey] = siteInfoCard;
+      saveProjectsStore(projectsStore);
+    }
 
     if (form) {
       for (const descriptor of fieldDescriptors) {

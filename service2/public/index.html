@@ -1144,7 +1144,7 @@
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
         <h1>PDF forms generator · v0.32 Lin</h1>
-        <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
+        <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
         <section class="card" data-template-selector>
@@ -2475,6 +2475,124 @@
           const normalized = (path || '').replace(/^\/+/, '');
           return new URL(normalized || '.', appBaseUrl).toString();
         };
+
+        const debounce = (fn, delay = 250) => {
+          let timer = null;
+          return (...args) => {
+            if (timer) {
+              window.clearTimeout(timer);
+            }
+            timer = window.setTimeout(() => fn(...args), delay);
+          };
+        };
+
+        const projectFields = {
+          batch_number: formEl.querySelector('input[name="batch_number"]'),
+          end_customer_name: formEl.querySelector('input[name="end_customer_name"]'),
+          site_location: formEl.querySelector('input[name="site_location"]'),
+          led_display_model: formEl.querySelector('input[name="led_display_model"]'),
+          date_of_service: formEl.querySelector('input[name="date_of_service"]'),
+          service_company_name: formEl.querySelector('input[name="service_company_name"]'),
+        };
+
+        const projectStatusEl = (() => {
+          const parentField = projectFields.batch_number ? projectFields.batch_number.closest('.field') : null;
+          if (!parentField) return null;
+          const hint = document.createElement('small');
+          hint.className = 'field-hint project-status-hint';
+          hint.style.color = '#475569';
+          hint.style.fontWeight = '400';
+          hint.style.marginTop = '-6px';
+          hint.hidden = true;
+          parentField.appendChild(hint);
+          return hint;
+        })();
+
+        const updateProjectStatus = (message, isError = false) => {
+          if (!projectStatusEl) return;
+          projectStatusEl.textContent = message || '';
+          projectStatusEl.hidden = !message;
+          projectStatusEl.style.color = isError ? '#b91c1c' : '#475569';
+        };
+
+        const applyProjectCard = (card) => {
+          if (!card || typeof card !== 'object') return;
+          const mapping = {
+            batch_number: card.batch_number || card.lsc_project_number || '',
+            end_customer_name: card.end_customer_name,
+            site_location: card.site_location,
+            led_display_model: card.led_display_model,
+            date_of_service: card.date_of_service,
+            service_company_name: card.service_company_name,
+          };
+          Object.entries(mapping).forEach(([name, value]) => {
+            const input = projectFields[name];
+            if (!input || value === undefined || value === null) return;
+            const next = String(value);
+            if (input.value !== next) {
+              input.value = next;
+              input.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+          });
+        };
+
+        const fetchProjectCard = (projectNumber) => {
+          const key = (projectNumber || '').trim();
+          if (!key) {
+            updateProjectStatus('');
+            return Promise.resolve(null);
+          }
+          updateProjectStatus('Loading saved project...');
+          const url = buildAppUrl('projects/' + encodeURIComponent(key));
+          return fetch(url)
+            .then((response) => {
+              if (response.status === 404) {
+                const notFound = new Error('Not found');
+                notFound.code = 'NOT_FOUND';
+                throw notFound;
+              }
+              if (!response.ok) {
+                throw new Error('Lookup failed');
+              }
+              return response.json();
+            })
+            .then((payload) => {
+              if (payload && payload.ok && payload.project) {
+                applyProjectCard(payload.project);
+                updateProjectStatus('Loaded saved project data.');
+                return payload.project;
+              }
+              throw new Error('Invalid response');
+            })
+            .catch((err) => {
+              if (err && err.code === 'NOT_FOUND') {
+                updateProjectStatus('No saved data for this project yet.', true);
+                return null;
+              }
+              updateProjectStatus('Project lookup failed.', true);
+              return null;
+            });
+        };
+
+        const triggerProjectLookup = debounce(() => {
+          const projectNumber = projectFields.batch_number ? projectFields.batch_number.value : '';
+          const key = (projectNumber || '').trim();
+          if (!key) {
+            updateProjectStatus('');
+            return;
+          }
+          fetchProjectCard(key);
+        }, 350);
+
+        if (projectFields.batch_number) {
+          ['change', 'blur'].forEach((eventName) => {
+            projectFields.batch_number.addEventListener(eventName, triggerProjectLookup);
+          });
+          const initialKey = (projectFields.batch_number.value || '').trim();
+          if (initialKey) {
+            triggerProjectLookup();
+          }
+        }
 
         const setTemplateStatus = (message, isError = false) => {
           if (!templateStatusEl) return;
@@ -4905,16 +5023,6 @@
             ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
           };
 
-          const resizeCanvasToImage = (canvas, img, maxW, maxH, ratio = 1) => {
-            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
-            const targetW = Math.max(140, Math.min(img.width * scale, maxW));
-            const targetH = Math.max(140, Math.min(img.height * scale, maxH));
-            canvas.width = targetW * ratio;
-            canvas.height = targetH * ratio;
-            canvas.style.width = targetW + 'px';
-            canvas.style.height = targetH + 'px';
-          };
-
           const setOverlayOrientation = (mode = 'portrait') => {
             overlayState.orientation = mode === 'landscape' ? 'landscape' : 'portrait';
             overlay.dataset.orientation = overlayState.orientation;
@@ -4930,6 +5038,16 @@
             overlayRotateBtn.classList.toggle('is-active', active);
           };
 
+          const resizeCanvasToImage = (canvas, img, maxW, maxH, ratio = 1) => {
+            const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+            const targetW = Math.max(140, Math.min(img.width * scale, maxW));
+            const targetH = Math.max(140, Math.min(img.height * scale, maxH));
+            canvas.width = targetW * ratio;
+            canvas.height = targetH * ratio;
+            canvas.style.width = targetW + 'px';
+            canvas.style.height = targetH + 'px';
+          };
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
             overlayState.active = true;
             overlayState.targetPad = pad;
@@ -4939,8 +5057,6 @@
             document.body.style.overflow = 'hidden';
             overlayState.rotateDeg = 0;
             setOverlayOrientation(overlayState.orientation);
-            updateRotateButton();
-            updateRotateButton();
             updateRotateButton();
 
             const resizeOverlayCanvas = () => {
