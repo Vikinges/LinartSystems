@@ -3141,7 +3141,7 @@ ${rows.join('\n')}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF forms generator · v0.31 Lin</title>
+    <title>PDF forms generator · v0.32 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -4281,7 +4281,7 @@ ${rows.join('\n')}
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>PDF forms generator · v0.31 Lin</h1>
+        <h1>PDF forms generator · v0.32 Lin</h1>
         <p>Заполните данные по выезду и обслуживанию: общая информация, команда на объекте, чек‑листы, материалы и подписи. Поля оставлены пустыми, чтобы начать с чистого листа.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
@@ -7550,6 +7550,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             ctx.drawImage(img, offsetX, offsetY, drawW, drawH);
           };
 
+          const setOverlayOrientation = (mode = 'portrait') => {
+            overlayState.orientation = mode === 'landscape' ? 'landscape' : 'portrait';
+            overlay.dataset.orientation = overlayState.orientation;
+            if (overlayOrientationBtn) {
+              overlayOrientationBtn.textContent =
+                overlayState.orientation === 'landscape' ? 'Portrait' : 'Landscape';
+            }
+          };
+
           const updateRotateButton = () => {
             if (!overlayRotateBtn) return;
             const active = overlayState.rotateDeg % 180 !== 0;
@@ -7575,7 +7584,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             document.body.style.overflow = 'hidden';
             overlayState.rotateDeg = 0;
             setOverlayOrientation(overlayState.orientation);
-            updateRotateButton();
             updateRotateButton();
 
             const resizeOverlayCanvas = () => {
