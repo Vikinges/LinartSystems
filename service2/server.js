@@ -9037,7 +9037,8 @@ app.post('/submit', (req, res, next) => {
   let partsRowsRendered = [];
   let projectsStore = loadProjectsStore();
   const projectKey =
-    (req.body && typeof req.body.lsc_project_number === 'string' && req.body.lsc_project_number.trim()) ||
+    toSingleValue(req.body?.lsc_project_number) ||
+    toSingleValue(req.body?.batch_number) ||
     null;
 
   if (req.body && typeof req.body === 'object') {
