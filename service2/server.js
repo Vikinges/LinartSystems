@@ -8188,9 +8188,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               });
             };
 
-            const requestSuggestions = (rawValue) => {
+            const requestSuggestions = (rawValue, { force = false } = {}) => {
               const query = (rawValue || '').trim();
-              if (query === lastQuery) {
+              if (!force && query === lastQuery) {
                 return;
               }
               lastQuery = query;
@@ -8220,7 +8220,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             };
 
             input.addEventListener('input', () => requestSuggestions(input.value));
-            input.addEventListener('focus', () => requestSuggestions(input.value));
+            input.addEventListener('focus', () => requestSuggestions(input.value, { force: true }));
             ['change', 'blur'].forEach((eventName) => {
               input.addEventListener(eventName, () => addLocalSeed(input.value));
             });
