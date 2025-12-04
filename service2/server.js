@@ -757,10 +757,19 @@ function loadSuggestionStore() {
       const filtered = values
         .map((entry) => normalizeSuggestionValue(entry))
         .filter((entry) => entry.length >= MIN_SUGGESTION_LENGTH);
-      if (filtered.length) {
-        const canonical = canonicalSuggestionField(field);
-        normalized.suggestions[canonical] = filtered.slice(0, MAX_SUGGESTIONS_PER_FIELD);
-      }
+      if (!filtered.length) continue;
+      const canonical = canonicalSuggestionField(field);
+      const existing = normalized.suggestions[canonical] || [];
+      const combined = [...existing, ...filtered];
+      const deduped = [];
+      const seen = new Set();
+      combined.forEach((val) => {
+        const lower = val.toLowerCase();
+        if (seen.has(lower)) return;
+        seen.add(lower);
+        deduped.push(val);
+      });
+      normalized.suggestions[canonical] = deduped.slice(0, MAX_SUGGESTIONS_PER_FIELD);
     }
   }
   // merge defaults so подсказки есть даже без прошлых отправок
