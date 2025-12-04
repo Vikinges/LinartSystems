@@ -119,15 +119,16 @@ const mappingOverrides = loadJson(MAPPING_PATH, {}) || {};
 let templatePath = null;
 
 function sanitizeRelativePath(relativePath) {
-  const normalized = path
-    .normalize(String(relativePath || ''))
-    .replace(/^[\\/]+/, '')
+  const input = String(relativePath || '').replace(/\\/g, '/');
+  const normalized = path.posix
+    .normalize(input)
+    .replace(/^\/+/, '')
     .replace(/\0/g, '');
   if (normalized.includes('..')) {
     return normalized
-      .split(path.sep)
+      .split('/')
       .filter((segment) => segment && segment !== '..')
-      .join(path.sep);
+      .join('/');
   }
   return normalized;
 }
