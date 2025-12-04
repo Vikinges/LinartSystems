@@ -1,0 +1,31 @@
+{
+  "activeTemplateId": "tpl-1764588346383-b8c5cf98",
+  "templates": [
+    {
+      "id": "builtin-form-template1",
+      "label": "Default template",
+      "relativePath": "form-template1.pdf",
+      "uploadedAt": "2025-12-01T09:20:32.214Z",
+      "size": 4096,
+      "source": "builtin",
+      "pageWidth": 595.28,
+      "pageHeight": 841.89,
+      "bodyTopOffset": 185.2158,
+      "description": "",
+      "slug": "default-template"
+    },
+    {
+      "id": "tpl-1764588346383-b8c5cf98",
+      "label": "LSC",
+      "description": "Sharp Display Solutions Europe GmbH\r\nLED Solutions Center\r\nIn der Alting 4\r\n90596 Schwanstetten\r\n\r\nT: +49 9170 94398-0\r\nE: info.lsc@sharp.eu\r\nW: www.sharpdisplays.eu",
+      "slug": "lsc",
+      "relativePath": "templates\\1764588346377-123",
+      "uploadedAt": "2025-12-01T11:25:46.383Z",
+      "size": 57101,
+      "source": "upload",
+      "pageWidth": 595.32001,
+      "pageHeight": 841.92004,
+      "bodyTopOffset": 255
+    }
+  ]
+}

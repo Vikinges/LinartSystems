@@ -1,0 +1,26 @@
+{
+  "19-3163": {
+    "end_customer_name": "Arena Nürnberg",
+    "site_location": "Kurt - Leuchtweg 11",
+    "led_display_model": "LED-Q039i",
+    "batch_number": "19-3163",
+    "lsc_project_number": "19-3163",
+    "date_of_service": "2025-12-03",
+    "service_company_name": "Sharp",
+    "customer_company": "Arena Nürnberg",
+    "customer_name": "Andreas ",
+    "form_type": "service_report",
+    "updated_at": "2025-12-04T06:31:28.432Z"
+  },
+  "DBG-001": {
+    "end_customer_name": "Debug Customer GmbH",
+    "site_location": "Berlin, Teststrasse 1",
+    "led_display_model": "FA 1.5 / 1.9 / 2.5",
+    "batch_number": "DBG-001",
+    "lsc_project_number": "DBG-001",
+    "date_of_service": "2025-12-04",
+    "service_company_name": "Sharp / NEC LED Solution Center",
+    "form_type": "service_report",
+    "updated_at": "2025-12-04T09:51:41.377Z"
+  }
+}

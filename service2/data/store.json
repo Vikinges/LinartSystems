@@ -1,0 +1,57 @@
+{
+  "suggestions": {
+    "customer_shared": [
+      "Debug Customer GmbH",
+      "Mercedes-Benz AG",
+      "Siemens"
+    ],
+    "company_shared": [
+      "Sharp / NEC LED Solution Center"
+    ],
+    "person_shared": [
+      "Vladimir Linartas",
+      "Debug Engineer",
+      "Ivan Technician",
+      "Ulrich Maurer",
+      "Vladimir"
+    ],
+    "site_location": [
+      "Berlin, Teststrasse 1",
+      "Flughafen Berlin Brandenburg",
+      "Munich Airport",
+      "Kurt - Leuchtweg 11"
+    ],
+    "customer_name": [
+      "Debug Customer GmbH",
+      "Anna Schneider",
+      "Vladimir",
+      "Andreas",
+      "c",
+      "Arena Nürnberg"
+    ],
+    "employee_role": [
+      "Technician",
+      "Engineer",
+      "Service tech"
+    ],
+    "end_customer_name": [
+      "Debug Customer GmbH"
+    ],
+    "service_company_name": [
+      "Sharp / NEC LED Solution Center"
+    ],
+    "engineer_name": [
+      "Debug Engineer"
+    ],
+    "employee_name": [
+      "Vladimir Linartas",
+      "Debug Engineer"
+    ],
+    "engineer_company": [
+      "Sharp / NEC LED Solution Center"
+    ],
+    "customer_company": [
+      "Debug Customer GmbH"
+    ]
+  }
+}
