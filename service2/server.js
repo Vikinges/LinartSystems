@@ -3235,7 +3235,7 @@ ${rows.join('\n')}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF forms generator · v0.33 Lin</title>
+    <title>PDF forms generator · v0.34 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -4375,7 +4375,7 @@ ${rows.join('\n')}
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>PDF forms generator · v0.33 Lin</h1>
+        <h1>PDF forms generator · v0.34 Lin</h1>
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
