@@ -2056,23 +2056,26 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     options.startY && Number.isFinite(options.startY)
       ? Math.max(options.startY - 6, margin + 28)
       : null;
+  const PAGE_TOP_PADDING = 32;
+  const pageStartY = (baseY) => Math.max(margin + PAGE_TOP_PADDING, baseY - PAGE_TOP_PADDING);
 
   const initialPage =
     options.targetPage && pagesList.includes(options.targetPage)
       ? options.targetPage
       : pdfDoc.addPage([baseSize.width, baseSize.height]);
   let page = initialPage;
-  let cursorY = initialStartY !== null ? initialStartY : page.getHeight() - margin;
+  let cursorY =
+    initialStartY !== null ? pageStartY(initialStartY) : pageStartY(page.getHeight() - margin);
   let firstPageDone = false;
 
   const setCurrentPage = (target, heading) => {
     page = target;
     // Для первой страницы используем заданный отступ, для следующих — весь доступный верх.
     if (!firstPageDone && initialStartY !== null) {
-      cursorY = initialStartY;
+      cursorY = pageStartY(initialStartY);
       firstPageDone = true;
     } else {
-      cursorY = page.getHeight() - margin;
+      cursorY = pageStartY(page.getHeight() - margin);
     }
     const headingText = heading || headingTitle;
     const textWidth = font.widthOfTextAtSize(headingText, 18);
