@@ -7527,6 +7527,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             const row = fragment.querySelector('[data-employee-row]');
             listEl.appendChild(fragment);
             renumberRows();
+            // ensure suggestion handlers are attached for newly added inputs
+            setupAutoSuggestions();
 
             const isPrimary = isPrimaryRow(row);
             const primaryState = rowStates.get(rowElements()[0]) || null;
@@ -8141,6 +8143,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           if (!inputs.length || typeof fetch !== 'function') return;
 
           inputs.forEach((input) => {
+            if (input.dataset.suggestBound === '1') return;
+            input.dataset.suggestBound = '1';
             const fieldName = input.dataset.suggestField;
             if (!fieldName) return;
             const listId = input.getAttribute('list');
