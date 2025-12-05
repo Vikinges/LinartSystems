@@ -4916,7 +4916,7 @@ ${renderTextInput('annex1_remaining', 'Remaining activities', { textarea: true, 
 ${renderTextInput('annex1_objections', 'Objections of the supplier', { textarea: true, allowUnknown: true })}
 ${renderTextInput('annex1_reservations', 'Reservations of the client', { textarea: true, allowUnknown: true })}
         </section>
-        <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
+        <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}" data-form-types="service_report,maintenance">
           <h2>On-site team time sheet</h2>
           <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
           <div class="employee-actions">
@@ -5046,7 +5046,7 @@ ${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, sect
             <h2>Customer comments</h2>
 ${renderTextInput('customer_comments', 'Customer comments', { textarea: true, type: 'textarea-lg', placeholder: 'Add customer feedback', allowUnknown: true })}
           </div>
-          <div data-form-types="maintenance,installation_report">
+          <div data-form-types="maintenance">
             <h2>Additional notes</h2>
 ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'textarea-lg', placeholder: 'Record any observations or follow-up actions' })}
           </div>
@@ -5117,7 +5117,7 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
             <small>JPEG/PNG only, up to 20 images.</small>
           </div>
         </section>
-${partsTable({ dataAttr: 'maintenance,installation_report' })}
+${partsTable({ dataAttr: 'maintenance' })}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
 
         <section class="card">
