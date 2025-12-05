@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 
 require('dotenv').config();
 
@@ -773,7 +773,7 @@ function loadSuggestionStore() {
       normalized.suggestions[canonical] = deduped.slice(0, MAX_SUGGESTIONS_PER_FIELD);
     }
   }
-  // merge defaults so подсказки есть даже без прошлых отправок
+  // merge defaults so Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ ÐµÑÑ‚ÑŒ Ð´Ð°Ð¶Ðµ Ð±ÐµÐ· Ð¿Ñ€Ð¾ÑˆÐ»Ñ‹Ñ… Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð¾Ðº
   for (const [field, values] of Object.entries(DEFAULT_SUGGESTIONS)) {
     const canonical = canonicalSuggestionField(field);
     const existing = normalized.suggestions[canonical] || [];
@@ -836,7 +836,7 @@ function recordSuggestionValue(fieldName, value) {
     return true;
   };
   let changed = updateBucket(suggestionStore.suggestions[canonical]);
-  // также дублируем в старое имя поля, чтобы использовать ранее сохранённые значения
+  // Ñ‚Ð°ÐºÐ¶Ðµ Ð´ÑƒÐ±Ð»Ð¸Ñ€ÑƒÐµÐ¼ Ð² ÑÑ‚Ð°Ñ€Ð¾Ðµ Ð¸Ð¼Ñ Ð¿Ð¾Ð»Ñ, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÑŒ Ñ€Ð°Ð½ÐµÐµ ÑÐ¾Ñ…Ñ€Ð°Ð½Ñ‘Ð½Ð½Ñ‹Ðµ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ
   if (canonical !== fieldName) {
     if (!suggestionStore.suggestions[fieldName]) {
       suggestionStore.suggestions[fieldName] = [];
@@ -859,7 +859,7 @@ function recordSuggestionsFromSubmission(body) {
     }
   }
 
-  // Вытаскиваем имена/роли сотрудников из массива employees[n][...]
+  // Ð’Ñ‹Ñ‚Ð°ÑÐºÐ¸Ð²Ð°ÐµÐ¼ Ð¸Ð¼ÐµÐ½Ð°/Ñ€Ð¾Ð»Ð¸ ÑÐ¾Ñ‚Ñ€ÑƒÐ´Ð½Ð¸ÐºÐ¾Ð² Ð¸Ð· Ð¼Ð°ÑÑÐ¸Ð²Ð° employees[n][...]
   Object.keys(body || {}).forEach((key) => {
     const match = key.match(/^employees\[(\d+)\]\[(name|role)\]$/);
     if (!match) return;
@@ -2018,11 +2018,11 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
     ? options.bodyTopOffset
     : defaultBodyTopOffset(pageHeight);
-  // Старт рендера: чуть ниже линии контента (bodyTopOffset), чтобы визуально совпасть с линией в админке.
+  // Ð¡Ñ‚Ð°Ñ€Ñ‚ Ñ€ÐµÐ½Ð´ÐµÑ€Ð°: Ñ‡ÑƒÑ‚ÑŒ Ð½Ð¸Ð¶Ðµ Ð»Ð¸Ð½Ð¸Ð¸ ÐºÐ¾Ð½Ñ‚ÐµÐ½Ñ‚Ð° (bodyTopOffset), Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð²Ð¸Ð·ÑƒÐ°Ð»ÑŒÐ½Ð¾ ÑÐ¾Ð²Ð¿Ð°ÑÑ‚ÑŒ Ñ Ð»Ð¸Ð½Ð¸ÐµÐ¹ Ð² Ð°Ð´Ð¼Ð¸Ð½ÐºÐµ.
   const marginTop = 12;
   const startY = Math.max(marginTop + 8, pageHeight - bodyTopOffset - 6);
 
-  // Очищаем тело под шапкой, оставляя верхнюю часть (логотип/хедер) нетронутой.
+  // ÐžÑ‡Ð¸Ñ‰Ð°ÐµÐ¼ Ñ‚ÐµÐ»Ð¾ Ð¿Ð¾Ð´ ÑˆÐ°Ð¿ÐºÐ¾Ð¹, Ð¾ÑÑ‚Ð°Ð²Ð»ÑÑ Ð²ÐµÑ€Ñ…Ð½ÑŽÑŽ Ñ‡Ð°ÑÑ‚ÑŒ (Ð»Ð¾Ð³Ð¾Ñ‚Ð¸Ð¿/Ñ…ÐµÐ´ÐµÑ€) Ð½ÐµÑ‚Ñ€Ð¾Ð½ÑƒÑ‚Ð¾Ð¹.
   targetPage.drawRectangle({
     x: 0,
     y: 0,
@@ -2157,7 +2157,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
         color: item.value ? rgb(0.15, 0.4, 0.8) : rgb(1, 1, 1),
       });
       if (item.value) {
-        page.drawText('✓', {
+        page.drawText('âœ“', {
           x: margin + 2,
           y: cursorY - rowHeight + 6,
           size: 10,
@@ -2470,7 +2470,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (isInstallation) {
     return drawInstallationReport(pdfDoc, font, body, signatureImages, partsRows, options);
   }
-  // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
+  // ÐÐ°Ñ‡Ð¸Ð½Ð°ÐµÐ¼ Ñ€Ð¸ÑÐ¾Ð²Ð°Ñ‚ÑŒ Ð½Ð¸Ð¶Ðµ ÑˆÐ°Ð¿ÐºÐ¸: Ð°Ð´Ð¼Ð¸Ð½ÐºÐ° ÑÐ¾Ñ…Ñ€Ð°Ð½ÑÐµÑ‚ bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
       ? Math.max(options.startY - 6, margin + 28)
@@ -2489,7 +2489,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const setCurrentPage = (target, heading) => {
     page = target;
-    // Для первой страницы используем заданный отступ, для следующих — весь доступный верх.
+    // Ð”Ð»Ñ Ð¿ÐµÑ€Ð²Ð¾Ð¹ ÑÑ‚Ñ€Ð°Ð½Ð¸Ñ†Ñ‹ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ð·Ð°Ð´Ð°Ð½Ð½Ñ‹Ð¹ Ð¾Ñ‚ÑÑ‚ÑƒÐ¿, Ð´Ð»Ñ ÑÐ»ÐµÐ´ÑƒÑŽÑ‰Ð¸Ñ… â€” Ð²ÐµÑÑŒ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹Ð¹ Ð²ÐµÑ€Ñ….
     if (!firstPageDone && initialStartY !== null) {
       cursorY = pageStartY(initialStartY);
       firstPageDone = true;
@@ -2571,7 +2571,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     const headerHeight = 18;
     const rowBaseHeight = 36;
     if (!employeeEntries.length) {
-      return; // пропускаем секцию, если нет сотрудников
+      return; // Ð¿Ñ€Ð¾Ð¿ÑƒÑÐºÐ°ÐµÐ¼ ÑÐµÐºÑ†Ð¸ÑŽ, ÐµÑÐ»Ð¸ Ð½ÐµÑ‚ ÑÐ¾Ñ‚Ñ€ÑƒÐ´Ð½Ð¸ÐºÐ¾Ð²
     }
 
     const blockHeight = headerHeight + rowBaseHeight * employeeEntries.length + 20;
@@ -3023,7 +3023,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= blockHeight + 10;
   };
 
-  // Сначала Site information (две колонки)
+  // Ð¡Ð½Ð°Ñ‡Ð°Ð»Ð° Site information (Ð´Ð²Ðµ ÐºÐ¾Ð»Ð¾Ð½ÐºÐ¸)
   const siteInfoRows = [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
@@ -3098,10 +3098,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= rowsPerCol * (headerHeight + dataHeight) + 12;
   }
 
-  // Небольшой зазор после site info
+  // ÐÐµÐ±Ð¾Ð»ÑŒÑˆÐ¾Ð¹ Ð·Ð°Ð·Ð¾Ñ€ Ð¿Ð¾ÑÐ»Ðµ site info
   cursorY -= 6;
 
-  // Затем employees и чеклисты
+  // Ð—Ð°Ñ‚ÐµÐ¼ employees Ð¸ Ñ‡ÐµÐºÐ»Ð¸ÑÑ‚Ñ‹
   renderEmployeesSection();
 
   if (isService) {
@@ -3117,7 +3117,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     drawChecklistSection({ title: 'Sign-off checklist', rows: signoffRows });
   }
 
-  // Parts record — в самом конце перед Sign-off details
+  // Parts record â€” Ð² ÑÐ°Ð¼Ð¾Ð¼ ÐºÐ¾Ð½Ñ†Ðµ Ð¿ÐµÑ€ÐµÐ´ Sign-off details
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
   if (partsUsedRows.length) {
     const isServiceParts = isService;
@@ -3268,7 +3268,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const detailHeight = 50;
   const detailRows = engineerDetails.length;
   const signatureHeight = 180;
-  // Требуем место для блока данных + подписей, чтобы заголовки не прилипали к предыдущей таблице
+  // Ð¢Ñ€ÐµÐ±ÑƒÐµÐ¼ Ð¼ÐµÑÑ‚Ð¾ Ð´Ð»Ñ Ð±Ð»Ð¾ÐºÐ° Ð´Ð°Ð½Ð½Ñ‹Ñ… + Ð¿Ð¾Ð´Ð¿Ð¸ÑÐµÐ¹, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¸ Ð½Ðµ Ð¿Ñ€Ð¸Ð»Ð¸Ð¿Ð°Ð»Ð¸ Ðº Ð¿Ñ€ÐµÐ´Ñ‹Ð´ÑƒÑ‰ÐµÐ¹ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ðµ
   const combinedRequired = detailHeight * detailRows + signatureHeight + 140;
   const signoffPageBreak = ensureSpace(combinedRequired, 'Sign-off details (cont.)');
 
@@ -3342,7 +3342,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     cursorY -= detailHeight * detailRows + 10;
   }
 
-  // Подписи крупные, но занимают меньше высоты.
+  // ÐŸÐ¾Ð´Ð¿Ð¸ÑÐ¸ ÐºÑ€ÑƒÐ¿Ð½Ñ‹Ðµ, Ð½Ð¾ Ð·Ð°Ð½Ð¸Ð¼Ð°ÑŽÑ‚ Ð¼ÐµÐ½ÑŒÑˆÐµ Ð²Ñ‹ÑÐ¾Ñ‚Ñ‹.
   const signatureHeading =
     ensureSpace(signatureHeight + 40, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
   drawSectionTitle(signatureHeading);
@@ -3365,7 +3365,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       font,
       color: headingColor,
     });
-    // рамку убрали, оставляем только подпись и содержимое
+    // Ñ€Ð°Ð¼ÐºÑƒ ÑƒÐ±Ñ€Ð°Ð»Ð¸, Ð¾ÑÑ‚Ð°Ð²Ð»ÑÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ð¾Ð´Ð¿Ð¸ÑÑŒ Ð¸ ÑÐ¾Ð´ÐµÑ€Ð¶Ð¸Ð¼Ð¾Ðµ
     if (entry) {
       try {
         const decoded = decodeImageDataUrl(entry.data);
@@ -3657,7 +3657,7 @@ ${rows.join('\n')}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF forms generator · v0.34 Lin</title>
+    <title>PDF forms generator Â· v0.34 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -4797,7 +4797,7 @@ ${rows.join('\n')}
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>PDF forms generator · v0.34 Lin</h1>
+        <h1>PDF forms generator Â· v0.34 Lin</h1>
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
@@ -4921,7 +4921,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
           <p>Record everyone working on site to keep automatic time & break totals. The first employee becomes the document signer.</p>
           <div class="employee-actions">
             <button type="button" class="button" data-action="employee-add">+ Add employee</button>
-            <small>Defaults use the moment you opened this form; fine-tune via manual input or ±30m shortcuts.</small>
+            <small>Defaults use the moment you opened this form; fine-tune via manual input or Â±30m shortcuts.</small>
           </div>
           <div class="employee-table-wrapper">
             <table class="employee-table">
@@ -5504,7 +5504,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const table = findActivePartsTable();
           if (!table) return null;
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
-          // Заполняем последнюю открытую строку (обычно только что добавленная)
+          // Ð—Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ Ð¿Ð¾ÑÐ»ÐµÐ´Ð½ÑŽÑŽ Ð¾Ñ‚ÐºÑ€Ñ‹Ñ‚ÑƒÑŽ ÑÑ‚Ñ€Ð¾ÐºÑƒ (Ð¾Ð±Ñ‹Ñ‡Ð½Ð¾ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ð´Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð½Ð°Ñ)
           return rows.length ? rows[rows.length - 1] : null;
         };
 
@@ -6090,11 +6090,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             }
           }
           if (selected) {
-            const slugDisplay = selected.slug ? ' · ' + selected.slug : '';
+            const slugDisplay = selected.slug ? ' Â· ' + selected.slug : '';
             setTemplateStatus(
               (selected.label || selected.slug || 'Template') +
                 slugDisplay +
-                (selected.isActive ? ' · Active by default' : ''),
+                (selected.isActive ? ' Â· Active by default' : ''),
             );
           } else {
             setTemplateStatus('Select a template to continue.');
@@ -6434,7 +6434,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             meta.className = 'admin-template__meta';
             const size = tpl.size ? (tpl.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size';
             const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
-            meta.textContent = size + ' • ' + uploaded;
+            meta.textContent = size + ' â€¢ ' + uploaded;
             colInfo.appendChild(nameSpan);
             colInfo.appendChild(meta);
             if (tpl.slug) {
@@ -7118,6 +7118,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         function fillDebugDefaults() {
           if (!debugState.enabled) return;
 
+          const formType = formTypeSelectEl ? formTypeSelectEl.value : '';
+          const isInstallation = formType === 'installation_report';
+          const isServiceOrMaintenance = formType === 'service_report' || formType === 'maintenance';
+
           const firstOptionValue = (datalistId) => {
             if (!datalistId) return '';
             const list =
@@ -7139,7 +7143,76 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             return el;
           };
 
+          const setCheckbox = (name, checked = true) => {
+            const el = formEl.querySelector('input[name=\"' + name + '\"]');
+            if (el && el.type === 'checkbox' && el.checked !== checked) {
+              el.checked = checked;
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            return el;
+          };
+
+          const toLocalDateTimeValue = (date) => {
+            if (!(date instanceof Date)) return '';
+            const tzSafe = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+            return tzSafe.toISOString().slice(0, 16);
+          };
+
           const todayIso = new Date().toISOString().slice(0, 10);
+
+          if (isInstallation) {
+            const projectSeed = 'Demo Building Project';
+            const clientSeed = firstOptionValue('suggest-end-customer-name') || 'Debug Client GmbH';
+            const supplierSeed =
+              firstOptionValue('suggest-service-company-name') || 'Sharp / NEC Install Team';
+
+            setIfEmpty('[name=\"batch_number\"]', 'LSC-DBG-001');
+            setIfEmpty('[name=\"building_project\"]', projectSeed);
+            setIfEmpty('[name=\"customer_company\"]', clientSeed);
+            setIfEmpty('[name=\"completion_date\"]', todayIso);
+            setIfEmpty('[name=\"acceptance_date\"]', todayIso);
+            setIfEmpty('[name=\"acceptance_location\"]', 'Berlin');
+            setIfEmpty('[name=\"attendee_client\"]', clientSeed + ' representative');
+            setIfEmpty('[name=\"attendee_supplier\"]', supplierSeed + ' representative');
+
+            setCheckbox('acceptance_overall', true);
+            setCheckbox('acceptance_partial', false);
+            setIfEmpty('[name=\"partial_services\"]', 'Installed LED wall, cabling, and handover.');
+
+            setCheckbox('defects_none', true);
+            setCheckbox('defects_annex', false);
+            setCheckbox('remaining_annex', false);
+            setIfEmpty('[name=\"defects_deadline\"]', todayIso);
+            setIfEmpty('[name=\"remaining_deadline\"]', todayIso);
+            setIfEmpty('[name=\"supplier_objections\"]', 'No objections (debug mode).');
+
+            setCheckbox('declaration_accepted', true);
+            setCheckbox('declaration_after_defects', false);
+            setCheckbox('declaration_not_accepted', false);
+            setCheckbox('declaration_reservations', false);
+
+            setIfEmpty('[name=\"warranty_years\"]', '2');
+            setIfEmpty('[name=\"warranty_begin\"]', todayIso);
+            updateWarrantyEnd();
+
+            setIfEmpty('[name=\"annex1_date\"]', todayIso);
+            setIfEmpty('[name=\"annex1_building_project\"]', projectSeed);
+            setIfEmpty('[name=\"annex1_defects\"]', 'No defects recorded (debug).');
+            setIfEmpty('[name=\"annex1_remaining\"]', 'Only cleaning and documentation pending.');
+            setIfEmpty('[name=\"annex1_objections\"]', 'None.');
+            setIfEmpty('[name=\"annex1_reservations\"]', 'None.');
+
+            const nowInput = toLocalDateTimeValue(new Date());
+            setIfEmpty('[name=\"engineer_company\"]', supplierSeed);
+            setIfEmpty('[name=\"engineer_name\"]', 'Debug Installer');
+            setIfEmpty('[name=\"engineer_datetime\"]', nowInput);
+            setIfEmpty('[name=\"customer_company\"]', clientSeed);
+            setIfEmpty('[name=\"customer_name\"]', clientSeed + ' contact');
+            setIfEmpty('[name=\"customer_datetime\"]', nowInput);
+
+            return;
+          }
+
           setIfEmpty(
             '[name=\"end_customer_name\"]',
             firstOptionValue('suggest-end-customer-name') || 'Debug Customer GmbH',
@@ -7171,6 +7244,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             '#customer-company',
             firstOptionValue('suggest-end-customer-name') || 'Debug Client Co',
           );
+
+          if (!isServiceOrMaintenance) return;
 
           const ensureEmployeeRow = () => {
             let rows = Array.from(document.querySelectorAll('[data-employee-row]'));
@@ -7238,6 +7313,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             setDateTime('departure', fmt(oneHourLater));
           }
         }
+
 
         function getPhotoLabel(fieldName) {
           const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
@@ -8264,7 +8340,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               '<div class="signature-overlay__actions">' +
               '<span>Draw signature</span>' +
               '<span class="spacer"></span>' +
-              '<button type="button" class="secondary" data-overlay-rotate>Rotate 90°</button>' +
+              '<button type="button" class="secondary" data-overlay-rotate>Rotate 90Â°</button>' +
               '<button type="button" class="secondary" data-overlay-orientation>Landscape</button>' +
               '<button type="button" class="secondary" data-overlay-clear>Clear</button>' +
               '<button type="button" class="secondary" data-overlay-cancel>Cancel</button>' +
@@ -8704,14 +8780,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             const dataList = document.getElementById(listId);
             if (!dataList) return;
 
-            // локальные подсказки на основе уже введённых значений (включая восстановленный драфт)
+            // Ð»Ð¾ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð½Ð° Ð¾ÑÐ½Ð¾Ð²Ðµ ÑƒÐ¶Ðµ Ð²Ð²ÐµÐ´Ñ‘Ð½Ð½Ñ‹Ñ… Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ð¹ (Ð²ÐºÐ»ÑŽÑ‡Ð°Ñ Ð²Ð¾ÑÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½Ð½Ñ‹Ð¹ Ð´Ñ€Ð°Ñ„Ñ‚)
             const localSeeds = [];
             const addLocalSeed = (val) => {
               const next = (val || '').trim();
               if (!next) return;
               if (localSeeds.find((item) => item.toLowerCase() === next.toLowerCase())) return;
               localSeeds.push(next);
-              // отправляем на сервер, чтобы подсказки были общими
+              // Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð»ÑÐµÐ¼ Ð½Ð° ÑÐµÑ€Ð²ÐµÑ€, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð±Ñ‹Ð»Ð¸ Ð¾Ð±Ñ‰Ð¸Ð¼Ð¸
               if (next.length >= ${MIN_SUGGESTION_LENGTH}) {
                 const body = JSON.stringify({ field: fieldName, value: next });
                 fetch(buildAppUrl('suggest/save'), {
@@ -9407,7 +9483,7 @@ app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {
   const fieldName = typeof req.body?.field === 'string' ? req.body.field.trim() : '';
   const value = typeof req.body?.value === 'string' ? req.body.value : '';
   if (!recordSuggestionValue(fieldName, value)) {
-    // Ничего не записали (пустое/короткое/неизвестное поле) — не считаем это ошибкой
+    // ÐÐ¸Ñ‡ÐµÐ³Ð¾ Ð½Ðµ Ð·Ð°Ð¿Ð¸ÑÐ°Ð»Ð¸ (Ð¿ÑƒÑÑ‚Ð¾Ðµ/ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¾Ðµ/Ð½ÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾Ðµ Ð¿Ð¾Ð»Ðµ) â€” Ð½Ðµ ÑÑ‡Ð¸Ñ‚Ð°ÐµÐ¼ ÑÑ‚Ð¾ Ð¾ÑˆÐ¸Ð±ÐºÐ¾Ð¹
     return res.json({ ok: true, skipped: true });
   }
   saveSuggestionStore();
@@ -9569,7 +9645,7 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
     return res.status(400).json({ ok: false, error: 'Builtin template cannot be deleted.' });
   }
 
-  // Удаляем файл, если он существует
+  // Ð£Ð´Ð°Ð»ÑÐµÐ¼ Ñ„Ð°Ð¹Ð», ÐµÑÐ»Ð¸ Ð¾Ð½ ÑÑƒÑ‰ÐµÑÑ‚Ð²ÑƒÐµÑ‚
   try {
     const safeRelative = sanitizeRelativePath(entry.relativePath || '');
     const absolute = path.join(PUBLIC_DIR, safeRelative);
@@ -9580,10 +9656,10 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
     console.warn('[server] Failed to remove template file', err.message);
   }
 
-  // Удаляем запись из манифеста
+  // Ð£Ð´Ð°Ð»ÑÐµÐ¼ Ð·Ð°Ð¿Ð¸ÑÑŒ Ð¸Ð· Ð¼Ð°Ð½Ð¸Ñ„ÐµÑÑ‚Ð°
   templateManifest.templates = templateManifest.templates.filter((tpl) => tpl.id !== entry.id);
 
-  // Если удалили активный — переключаемся на первый доступный или builtin
+  // Ð•ÑÐ»Ð¸ ÑƒÐ´Ð°Ð»Ð¸Ð»Ð¸ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ð¹ â€” Ð¿ÐµÑ€ÐµÐºÐ»ÑŽÑ‡Ð°ÐµÐ¼ÑÑ Ð½Ð° Ð¿ÐµÑ€Ð²Ñ‹Ð¹ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹Ð¹ Ð¸Ð»Ð¸ builtin
   if (templateManifest.activeTemplateId === entry.id) {
     const fallback = getActiveTemplateEntry(templateManifest) || templateManifest.templates[0] || null;
     templateManifest.activeTemplateId = fallback ? fallback.id : null;
@@ -9686,7 +9762,7 @@ app.post('/submit', (req, res, next) => {
     }
   }
 
-  // Всегда подхватываем подписи, даже если поля не совпадают с шаблоном.
+  // Ð’ÑÐµÐ³Ð´Ð° Ð¿Ð¾Ð´Ñ…Ð²Ð°Ñ‚Ñ‹Ð²Ð°ÐµÐ¼ Ð¿Ð¾Ð´Ð¿Ð¸ÑÐ¸, Ð´Ð°Ð¶Ðµ ÐµÑÐ»Ð¸ Ð¿Ð¾Ð»Ñ Ð½Ðµ ÑÐ¾Ð²Ð¿Ð°Ð´Ð°ÑŽÑ‚ Ñ ÑˆÐ°Ð±Ð»Ð¾Ð½Ð¾Ð¼.
   Object.entries(signatureInputs).forEach(([sigName, raw]) => {
     if (typeof raw === 'string' && raw.startsWith('data:image/')) {
       signatureImages.push({ acroName: sigName, data: raw });
