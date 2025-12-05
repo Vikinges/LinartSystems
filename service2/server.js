@@ -2371,8 +2371,18 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   ensureSpace(signatureHeight + 40, 'Signatures');
   drawSectionTitle('Signatures');
   const signatureBoxes = [
-    { label: 'For the client', acroName: 'customer_signature', x: margin },
-    { label: 'For the supplier', acroName: 'engineer_signature', x: margin + columnWidth + 12 },
+    {
+      label: 'For the client',
+      acroName: 'customer_signature',
+      x: margin,
+      name: val('attendee_client') || val('customer_name'),
+    },
+    {
+      label: 'For the supplier',
+      acroName: 'engineer_signature',
+      x: margin + columnWidth + 12,
+      name: val('attendee_supplier') || val('engineer_name'),
+    },
   ];
   const resolvePageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
 
@@ -2386,6 +2396,15 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       font,
       color: headingColor,
     });
+    if (box.name) {
+      page.drawText(String(box.name), {
+        x: boxRect.x,
+        y: boxRect.y + boxRect.height - 10,
+        size: 9,
+        font,
+        color: textColor,
+      });
+    }
     page.drawRectangle({
       x: boxRect.x,
       y: boxRect.y,
