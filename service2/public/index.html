@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDF forms generator · v0.32 Lin</title>
+    <title>PDF forms generator · v0.34 Lin</title>
     <link
       rel="icon"
       type="image/gif"
@@ -1143,7 +1143,7 @@
     <div class="container">
       <header>
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
-        <h1>PDF forms generator · v0.32 Lin</h1>
+        <h1>PDF forms generator · v0.34 Lin</h1>
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
       </header>
       <form id="pm-form" enctype="multipart/form-data">
@@ -1202,6 +1202,10 @@
           <input type="text" id="site-location" name="site_location" placeholder="Site location" data-suggest-field="site_location" list="suggest-site-location" autocomplete="off" />
           <datalist id="suggest-site-location" data-suggest-list="site_location"></datalist>
         </label>
+        <label class="field" for="building-project">
+          <span>Building project</span>
+          <input type="text" id="building-project" name="building_project" placeholder="Building project" />
+        </label>
         <label class="field" for="led-display-model">
           <span>LED display model / batch</span>
           <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model / batch" />
@@ -1210,14 +1214,14 @@
           <span>LSC Project number</span>
           <input type="text" id="batch-number" name="batch_number" placeholder="LSC Project number" />
         </label>
-        <label class="field" for="date-of-service">
-          <span>Date of service</span>
-          <input type="date" id="date-of-service" name="date_of_service" placeholder="Date of service" />
-        </label>
         <label class="field" for="service-company-name">
           <span>Service company name</span>
           <input type="text" id="service-company-name" name="service_company_name" placeholder="Service company name" data-suggest-field="service_company_name" list="suggest-service-company-name" autocomplete="off" />
           <datalist id="suggest-service-company-name" data-suggest-list="service_company_name"></datalist>
+        </label>
+        <label class="field" for="date-of-service">
+          <span>Date of service</span>
+          <input type="date" id="date-of-service" name="date_of_service" placeholder="Date of service" />
         </label>
 <div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
         <!-- Missing field: Supplier (supplier_name) -->
@@ -1225,16 +1229,120 @@
           </div>
         </section>
         <section class="card" data-form-types="installation_report">
-          <h2>Installation details</h2>
+          <h2>Acceptance certificate</h2>
           <div class="grid two-col">
-        <!-- Missing field: Acceptance status (accepted / with reservations) (acceptance_status) -->
-        <!-- Missing field: Participants (customer / contractor) (installation_participants) -->
-        <!-- Missing field: Defects (Annex 1) (installation_defects) -->
-        <!-- Missing field: Remaining activities (installation_remaining) -->
-        <!-- Missing field: Reservations (installation_reservations) -->
-        <!-- Missing field: Warranty begin (warranty_begin) -->
-        <!-- Missing field: Warranty end (warranty_end) -->
+        <label class="field" for="acceptance-date">
+          <span>Acceptance date</span>
+          <input type="date" id="acceptance-date" name="acceptance_date" placeholder="Acceptance date" />
+        </label>
+        <label class="field" for="acceptance-location">
+          <span>Acceptance location</span>
+          <input type="text" id="acceptance-location" name="acceptance_location" placeholder="Acceptance location" />
+        </label>
+        <label class="field" for="completion-date">
+          <span>Completion date</span>
+          <input type="date" id="completion-date" name="completion_date" placeholder="Completion date" />
+        </label>
+        <label class="field" for="building-project-acceptance">
+          <span>Building project (certificate)</span>
+          <input type="text" id="building-project-acceptance" name="building_project_acceptance" placeholder="Building project (certificate)" />
+        </label>
           </div>
+          <div class="grid two-col">
+        <label class="field" for="attendee-client">
+          <span>Attendee (client)</span>
+          <input type="text" id="attendee-client" name="attendee_client" placeholder="Attendee (client)" />
+        </label>
+        <label class="field" for="attendee-supplier">
+          <span>Attendee (supplier)</span>
+          <input type="text" id="attendee-supplier" name="attendee_supplier" placeholder="Attendee (supplier)" />
+        </label>
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Acceptance scope</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>Contractually agreed overall performance</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Following self-contained partial service(s)</span></label>
+          </div>
+        <label class="field" for="partial-services">
+          <span>Partial services (Annex 1)</span>
+          <textarea id="partial-services" name="partial_services" rows="4" placeholder="Partial services (Annex 1)" data-auto-resize></textarea>
+        </label>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Defects & remaining activity</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="defects_none" /> <span>No visible defects</span></label>
+            <label class="checkbox"><input type="checkbox" name="defects_annex" /> <span>Defects according to Annex 1</span></label>
+            <label class="checkbox"><input type="checkbox" name="remaining_annex" /> <span>Remaining activity according to Annex 1</span></label>
+          </div>
+          <div class="grid two-col">
+        <label class="field" for="defects-deadline">
+          <span>Defects to be remediated before</span>
+          <input type="date" id="defects-deadline" name="defects_deadline" placeholder="Defects to be remediated before" />
+        </label>
+        <label class="field" for="remaining-deadline">
+          <span>Remaining activities to be remediated before</span>
+          <input type="date" id="remaining-deadline" name="remaining_deadline" placeholder="Remaining activities to be remediated before" />
+        </label>
+          </div>
+        <label class="field" for="supplier-objections">
+          <span>Objections of the supplier</span>
+          <textarea id="supplier-objections" name="supplier_objections" rows="4" placeholder="Objections of the supplier" data-auto-resize></textarea>
+        </label>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Declaration & warranty</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="declaration_accepted" /> <span>The performance is accepted</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_after_defects" /> <span>Acceptance takes effect after defects are eliminated</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_not_accepted" /> <span>Performance not accepted due to substantial defects</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_reservations" /> <span>Acceptance subject to reservations (Appendix No. 1)</span></label>
+          </div>
+          <div class="grid two-col">
+        <label class="field" for="warranty-years">
+          <span>Warranty (years)</span>
+          <input type="number" id="warranty-years" name="warranty_years" placeholder="Warranty (years)" />
+        </label>
+        <label class="field" for="warranty-begin">
+          <span>Warranty begins on</span>
+          <input type="date" id="warranty-begin" name="warranty_begin" placeholder="Warranty begins on" />
+        </label>
+        <label class="field" for="warranty-end">
+          <span>Warranty ends on</span>
+          <input type="date" id="warranty-end" name="warranty_end" placeholder="Warranty ends on" />
+        </label>
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Annex 1</h2>
+          <div class="grid two-col">
+        <label class="field" for="annex1-date">
+          <span>Annex 1 date</span>
+          <input type="date" id="annex1-date" name="annex1_date" placeholder="Annex 1 date" />
+        </label>
+        <label class="field" for="annex1-building-project">
+          <span>Building project (Annex 1)</span>
+          <input type="text" id="annex1-building-project" name="annex1_building_project" placeholder="Building project (Annex 1)" />
+        </label>
+          </div>
+        <label class="field" for="annex1-defects">
+          <span>Defects</span>
+          <textarea id="annex1-defects" name="annex1_defects" rows="4" placeholder="Defects" data-auto-resize></textarea>
+        </label>
+        <label class="field" for="annex1-remaining">
+          <span>Remaining activities</span>
+          <textarea id="annex1-remaining" name="annex1_remaining" rows="4" placeholder="Remaining activities" data-auto-resize></textarea>
+        </label>
+        <label class="field" for="annex1-objections">
+          <span>Objections of the supplier</span>
+          <textarea id="annex1-objections" name="annex1_objections" rows="4" placeholder="Objections of the supplier" data-auto-resize></textarea>
+        </label>
+        <label class="field" for="annex1-reservations">
+          <span>Reservations of the client</span>
+          <textarea id="annex1-reservations" name="annex1_reservations" rows="4" placeholder="Reservations of the client" data-auto-resize></textarea>
+        </label>
         </section>
         <section class="card employee-card" data-employees-section data-employee-max="20">
           <h2>On-site team time sheet</h2>
@@ -1661,7 +1769,7 @@
         </label>
           </div>
         </section>
-        <section class="card photos-card">
+        <section class="card photos-card" data-form-types="service_report,maintenance">
           <h2>Photos</h2>
           <div class="photo-slot" data-photo-slot="photo_before">
             <span>Photos before maintenance</span>
@@ -1699,6 +1807,33 @@
             </div>
             <small>JPEG/PNG only, up to 20 images.</small>
       </div>
+        </section>
+        <section class="card photos-card" data-form-types="installation_report">
+          <h2>Installation photos (optional)</h2>
+          <div class="photo-slot" data-photo-slot="photo_defects">
+            <span>Defect photos</span>
+            <p>Upload up to 20 images that show existing defects.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_defects" accept="image/*" multiple data-photo-input="photo_defects" />
+              Upload defect photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_defects" data-photo-mode="multi" data-photo-label="Defect photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photo_installation">
+            <span>Installation photos</span>
+            <p>Upload up to 20 images that show the completed installation.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_installation" accept="image/*" multiple data-photo-input="photo_installation" />
+              Upload installation photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_installation" data-photo-mode="multi" data-photo-label="Installation photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
         </section>
       <section class="card" data-parts-section data-form-types="maintenance,installation_report">
         <h2>Parts record</h2>
@@ -4789,6 +4924,8 @@
             const row = fragment.querySelector('[data-employee-row]');
             listEl.appendChild(fragment);
             renumberRows();
+            // ensure suggestion handlers are attached for newly added inputs
+            setupAutoSuggestions();
 
             const isPrimary = isPrimaryRow(row);
             const primaryState = rowStates.get(rowElements()[0]) || null;
@@ -5403,6 +5540,8 @@
           if (!inputs.length || typeof fetch !== 'function') return;
 
           inputs.forEach((input) => {
+            if (input.dataset.suggestBound === '1') return;
+            input.dataset.suggestBound = '1';
             const fieldName = input.dataset.suggestField;
             if (!fieldName) return;
             const listId = input.getAttribute('list');
@@ -5418,7 +5557,7 @@
               if (localSeeds.find((item) => item.toLowerCase() === next.toLowerCase())) return;
               localSeeds.push(next);
               // отправляем на сервер, чтобы подсказки были общими
-              if (next.length >= 2) {
+              if (next.length >= 1) {
                 const body = JSON.stringify({ field: fieldName, value: next });
                 fetch(buildAppUrl('suggest/save'), {
                   method: 'POST',
@@ -5450,9 +5589,9 @@
               });
             };
 
-            const requestSuggestions = (rawValue) => {
+            const requestSuggestions = (rawValue, { force = false } = {}) => {
               const query = (rawValue || '').trim();
-              if (query === lastQuery) {
+              if (!force && query === lastQuery) {
                 return;
               }
               lastQuery = query;
@@ -5482,7 +5621,7 @@
             };
 
             input.addEventListener('input', () => requestSuggestions(input.value));
-            input.addEventListener('focus', () => requestSuggestions(input.value));
+            input.addEventListener('focus', () => requestSuggestions(input.value, { force: true }));
             ['change', 'blur'].forEach((eventName) => {
               input.addEventListener(eventName, () => addLocalSeed(input.value));
             });
