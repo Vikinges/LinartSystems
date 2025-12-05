@@ -2193,7 +2193,6 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   drawLabeledField('LSC Projekt-No.', val('batch_number') || val('lsc_project_number'));
   drawLabeledField('Building project', val('building_project_acceptance') || val('building_project'));
   drawLabeledField('Client', val('end_customer_name') || val('customer_company'));
-  drawLabeledField('Supplier', val('supplier_name') || val('service_company_name'));
   drawLabeledField('Completion', val('completion_date'));
 
   drawSectionTitle('Attendees');
@@ -4862,7 +4861,6 @@ ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 ${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true })}
 ${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
 ${renderTextInput('customer_company', 'Client', { allowUnknown: true })}
-${renderTextInput('supplier_name', 'Supplier', { allowUnknown: true })}
 ${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_date', 'Acceptance date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true })}
