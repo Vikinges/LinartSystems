@@ -5407,6 +5407,61 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           applyFormTypeVisibility();
         }
 
+        const warrantyYearsInput = formEl.querySelector('input[name="warranty_years"]');
+        const warrantyBeginInput = formEl.querySelector('input[name="warranty_begin"]');
+        const warrantyEndInput = formEl.querySelector('input[name="warranty_end"]');
+        let warrantyEndTouched = false;
+
+        const parseIsoDate = (value) => {
+          if (!value || typeof value !== 'string') return null;
+          const parts = value.split('-').map((p) => Number(p));
+          if (parts.length !== 3) return null;
+          const [year, month, day] = parts;
+          if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+          const date = new Date(Date.UTC(year, month - 1, day));
+          if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+            return null;
+          }
+          return date;
+        };
+
+        const formatIsoDate = (date) => {
+          const y = date.getUTCFullYear();
+          const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+          const d = String(date.getUTCDate()).padStart(2, '0');
+          return `${y}-${m}-${d}`;
+        };
+
+        const updateWarrantyEnd = () => {
+          if (!warrantyYearsInput || !warrantyBeginInput || !warrantyEndInput) return;
+          if (warrantyEndTouched && warrantyEndInput.value) return;
+          const baseDate = parseIsoDate(warrantyBeginInput.value);
+          const years = Number(warrantyYearsInput.value);
+          if (!baseDate || !Number.isFinite(years)) return;
+          const target = new Date(baseDate.getTime());
+          target.setUTCFullYear(target.getUTCFullYear() + years);
+          warrantyEndInput.value = formatIsoDate(target);
+        };
+
+        if (warrantyEndInput) {
+          warrantyEndInput.addEventListener('input', () => {
+            warrantyEndTouched = true;
+          });
+        }
+        if (warrantyYearsInput) {
+          warrantyYearsInput.addEventListener('input', () => {
+            warrantyEndTouched = false;
+            updateWarrantyEnd();
+          });
+        }
+        if (warrantyBeginInput) {
+          warrantyBeginInput.addEventListener('input', () => {
+            warrantyEndTouched = false;
+            updateWarrantyEnd();
+          });
+        }
+        updateWarrantyEnd();
+
         const findActivePartsSection = () => {
           const sections = Array.from(document.querySelectorAll('[data-parts-section]'));
           return sections.find((section) => !section.hidden && section.style.display !== 'none') || null;
