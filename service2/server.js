@@ -9365,9 +9365,9 @@ app.get('/favicon.ico', (req, res) => {
 app.get('/health', (req, res) => {
   try {
     const uptime = process.uptime();
-    return res.json({ status: 'ok', service: 'service1', uptime: Math.floor(uptime), now: new Date().toISOString() });
+    return res.json({ status: 'ok', service: 'service2', uptime: Math.floor(uptime), now: new Date().toISOString() });
   } catch (err) {
-    return res.status(500).json({ status: 'fail', service: 'service1', error: String(err && err.message ? err.message : err) });
+    return res.status(500).json({ status: 'fail', service: 'service2', error: String(err && err.message ? err.message : err) });
   }
 });
 
