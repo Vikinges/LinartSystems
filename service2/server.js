@@ -2249,7 +2249,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     val('annex1_reservations'),
   ];
   if (annex1Fields.some((field) => field && String(field).trim())) {
-    addPageWithHeading('Annex 1');
+    const annex1EstimatedHeight = 520; // heading + fields + text blocks (rough estimate)
+    const annex1NewPage = ensureSpace(annex1EstimatedHeight, 'Annex 1');
+    if (!annex1NewPage) {
+      drawSectionTitle('Annex 1');
+    }
     drawLabeledField('Annex 1 date', val('annex1_date') || val('acceptance_date'), { height: 28 });
     drawLabeledField('Building project', val('annex1_building_project') || val('building_project'), { height: 32 });
     drawSectionTitle('Defects');
@@ -2264,7 +2268,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const partsUsedRows = (partsRows || []).filter((row) => row && row.hasData);
   if (partsUsedRows.length) {
-    addPageWithHeading('Annex 2 (Spare parts)');
+    const estimatedTableHeight = 18 + partsUsedRows.length * 30;
+    const annex2EstimatedHeight = 32 + 32 + estimatedTableHeight + 200; // fields + table + signatures
+    const annex2NewPage = ensureSpace(annex2EstimatedHeight, 'Annex 2 (Spare parts)');
+    if (!annex2NewPage) {
+      drawSectionTitle('Annex 2 (Spare parts)');
+    }
     drawLabeledField(
       'Acceptance date',
       val('annex1_date') || val('acceptance_date'),
