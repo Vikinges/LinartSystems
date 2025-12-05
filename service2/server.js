@@ -4845,27 +4845,15 @@ ${rows.join('\n')}
           </div>
         </section>
         <section class="card">
-          <h2>Site information</h2>
-          <div class="grid two-col">
-${renderTextInput('end_customer_name', 'End customer name')}
-${renderTextInput('site_location', 'Site location')}
-${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
-${renderTextInput('led_display_model', 'LED display model / batch')}
-${renderTextInput('batch_number', 'LSC Project number')}
-${renderTextInput('service_company_name', 'Service company name')}
-${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
-<div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
-${renderTextInput('supplier_name', 'Supplier')}
-</div>
-          </div>
-        </section>
-        <section class="card" data-form-types="installation_report">
           <h2>Acceptance certificate</h2>
           <div class="grid two-col">
+${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true })}
+${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
+${renderTextInput('customer_company', 'Client', { allowUnknown: true })}
+${renderTextInput('supplier_name', 'Supplier', { allowUnknown: true })}
+${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_date', 'Acceptance date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true })}
-${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
-${renderTextInput('building_project_acceptance', 'Building project (certificate)', { allowUnknown: true })}
           </div>
           <div class="grid two-col">
 ${renderTextInput('attendee_client', 'Attendee (client)', { allowUnknown: true })}
