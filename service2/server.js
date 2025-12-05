@@ -9858,6 +9858,7 @@ app.post('/submit', (req, res, next) => {
       assignIfValue('date_of_service', toSingleValue(req.body?.date_of_service));
       assignIfValue('service_company_name', toSingleValue(req.body?.service_company_name));
       assignIfValue('supplier_name', toSingleValue(req.body?.supplier_name));
+      assignIfValue('customer_company', toSingleValue(req.body?.customer_company));
       assignIfValue('completion_date', toSingleValue(req.body?.completion_date));
       assignIfValue('acceptance_location', toSingleValue(req.body?.acceptance_location));
       assignIfValue('acceptance_date', toSingleValue(req.body?.acceptance_date));
