@@ -2035,6 +2035,394 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
   return { page: targetPage, index: 0, startY };
 }
 
+async function drawInstallationReport(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
+  const pagesList = pdfDoc.getPages();
+  const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
+  const margin = 18;
+  const headingColor = rgb(0.08, 0.2, 0.4);
+  const textColor = rgb(0.1, 0.1, 0.16);
+  const headingTitle = 'Acceptance Certificate';
+  const initialStartY =
+    options.startY && Number.isFinite(options.startY)
+      ? Math.max(options.startY - 6, margin + 28)
+      : null;
+  const pageStartY = (baseY) => Math.max(margin + 32, baseY - 16);
+
+  const initialPage =
+    options.targetPage && pagesList.includes(options.targetPage)
+      ? options.targetPage
+      : pdfDoc.addPage([baseSize.width, baseSize.height]);
+  let page = initialPage;
+  let cursorY =
+    initialStartY !== null ? pageStartY(initialStartY) : pageStartY(page.getHeight() - margin);
+  const signaturePlacements = [];
+
+  const setCurrentPage = (target, heading = headingTitle) => {
+    page = target;
+    cursorY =
+      initialStartY !== null && target === initialPage ? pageStartY(initialStartY) : pageStartY(page.getHeight() - margin);
+    const textWidth = font.widthOfTextAtSize(heading, 18);
+    const centeredX = (page.getWidth() - textWidth) / 2;
+    page.drawText(heading, {
+      x: centeredX,
+      y: cursorY,
+      size: 18,
+      font,
+      color: headingColor,
+    });
+    cursorY -= 26;
+  };
+
+  const addPageWithHeading = (heading = `${headingTitle} (cont.)`) => {
+    const next = pdfDoc.addPage([baseSize.width, baseSize.height]);
+    setCurrentPage(next, heading);
+    return next;
+  };
+
+  const ensureSpace = (requiredHeight, heading) => {
+    if (cursorY - requiredHeight < margin) {
+      addPageWithHeading(heading || `${headingTitle} (cont.)`);
+      return true;
+    }
+    return false;
+  };
+
+  const drawSectionTitle = (label) => {
+    page.drawText(label, {
+      x: margin,
+      y: cursorY,
+      size: 12,
+      font,
+      color: headingColor,
+    });
+    cursorY -= 16;
+  };
+
+  const drawLabeledField = (label, value, { height = 32 } = {}) => {
+    const text = toSingleValue(value);
+    if (!text) return;
+    const blockHeight = Math.max(height, 26);
+    ensureSpace(blockHeight + 6);
+    page.drawText(label, {
+      x: margin,
+      y: cursorY,
+      size: 10,
+      font,
+      color: headingColor,
+    });
+    const rect = {
+      x: margin,
+      y: cursorY - blockHeight,
+      width: page.getWidth() - margin * 2,
+      height: blockHeight,
+    };
+    page.drawRectangle({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      borderWidth: 0.8,
+      borderColor: TABLE_BORDER_COLOR,
+      color: rgb(1, 1, 1),
+    });
+    drawCenteredTextBlock(page, text, font, rect, {
+      align: 'left',
+      paddingX: 8,
+      paddingY: 8,
+      color: textColor,
+      fontSize: 10,
+      minFontSize: 9,
+      verticalAlign: 'middle',
+    });
+    cursorY -= blockHeight + 8;
+  };
+
+  const drawCheckboxList = (items, title) => {
+    const visible = items.filter((item) => item && item.label && item.value);
+    if (!visible.length) return;
+    const rowHeight = 20;
+    const totalHeight = visible.length * rowHeight + (title ? 16 : 0);
+    ensureSpace(totalHeight + 8, title ? `${title} (cont.)` : undefined);
+    if (title) {
+      drawSectionTitle(title);
+    }
+    visible.forEach((item) => {
+      page.drawRectangle({
+        x: margin,
+        y: cursorY - rowHeight + 4,
+        width: 12,
+        height: 12,
+        borderWidth: 1,
+        borderColor: TABLE_BORDER_COLOR,
+        color: item.value ? rgb(0.15, 0.4, 0.8) : rgb(1, 1, 1),
+      });
+      if (item.value) {
+        page.drawText('✓', {
+          x: margin + 2,
+          y: cursorY - rowHeight + 6,
+          size: 10,
+          font,
+          color: rgb(1, 1, 1),
+        });
+      }
+      const labelRect = {
+        x: margin + 18,
+        y: cursorY - rowHeight + 2,
+        width: page.getWidth() - margin * 2 - 18,
+        height: rowHeight,
+      };
+      drawCenteredTextBlock(page, item.label, font, labelRect, {
+        align: 'left',
+        paddingX: 4,
+        paddingY: 4,
+        color: textColor,
+        fontSize: 10,
+        minFontSize: 9,
+      });
+      cursorY -= rowHeight;
+    });
+    cursorY -= 6;
+  };
+
+  const boolVal = (key) => normalizeCheckboxValue(body?.[key]);
+  const val = (key) => toSingleValue(body?.[key]) || '';
+
+  setCurrentPage(page, headingTitle);
+
+  drawSectionTitle('Project details');
+  drawLabeledField('LSC Projekt-No.', val('batch_number') || val('lsc_project_number'));
+  drawLabeledField('Building project', val('building_project_acceptance') || val('building_project'));
+  drawLabeledField('Client', val('end_customer_name') || val('customer_company'));
+  drawLabeledField('Supplier', val('supplier_name') || val('service_company_name'));
+  drawLabeledField('Completion', val('completion_date'));
+
+  drawSectionTitle('Attendees');
+  drawLabeledField('For the client', val('attendee_client') || val('customer_name'));
+  drawLabeledField('For the supplier', val('attendee_supplier') || val('engineer_name'));
+
+  drawSectionTitle('Acceptance');
+  drawLabeledField('Appointment date', val('acceptance_date') || val('date_of_service'));
+  drawCheckboxList(
+    [
+      { label: 'Contractually agreed overall performance', value: boolVal('acceptance_overall') },
+      { label: 'Self-contained partial service(s)', value: boolVal('acceptance_partial') },
+    ],
+    'Scope of acceptance',
+  );
+  drawLabeledField('Partial service(s)', val('partial_services'), { height: 60 });
+
+  drawSectionTitle('Notification of defects / remaining activity');
+  drawCheckboxList(
+    [
+      { label: 'No visible defects', value: boolVal('defects_none') },
+      { label: 'Defects according to Annex 1', value: boolVal('defects_annex') },
+      { label: 'Remaining activity according to Annex 1', value: boolVal('remaining_annex') },
+    ],
+    null,
+  );
+  drawLabeledField('Defects to be remediated before', val('defects_deadline'), { height: 30 });
+  drawLabeledField('Remaining activities to be remediated before', val('remaining_deadline'), { height: 30 });
+  drawLabeledField('Objections of the supplier', val('supplier_objections'), { height: 64 });
+
+  drawSectionTitle('Declaration of the client');
+  drawCheckboxList(
+    [
+      { label: 'The performance is accepted.', value: boolVal('declaration_accepted') },
+      {
+        label: 'Acceptance takes effect after listed defects have been eliminated.',
+        value: boolVal('declaration_after_defects'),
+      },
+      { label: 'The performance is not accepted due to substantial defects.', value: boolVal('declaration_not_accepted') },
+      { label: 'Acceptance is subject to reservations (Appendix No. 1).', value: boolVal('declaration_reservations') },
+    ],
+    null,
+  );
+
+  drawSectionTitle('Warranty');
+  drawLabeledField('Warranty (years)', val('warranty_years'));
+  drawLabeledField('Warranty begins on', val('warranty_begin'), { height: 28 });
+  drawLabeledField('Warranty ends on', val('warranty_end'), { height: 28 });
+
+  const annex1Fields = [
+    val('annex1_defects'),
+    val('annex1_remaining'),
+    val('annex1_objections'),
+    val('annex1_reservations'),
+  ];
+  if (annex1Fields.some((field) => field && String(field).trim())) {
+    addPageWithHeading('Annex 1');
+    drawLabeledField('Annex 1 date', val('annex1_date') || val('acceptance_date'), { height: 28 });
+    drawLabeledField('Building project', val('annex1_building_project') || val('building_project'), { height: 32 });
+    drawSectionTitle('Defects');
+    drawLabeledField('Details', val('annex1_defects'), { height: 100 });
+    drawSectionTitle('Remaining activities');
+    drawLabeledField('Details', val('annex1_remaining'), { height: 80 });
+    drawSectionTitle('Objections of the supplier');
+    drawLabeledField('Details', val('annex1_objections'), { height: 80 });
+    drawSectionTitle('Reservations of the client');
+    drawLabeledField('Details', val('annex1_reservations'), { height: 80 });
+  }
+
+  const partsUsedRows = (partsRows || []).filter((row) => row && row.hasData);
+  if (partsUsedRows.length) {
+    addPageWithHeading('Annex 2 (Spare parts)');
+    const tableWidth = page.getWidth() - margin * 2;
+    const columnWidths = [0.08, 0.18, 0.12, 0.34, 0.14, 0.14].map((ratio) => tableWidth * ratio);
+    const headers = ['Pos.', 'Delivered qty', 'Unit', 'Description', 'Ordered qty', 'Remaining qty'];
+    const headerHeight = 18;
+    const rowHeightBase = 26;
+    const drawHeader = () => {
+      let x = margin;
+      headers.forEach((label, idx) => {
+        const width = columnWidths[idx];
+        page.drawRectangle({
+          x,
+          y: cursorY - headerHeight,
+          width,
+          height: headerHeight,
+          color: rgb(0.92, 0.95, 0.99),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        page.drawText(label, {
+          x: x + 6,
+          y: cursorY - headerHeight + headerHeight - 12,
+          size: 9,
+          font,
+          color: headingColor,
+        });
+        x += width;
+      });
+      cursorY -= headerHeight;
+    };
+
+    drawHeader();
+    partsUsedRows.forEach((row, index) => {
+      const rowFields = row.fields || {};
+      const values = [
+        String(index + 1),
+        toSingleValue(rowFields[`parts_removed_part_${row.number}`]) || '',
+        '', // unit not provided
+        toSingleValue(rowFields[`parts_removed_desc_${row.number}`]) || '',
+        toSingleValue(rowFields[`parts_used_part_${row.number}`]) || '',
+        toSingleValue(rowFields[`parts_used_serial_${row.number}`]) || '',
+      ];
+      const layouts = values.map((value, idx) =>
+        layoutMultilineText(String(value || ''), font, columnWidths[idx] - 8, {
+          fontSize: 10,
+          minFontSize: 9,
+          lineHeightMultiplier: 1.2,
+        }),
+      );
+      const rowHeight = Math.max(
+        rowHeightBase,
+        ...layouts.map((layout) => Math.ceil(layout.totalHeight + 8)),
+      );
+      if (ensureSpace(rowHeight + 8, 'Annex 2 (Spare parts, cont.)')) {
+        drawHeader();
+      }
+      let x = margin;
+      layouts.forEach((layout, idx) => {
+        const width = columnWidths[idx];
+        page.drawRectangle({
+          x,
+          y: cursorY - rowHeight,
+          width,
+          height: rowHeight,
+          color: rgb(1, 1, 1),
+          borderWidth: TABLE_BORDER_WIDTH,
+          borderColor: TABLE_BORDER_COLOR,
+        });
+        drawCenteredTextBlock(
+          page,
+          values[idx],
+          font,
+          { x, y: cursorY - rowHeight, width, height: rowHeight },
+          {
+            align: 'center',
+            paddingX: 4,
+            paddingY: 6,
+            color: textColor,
+            fontSize: layout.fontSize,
+            minFontSize: layout.fontSize,
+            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+            precomputed: layout,
+          },
+        );
+        x += width;
+      });
+      cursorY -= rowHeight;
+    });
+    cursorY -= 10;
+  }
+
+  const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
+  const signatureHeight = 160;
+  ensureSpace(signatureHeight + 40, 'Signatures');
+  drawSectionTitle('Signatures');
+  const signatureBoxes = [
+    { label: 'For the client', acroName: 'customer_signature', x: margin },
+    { label: 'For the supplier', acroName: 'engineer_signature', x: margin + columnWidth + 12 },
+  ];
+  const resolvePageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
+
+  for (const box of signatureBoxes) {
+    const entry = (signatureImages || []).find((item) => new RegExp(box.acroName, 'i').test(item.acroName));
+    const boxRect = { x: box.x, y: cursorY - signatureHeight, width: columnWidth, height: signatureHeight };
+    page.drawText(box.label, {
+      x: boxRect.x,
+      y: boxRect.y + boxRect.height + 6,
+      size: 10,
+      font,
+      color: headingColor,
+    });
+    page.drawRectangle({
+      x: boxRect.x,
+      y: boxRect.y,
+      width: boxRect.width,
+      height: boxRect.height,
+      borderWidth: TABLE_BORDER_WIDTH,
+      borderColor: TABLE_BORDER_COLOR,
+      color: rgb(1, 1, 1),
+    });
+    if (entry) {
+      try {
+        const decoded = decodeImageDataUrl(entry.data);
+        if (decoded) {
+          const image =
+            decoded.mimeType === 'image/png'
+              ? await pdfDoc.embedPng(decoded.buffer)
+              : await pdfDoc.embedJpg(decoded.buffer);
+          const availableWidth = boxRect.width - 12;
+          const availableHeight = boxRect.height - 12;
+          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
+          const drawWidth = image.width * scale;
+          const drawHeight = image.height * scale;
+          const offsetX = boxRect.x + 6 + (availableWidth - drawWidth) / 2;
+          const offsetY = boxRect.y + 6 + (availableHeight - drawHeight) / 2;
+          page.drawImage(image, {
+            x: offsetX,
+            y: offsetY,
+            width: drawWidth,
+            height: drawHeight,
+          });
+          signaturePlacements.push({
+            acroName: entry.acroName,
+            page: resolvePageNumber(),
+            width: Number(drawWidth.toFixed(2)),
+            height: Number(drawHeight.toFixed(2)),
+          });
+        }
+      } catch (err) {
+        console.warn(`[server] Unable to draw signature for ${box.label}: ${err.message}`);
+      }
+    }
+  }
+  cursorY -= signatureHeight + 16;
+
+  return signaturePlacements;
+}
+
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
   const pagesList = pdfDoc.getPages();
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
@@ -2051,6 +2439,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     }[templateType] || 'Service Report';
   const isInstallation = templateType === 'installation_report';
   const isService = isServiceReport(templateType);
+  if (isInstallation) {
+    return drawInstallationReport(pdfDoc, font, body, signatureImages, partsRows, options);
+  }
   // Начинаем рисовать ниже шапки: админка сохраняет bodyTopOffset.
   const initialStartY =
     options.startY && Number.isFinite(options.startY)
@@ -3072,7 +3463,7 @@ function generateIndexHtml() {
         </label>`;
     }
     const valueAttr = initial ? ` value="${escapeHtml(initial)}"` : '';
-    const enableSuggestions = SUGGESTION_FIELDS.has(descriptor.requestName);
+    const enableSuggestions = descriptor && SUGGESTION_FIELDS.has(descriptor.requestName);
     let suggestionAttrs = '';
     let datalistMarkup = '';
     if (enableSuggestions) {
@@ -4429,26 +4820,74 @@ ${rows.join('\n')}
           <div class="grid two-col">
 ${renderTextInput('end_customer_name', 'End customer name')}
 ${renderTextInput('site_location', 'Site location')}
+${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
 ${renderTextInput('led_display_model', 'LED display model / batch')}
 ${renderTextInput('batch_number', 'LSC Project number')}
-${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 ${renderTextInput('service_company_name', 'Service company name')}
+${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 <div data-form-types="installation_report" class="grid two-col" style="grid-column:1 / -1;gap:0.5rem">
 ${renderTextInput('supplier_name', 'Supplier')}
 </div>
           </div>
         </section>
         <section class="card" data-form-types="installation_report">
-          <h2>Installation details</h2>
+          <h2>Acceptance certificate</h2>
           <div class="grid two-col">
-${renderTextInput('acceptance_status', 'Acceptance status (accepted / with reservations)', { placeholder: 'accepted / accepted with reservations' })}
-${renderTextInput('installation_participants', 'Participants (customer / contractor)', { placeholder: 'List participants' })}
-${renderTextInput('installation_defects', 'Defects (Annex 1)', { textarea: true })}
-${renderTextInput('installation_remaining', 'Remaining activities', { textarea: true })}
-${renderTextInput('installation_reservations', 'Reservations', { textarea: true })}
-${renderTextInput('warranty_begin', 'Warranty begin', { type: 'date' })}
-${renderTextInput('warranty_end', 'Warranty end', { type: 'date' })}
+${renderTextInput('acceptance_date', 'Acceptance date', { type: 'date', allowUnknown: true })}
+${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true })}
+${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
+${renderTextInput('building_project_acceptance', 'Building project (certificate)', { allowUnknown: true })}
           </div>
+          <div class="grid two-col">
+${renderTextInput('attendee_client', 'Attendee (client)', { allowUnknown: true })}
+${renderTextInput('attendee_supplier', 'Attendee (supplier)', { allowUnknown: true })}
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Acceptance scope</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>Contractually agreed overall performance</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Following self-contained partial service(s)</span></label>
+          </div>
+${renderTextInput('partial_services', 'Partial services (Annex 1)', { textarea: true, allowUnknown: true })}
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Defects & remaining activity</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="defects_none" /> <span>No visible defects</span></label>
+            <label class="checkbox"><input type="checkbox" name="defects_annex" /> <span>Defects according to Annex 1</span></label>
+            <label class="checkbox"><input type="checkbox" name="remaining_annex" /> <span>Remaining activity according to Annex 1</span></label>
+          </div>
+          <div class="grid two-col">
+${renderTextInput('defects_deadline', 'Defects to be remediated before', { type: 'date', allowUnknown: true })}
+${renderTextInput('remaining_deadline', 'Remaining activities to be remediated before', { type: 'date', allowUnknown: true })}
+          </div>
+${renderTextInput('supplier_objections', 'Objections of the supplier', { textarea: true, allowUnknown: true })}
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Declaration & warranty</h2>
+          <div class="grid two-col">
+            <label class="checkbox"><input type="checkbox" name="declaration_accepted" /> <span>The performance is accepted</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_after_defects" /> <span>Acceptance takes effect after defects are eliminated</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_not_accepted" /> <span>Performance not accepted due to substantial defects</span></label>
+            <label class="checkbox"><input type="checkbox" name="declaration_reservations" /> <span>Acceptance subject to reservations (Appendix No. 1)</span></label>
+          </div>
+          <div class="grid two-col">
+${renderTextInput('warranty_years', 'Warranty (years)', { type: 'number', allowUnknown: true })}
+${renderTextInput('warranty_begin', 'Warranty begins on', { type: 'date', allowUnknown: true })}
+${renderTextInput('warranty_end', 'Warranty ends on', { type: 'date', allowUnknown: true })}
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
+          <h2>Annex 1</h2>
+          <div class="grid two-col">
+${renderTextInput('annex1_date', 'Annex 1 date', { type: 'date', allowUnknown: true })}
+${renderTextInput('annex1_building_project', 'Building project (Annex 1)', { allowUnknown: true })}
+          </div>
+${renderTextInput('annex1_defects', 'Defects', { textarea: true, allowUnknown: true })}
+${renderTextInput('annex1_remaining', 'Remaining activities', { textarea: true, allowUnknown: true })}
+${renderTextInput('annex1_objections', 'Objections of the supplier', { textarea: true, allowUnknown: true })}
+${renderTextInput('annex1_reservations', 'Reservations of the client', { textarea: true, allowUnknown: true })}
         </section>
         <section class="card employee-card" data-employees-section data-employee-max="${EMPLOYEE_MAX_COUNT}">
           <h2>On-site team time sheet</h2>
@@ -4585,7 +5024,7 @@ ${renderTextInput('customer_comments', 'Customer comments', { textarea: true, ty
 ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'textarea-lg', placeholder: 'Record any observations or follow-up actions' })}
           </div>
         </section>
-        <section class="card photos-card">
+        <section class="card photos-card" data-form-types="service_report,maintenance">
           <h2>Photos</h2>
           <div class="photo-slot" data-photo-slot="photo_before">
             <span>Photos before maintenance</span>
@@ -4623,6 +5062,33 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
             </div>
             <small>JPEG/PNG only, up to 20 images.</small>
       </div>
+        </section>
+        <section class="card photos-card" data-form-types="installation_report">
+          <h2>Installation photos (optional)</h2>
+          <div class="photo-slot" data-photo-slot="photo_defects">
+            <span>Defect photos</span>
+            <p>Upload up to 20 images that show existing defects.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_defects" accept="image/*" multiple data-photo-input="photo_defects" />
+              Upload defect photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_defects" data-photo-mode="multi" data-photo-label="Defect photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
+          <div class="photo-slot" data-photo-slot="photo_installation">
+            <span>Installation photos</span>
+            <p>Upload up to 20 images that show the completed installation.</p>
+            <label class="upload-button">
+              <input type="file" name="photo_installation" accept="image/*" multiple data-photo-input="photo_installation" />
+              Upload installation photos
+            </label>
+            <div class="photo-preview" data-photo-preview="photo_installation" data-photo-mode="multi" data-photo-label="Installation photo" data-state="empty">
+              <span>No files selected yet.</span>
+            </div>
+            <small>JPEG/PNG only, up to 20 images.</small>
+          </div>
         </section>
 ${partsTable({ dataAttr: 'maintenance,installation_report' })}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
@@ -8587,6 +9053,8 @@ const uploadFields = upload.fields([
   { name: 'photo_after', maxCount: 20 },
   { name: 'photos', maxCount: 20 },
   { name: 'photos[]', maxCount: 20 },
+  { name: 'photo_defects', maxCount: 20 },
+  { name: 'photo_installation', maxCount: 20 },
 ]);
 
 function collectPhotoFiles(files) {
@@ -8601,6 +9069,8 @@ function collectPhotoFiles(files) {
   append(files.photo_after);
   append(files.photos);
   append(files['photos[]']);
+  append(files.photo_defects);
+  append(files.photo_installation);
   return photos;
 }
 
@@ -8709,6 +9179,8 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
     photo_after: 'After photo',
     photos: 'Supporting photo',
     'photos[]': 'Supporting photo',
+    photo_defects: 'Defect photo',
+    photo_installation: 'Installation photo',
   };
   const counters = new Map();
 
@@ -9118,6 +9590,7 @@ app.post('/submit', (req, res, next) => {
     toSingleValue(req.body?.lsc_project_number) ||
     toSingleValue(req.body?.batch_number) ||
     null;
+  const templateType = toSingleValue(req.body?.template_type) || 'service_report';
 
   if (req.body && typeof req.body === 'object') {
     for (const [key, value] of Object.entries(req.body)) {
@@ -9210,17 +9683,31 @@ app.post('/submit', (req, res, next) => {
     // Persist project card by LSC Project number
     if (projectKey) {
       projectsStore = projectsStore || {};
-      const siteInfoCard = {
-        end_customer_name: toSingleValue(req.body?.end_customer_name) || '',
-        site_location: toSingleValue(req.body?.site_location) || '',
-        led_display_model: toSingleValue(req.body?.led_display_model) || '',
-        batch_number: toSingleValue(req.body?.batch_number) || '',
-        lsc_project_number: projectKey,
-        date_of_service: toSingleValue(req.body?.date_of_service) || '',
-        service_company_name: toSingleValue(req.body?.service_company_name) || '',
-        form_type: toSingleValue(req.body?.template_type) || '',
-        updated_at: new Date().toISOString(),
+      const existingCard = projectsStore[projectKey] && typeof projectsStore[projectKey] === 'object'
+        ? projectsStore[projectKey]
+        : {};
+      const siteInfoCard = { ...existingCard };
+      const assignIfValue = (key, value) => {
+        if (value !== undefined && value !== null && String(value).trim() !== '') {
+          siteInfoCard[key] = value;
+        }
       };
+      assignIfValue('end_customer_name', toSingleValue(req.body?.end_customer_name));
+      assignIfValue('site_location', toSingleValue(req.body?.site_location));
+      assignIfValue('building_project', toSingleValue(req.body?.building_project));
+      assignIfValue('led_display_model', toSingleValue(req.body?.led_display_model));
+      assignIfValue('batch_number', toSingleValue(req.body?.batch_number));
+      assignIfValue('date_of_service', toSingleValue(req.body?.date_of_service));
+      assignIfValue('service_company_name', toSingleValue(req.body?.service_company_name));
+      assignIfValue('supplier_name', toSingleValue(req.body?.supplier_name));
+      assignIfValue('completion_date', toSingleValue(req.body?.completion_date));
+      assignIfValue('acceptance_location', toSingleValue(req.body?.acceptance_location));
+      assignIfValue('acceptance_date', toSingleValue(req.body?.acceptance_date));
+      assignIfValue('attendee_client', toSingleValue(req.body?.attendee_client));
+      assignIfValue('attendee_supplier', toSingleValue(req.body?.attendee_supplier));
+      siteInfoCard.lsc_project_number = projectKey;
+      siteInfoCard.form_type = templateType;
+      siteInfoCard.updated_at = new Date().toISOString();
       projectsStore[projectKey] = siteInfoCard;
       saveProjectsStore(projectsStore);
     }
@@ -9398,16 +9885,23 @@ app.post('/submit', (req, res, next) => {
         .replace(/^_+|_+$/g, '')
         .slice(0, 40);
     }
+    const safeTemplateType = sanitizeFilename(templateType || 'service_report');
+    const outputBaseDir = path.join(OUTPUT_DIR, safeTemplateType);
+    const outputPdfDir = path.join(outputBaseDir, 'pdf');
+    const outputMetaDir = path.join(outputBaseDir, 'meta');
+    fsExtra.ensureDirSync(outputPdfDir);
+    fsExtra.ensureDirSync(outputMetaDir);
+
     const customerPart = customerName ? `${cleanForFilename(customerName)}-` : '';
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const baseFilename = `filled-${customerPart}${timestamp}`;
     let filename = `${baseFilename}.pdf`;
     let counter = 1;
-    while (fs.existsSync(path.join(OUTPUT_DIR, filename))) {
+    while (fs.existsSync(path.join(outputPdfDir, filename))) {
       filename = `${baseFilename}-${counter}.pdf`;
       counter += 1;
     }
-    const outputPath = path.join(OUTPUT_DIR, filename);
+    const outputPath = path.join(outputPdfDir, filename);
     await fs.promises.writeFile(outputPath, pdfOutput);
 
     const metadata = {
@@ -9415,8 +9909,10 @@ app.post('/submit', (req, res, next) => {
       templateId: submissionTemplateEntry.id,
       templateSlug: submissionTemplateEntry.slug,
       templateLabel: submissionTemplateEntry.label,
+      templateType,
       createdAt: new Date().toISOString(),
       filename,
+      outputDir: outputPdfDir,
       requestBody: sanitizedBody,
       fieldsUsed: fieldDescriptors.map((f) => ({ acroName: f.acroName, requestName: f.requestName, type: f.type })),
       files: photoFiles.map((file) => ({
@@ -9465,7 +9961,7 @@ app.post('/submit', (req, res, next) => {
 
     const metadataFilename = filename.replace(/\.pdf$/i, '.json');
     await fs.promises.writeFile(
-      path.join(OUTPUT_DIR, metadataFilename),
+      path.join(outputMetaDir, metadataFilename),
       JSON.stringify(metadata, null, 2),
       'utf8'
     );
@@ -9475,7 +9971,7 @@ app.post('/submit', (req, res, next) => {
     const baseHost =
       (HOST_URL_ENV && HOST_URL_ENV.trim()) ||
       '';
-    const downloadPath = `download/${encodeURIComponent(filename)}`;
+    const downloadPath = `download/${encodeURIComponent(safeTemplateType)}/${encodeURIComponent(filename)}`;
     const downloadUrl = baseHost
       ? `${baseHost.replace(/\/$/, '')}/${downloadPath}`
       : downloadPath;
@@ -9486,6 +9982,7 @@ app.post('/submit', (req, res, next) => {
       templateId: submissionTemplateEntry.id,
       templateSlug: submissionTemplateEntry.slug,
       templateLabel: submissionTemplateEntry.label,
+      templateType,
       overflowCount: overflowTextEntries.length,
       partsRowsHidden: hiddenPartRows,
       partsRowsRendered,
@@ -9521,6 +10018,23 @@ app.post('/submit', (req, res, next) => {
       .status(status >= 400 && status < 600 ? status : 500)
       .json({ ok: false, error: err && err.message ? err.message : 'Unexpected error' });
   }
+});
+
+app.get('/download/:type/:file', async (req, res) => {
+  const requestedType = sanitizeFilename(req.params.type);
+  const requestedFile = sanitizeFilename(req.params.file);
+  const baseDir = path.join(OUTPUT_DIR, requestedType, 'pdf');
+  const filePath = path.join(baseDir, requestedFile);
+
+  if (!filePath.startsWith(baseDir)) {
+    return res.status(400).json({ ok: false, error: 'Invalid file path.' });
+  }
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ ok: false, error: 'File not found.' });
+  }
+
+  res.download(filePath, requestedFile);
 });
 
 app.get('/download/:file', async (req, res) => {
