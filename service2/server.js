@@ -4844,7 +4844,19 @@ ${rows.join('\n')}
             </div>
           </div>
         </section>
-        <section class="card">
+        <section class="card" data-form-types="service_report,maintenance">
+          <h2>Site information</h2>
+          <div class="grid two-col">
+${renderTextInput('end_customer_name', 'End customer name')}
+${renderTextInput('site_location', 'Site location')}
+${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
+${renderTextInput('led_display_model', 'LED display model / batch')}
+${renderTextInput('batch_number', 'LSC Project number')}
+${renderTextInput('service_company_name', 'Service company name')}
+${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
+          </div>
+        </section>
+        <section class="card" data-form-types="installation_report">
           <h2>Acceptance certificate</h2>
           <div class="grid two-col">
 ${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true })}
