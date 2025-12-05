@@ -5117,7 +5117,7 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
             <small>JPEG/PNG only, up to 20 images.</small>
           </div>
         </section>
-${partsTable({ dataAttr: 'maintenance' })}
+${partsTable({ dataAttr: 'maintenance,installation_report' })}
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
 
         <section class="card">
