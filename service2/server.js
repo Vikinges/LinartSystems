@@ -2266,6 +2266,16 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   const partsUsedRows = (partsRows || []).filter((row) => row && row.hasData);
   if (partsUsedRows.length) {
     addPageWithHeading('Annex 2 (Spare parts)');
+    drawLabeledField(
+      'Acceptance date',
+      val('annex1_date') || val('acceptance_date'),
+      { height: 28 },
+    );
+    drawLabeledField(
+      'Building project',
+      val('annex1_building_project') || val('building_project') || val('building_project_acceptance'),
+      { height: 32 },
+    );
     const tableWidth = page.getWidth() - margin * 2;
     const columnWidths = [0.08, 0.18, 0.12, 0.34, 0.14, 0.14].map((ratio) => tableWidth * ratio);
     const headers = ['Pos.', 'Delivered qty', 'Unit', 'Description', 'Ordered qty', 'Remaining qty'];
