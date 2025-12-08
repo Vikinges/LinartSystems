@@ -250,10 +250,11 @@
           Password
           <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
         </label>
-        <label>
-          Allowed services (comma-separated IDs, leave empty for all)
-          <input type="text" id="newUserAllowed" placeholder="service2,service-test">
+        <label class="inline" style="gap:8px;">
+          <input type="checkbox" id="newUserAllowAll" checked>
+          Allow all services
         </label>
+        <div id="newUserServices" class="service-checkboxes"></div>
         <div class="form-actions">
           <button type="submit">Add user</button>
         </div>
@@ -380,7 +381,8 @@
     const addUserForm = document.getElementById('addUser');
     const newUserNameInput = document.getElementById('newUserName');
     const newUserPasswordInput = document.getElementById('newUserPassword');
-    const newUserAllowedInput = document.getElementById('newUserAllowed');
+    const newUserAllowAll = document.getElementById('newUserAllowAll');
+    const newUserServices = document.getElementById('newUserServices');
     const socialList = document.getElementById('socialList');
     const addSocialForm = document.getElementById('addSocial');
     const newSocialLabelInput = document.getElementById('newSocialLabel');
@@ -572,6 +574,31 @@
     }
 
 
+    function renderServiceCheckboxes(container, selectedSet = new Set(), disabled = false) {
+      if (!container) return;
+      container.innerHTML = '';
+      const services = Array.isArray(state.services) ? state.services : [];
+      if (!services.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No services registered.';
+        container.appendChild(empty);
+        return;
+      }
+      services.forEach((service) => {
+        const label = document.createElement('label');
+        label.className = 'inline';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.dataset.serviceId = service.name;
+        input.checked = selectedSet.has(service.name);
+        input.disabled = disabled;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(` ${service.displayName || service.name}`));
+        container.appendChild(label);
+      });
+    }
+
     function renderUsers() {
       usersList.innerHTML = '';
       const users = Array.isArray(state.users) ? state.users : [];
@@ -603,11 +630,25 @@
         const actions = document.createElement('div');
         actions.className = 'actions';
 
-        const allowedInput = document.createElement('input');
-        allowedInput.type = 'text';
-        allowedInput.placeholder = 'service2,service-test';
-        allowedInput.value = Array.isArray(user.allowedServices) ? user.allowedServices.join(',') : '';
-        actions.appendChild(allowedInput);
+        const allowAllWrap = document.createElement('label');
+        allowAllWrap.className = 'inline';
+        const allowAllInput = document.createElement('input');
+        allowAllInput.type = 'checkbox';
+        allowAllInput.checked = !user.allowedServices || !user.allowedServices.length;
+        allowAllWrap.appendChild(allowAllInput);
+        allowAllWrap.appendChild(document.createTextNode(' Allow all services'));
+        actions.appendChild(allowAllWrap);
+
+        const servicesBox = document.createElement('div');
+        servicesBox.className = 'service-checkboxes';
+        renderServiceCheckboxes(servicesBox, new Set(user.allowedServices || []), allowAllInput.checked);
+        allowAllInput.addEventListener('change', () => {
+          const disable = allowAllInput.checked;
+          servicesBox.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => {
+            cb.disabled = disable;
+          });
+        });
+        actions.appendChild(servicesBox);
 
         const passwordInput = document.createElement('input');
         passwordInput.type = 'password';
@@ -620,7 +661,15 @@
         saveBtn.textContent = 'Save';
         saveBtn.addEventListener('click', async () => {
           try {
-            const payload = { allowedServices: allowedInput.value };
+            const payload = {};
+            if (allowAllInput.checked) {
+              payload.allowedServices = [];
+            } else {
+              const selected = Array.from(
+                servicesBox.querySelectorAll('input[type="checkbox"][data-service-id]:checked')
+              ).map((el) => el.dataset.serviceId);
+              payload.allowedServices = selected;
+            }
             if (passwordInput.value && passwordInput.value.length >= 4) {
               payload.password = passwordInput.value;
             }
@@ -655,6 +704,21 @@
         card.appendChild(actions);
         usersList.appendChild(card);
       });
+    }
+
+    function renderNewUserServices() {
+      if (!newUserServices) return;
+      const selected = new Set();
+      const disable = newUserAllowAll ? newUserAllowAll.checked : false;
+      renderServiceCheckboxes(newUserServices, selected, disable);
+      if (newUserAllowAll) {
+        newUserAllowAll.addEventListener('change', () => {
+          const shouldDisable = newUserAllowAll.checked;
+          newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => {
+            cb.disabled = shouldDisable;
+          });
+        });
+      }
     }
 
     function renderSocialLinks() {
@@ -808,6 +872,7 @@
         renderBranding();
         renderHero();
         renderServices();
+        renderNewUserServices();
         renderUsers();
         renderSocialLinks();
       } catch (error) {
@@ -821,7 +886,12 @@
         if (!newUserNameInput || !newUserPasswordInput) return;
         const username = newUserNameInput.value.trim();
         const password = newUserPasswordInput.value;
-        const allowed = newUserAllowedInput ? newUserAllowedInput.value : '';
+        const allowAll = newUserAllowAll && newUserAllowAll.checked;
+        const selectedServices = allowAll || !newUserServices
+          ? []
+          : Array.from(
+              newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]:checked')
+            ).map((el) => el.dataset.serviceId);
         if (!username || !password) {
           handleError(new Error('Username and password are required'));
           return;
@@ -830,10 +900,13 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, allowedServices: allowed })
+            body: JSON.stringify({ username, password, allowedServices: selectedServices })
           });
           newUserPasswordInput.value = '';
-          if (newUserAllowedInput) newUserAllowedInput.value = '';
+          if (newUserServices) {
+            newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => (cb.checked = false));
+          }
+          if (newUserAllowAll) newUserAllowAll.checked = true;
           await loadAll();
         } catch (error) {
           handleError(error);
