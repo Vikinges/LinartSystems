@@ -326,6 +326,14 @@ function isServiceAllowed(service, allowedSet) {
   return allowedSet.has(id) || allowedSet.has(name);
 }
 
+function sanitizeId(value, fallback) {
+  if (!value) return fallback;
+  const cleaned = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '');
+  return cleaned || fallback;
+}
+
 const allowedImageTypes = new Map([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],
