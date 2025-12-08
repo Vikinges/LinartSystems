@@ -161,13 +161,14 @@ function normalizeService(service) {
   if (!service || typeof service !== 'object') return null;
   const name = service.name ? String(service.name).trim() : '';
   if (!name) return null;
-  let id =
+  const id = sanitizeId(
     service.id && typeof service.id === 'string' && service.id.trim()
       ? service.id.trim()
-      : name;
-  id = id.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || name;
+      : name,
+    name
+  );
   const target = service.target ? String(service.target).trim() : '';
-  let prefix = service.prefix ? String(service.prefix).trim() : `/${name}`;
+  let prefix = service.prefix ? String(service.prefix).trim() : `/${id}`;
   if (prefix && !prefix.startsWith('/')) {
     prefix = `/${prefix}`;
   }
@@ -334,6 +335,118 @@ function sanitizeId(value, fallback) {
   return cleaned || fallback;
 }
 
+function sanitizeEnvVars(env) {
+  const result = {};
+  if (!env || typeof env !== 'object') return result;
+  for (const [key, value] of Object.entries(env)) {
+    const k = String(key || '')
+      .trim()
+      .replace(/[^a-zA-Z0-9_]/g, '')
+      .toUpperCase();
+    if (!k) continue;
+    result[k] = value === undefined || value === null ? '' : String(value);
+  }
+  return result;
+}
+
+function parseBundleConfig(workDir, ts) {
+  const defaultId = `service-${ts}`;
+  const candidates = ['hub-service.json', 'service.config.json', 'service.json', 'hub.service.json'];
+  let raw = null;
+  let configPath = null;
+  for (const name of candidates) {
+    const fullPath = path.join(workDir, name);
+    if (fs.existsSync(fullPath)) {
+      try {
+        raw = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+        configPath = name;
+        break;
+      } catch (err) {
+        // ignore malformed config; treat as missing
+      }
+    }
+  }
+
+  const cfg = raw && typeof raw === 'object' ? raw : {};
+  const id = sanitizeId(typeof cfg.id === 'string' ? cfg.id : cfg.name, defaultId);
+  const name = typeof cfg.name === 'string' && cfg.name.trim() ? cfg.name.trim() : id;
+  let prefix = typeof cfg.prefix === 'string' && cfg.prefix.trim() ? cfg.prefix.trim() : `/${id}`;
+  if (prefix && !prefix.startsWith('/')) {
+    prefix = `/${prefix}`;
+  }
+  const displayName = typeof cfg.displayName === 'string' && cfg.displayName.trim() ? cfg.displayName.trim() : name;
+  const description = typeof cfg.description === 'string' ? cfg.description.trim() : '';
+  const logo = typeof cfg.logo === 'string' && cfg.logo.trim() ? cfg.logo.trim() : null;
+  const internalPortRaw = cfg.internalPort ?? cfg.targetPort ?? cfg.port;
+  const portNum = Number(internalPortRaw);
+  const internalPort = Number.isFinite(portNum) && portNum > 0 ? portNum : null;
+  const env = sanitizeEnvVars(cfg.env);
+
+  return {
+    id,
+    name,
+    prefix,
+    displayName,
+    description,
+    logo,
+    internalPort,
+    env,
+    configPath,
+  };
+}
+
+function detectStaticRoot(workDir) {
+  const candidates = ['dist', 'build', 'public', '.'];
+  for (const candidate of candidates) {
+    const dir = path.join(workDir, candidate);
+    const indexPath = path.join(dir, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return {
+        dir,
+        indexPath,
+        relative: path.relative(workDir, dir) || '.',
+      };
+    }
+  }
+  return null;
+}
+
+function ensureDockerfile(workDir) {
+  const dockerfilePath = path.join(workDir, 'Dockerfile');
+  if (fs.existsSync(dockerfilePath)) {
+    return { dockerfilePath, generated: false, internalPort: null, source: null };
+  }
+
+  const staticRoot = detectStaticRoot(workDir);
+  if (!staticRoot) {
+    return { dockerfilePath, generated: false, internalPort: null, source: null };
+  }
+
+  const copySource = staticRoot.relative === '.' ? '.' : staticRoot.relative.replace(/\\/g, '/');
+  const content = [
+    'FROM nginx:alpine',
+    'WORKDIR /usr/share/nginx/html',
+    `COPY ${copySource}/ .`,
+    'EXPOSE 80',
+    '',
+  ].join('\n');
+  fs.writeFileSync(dockerfilePath, content);
+  return { dockerfilePath, generated: true, internalPort: 80, source: copySource };
+}
+
+function buildEnvArgs(envMap) {
+  if (!envMap || typeof envMap !== 'object') return '';
+  const args = [];
+  for (const [key, value] of Object.entries(envMap)) {
+    if (!key) continue;
+    const safeKey = key.replace(/[^A-Z0-9_]/gi, '').toUpperCase();
+    if (!safeKey) continue;
+    const safeValue = String(value ?? '').replace(/'/g, "'\"'\"'");
+    args.push(`-e ${safeKey}='${safeValue}'`);
+  }
+  return args.join(' ');
+}
+
 const allowedImageTypes = new Map([
   ['image/png', '.png'],
   ['image/jpeg', '.jpg'],
@@ -397,6 +510,17 @@ function buildStoredFilename(originalName, mimetype) {
   return `${Date.now()}-${base}${ext}`;
 }
 
+function buildBundleFilename(originalName) {
+  const rawExt = path.extname(originalName || '').toLowerCase();
+  const ext = rawExt === '.zip' ? '.zip' : '.zip';
+  const base = path
+    .basename(originalName || 'bundle', rawExt)
+    .replace(/[^a-z0-9_-]+/gi, '')
+    .toLowerCase()
+    .slice(0, 60) || 'bundle';
+  return `${Date.now()}-${base}${ext}`;
+}
+
 const upload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
@@ -411,6 +535,24 @@ const upload = multer({
       return cb(null, true);
     }
     const err = new Error('Unsupported file type. Allowed: png, jpg, svg, gif, webp, mp4, webm, ogv.');
+    err.code = 'UNSUPPORTED_FILE_TYPE';
+    return cb(err);
+  },
+});
+
+const bundleUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+    filename: (_req, file, cb) => cb(null, buildBundleFilename(file.originalname)),
+  }),
+  limits: { fileSize: 300 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (ext === '.zip' || mime === 'application/zip' || mime === 'application/x-zip-compressed') {
+      return cb(null, true);
+    }
+    const err = new Error('Only ZIP bundles are allowed.');
     err.code = 'UNSUPPORTED_FILE_TYPE';
     return cb(err);
   },
@@ -735,82 +877,156 @@ app.post('/admin/password', requireSuperadmin, async (req, res) => {
   }
 });
 
-// Upload a test service ZIP, build and run on next free port (admin-only)
-app.post('/admin/upload-service', requireSuperadmin, upload.single('bundle'), async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ ok: false, error: 'missing_file' });
-  }
-  const ts = Date.now();
-  const zipPath = req.file.path;
-  const workDir = path.join(TEMP_DIR, `svc-${ts}`);
-  fs.mkdirSync(workDir, { recursive: true });
-
-  try {
-    addLog(`upload-service: received ${path.basename(zipPath)} (${req.file.size || 0} bytes)`);
-    await execAsync(`unzip -q "${zipPath}" -d "${workDir}"`);
-  } catch (err) {
-    addLog(`upload-service: unzip failed - ${err.stderr || err.message}`);
-    return res.status(500).json({ ok: false, error: 'unzip_failed', detail: err.stderr || err.message });
-  }
-
-  const dockerfilePath = path.join(workDir, 'Dockerfile');
-  if (!fs.existsSync(dockerfilePath)) {
-    addLog('upload-service: Dockerfile missing');
-    return res.status(400).json({ ok: false, error: 'dockerfile_missing' });
-  }
-
-  const imageTag = `linartsystems-service-test:${ts}`;
-  try {
-    await execAsync(`docker build -t ${imageTag} "${workDir}"`);
-    addLog(`upload-service: built image ${imageTag}`);
-  } catch (err) {
-    addLog(`upload-service: build failed - ${err.stderr || err.message}`);
-    return res.status(500).json({ ok: false, error: 'build_failed', detail: err.stderr || err.message });
-  }
-
-  let services = loadServices();
-  const existingTest = services.find((s) => s.name === 'service-test');
-  if (existingTest) {
-    try {
-      const u = new URL(existingTest.target);
-      await stopContainer(u.hostname);
-    } catch (e) {
-      // ignore
+// Upload a service bundle (ZIP), build and run it on the project network (admin-only)
+app.post('/admin/upload-service', requireSuperadmin, (req, res, next) => {
+  bundleUpload.single('bundle')(req, res, async (err) => {
+    if (err) return next(err);
+    if (!req.file) {
+      return res.status(400).json({ ok: false, error: 'missing_file' });
     }
-    services = services.filter((s) => s.name !== 'service-test');
-  }
 
-  const containerName = `linart_service_test_${ts}`;
-  const network = getProjectNetwork();
-  try {
-    await execAsync(`docker run -d --name ${containerName} --network ${network} ${imageTag}`);
-    addLog(`upload-service: started container ${containerName} on ${network}`);
-  } catch (err) {
-    addLog(`upload-service: run failed - ${err.stderr || err.message}`);
-    return res.status(500).json({ ok: false, error: 'run_failed', detail: err.stderr || err.message });
-  }
+    const ts = Date.now();
+    const zipPath = req.file.path;
+    const workDir = path.join(TEMP_DIR, `svc-${ts}`);
+    fs.mkdirSync(workDir, { recursive: true });
 
-  const target = `http://${containerName}:3001`;
-  const nextPort = getNextPort();
-  const testService = normalizeService({
-    name: 'service-test',
-    target,
-    prefix: '/service-test',
-    displayName: 'Test service',
-    description: `Uploaded at ${new Date(ts).toISOString()} (port hint ${nextPort})`,
-  });
-  services.push(testService);
-  saveServices(services);
-  registerProxies(app);
-  addLog(`upload-service: registered proxy ${testService.prefix} -> ${testService.target}`);
+    try {
+      addLog(`upload-service: received ${path.basename(zipPath)} (${req.file.size || 0} bytes)`);
+      await execAsync(`unzip -q "${zipPath}" -d "${workDir}"`);
+    } catch (unzipErr) {
+      addLog(`upload-service: unzip failed - ${unzipErr.stderr || unzipErr.message}`);
+      return res.status(500).json({ ok: false, error: 'unzip_failed', detail: unzipErr.stderr || unzipErr.message });
+    }
 
-  res.json({
-    ok: true,
-    service: testService,
-    container: containerName,
-    image: imageTag,
-    network,
-    portHint: nextPort,
+    const bundle = parseBundleConfig(workDir, ts);
+    const overrides = req.body || {};
+    const overrideId = sanitizeId(
+      typeof overrides.serviceId === 'string' && overrides.serviceId.trim()
+        ? overrides.serviceId.trim()
+        : bundle.id,
+      bundle.id
+    );
+    const overrideName =
+      typeof overrides.serviceName === 'string' && overrides.serviceName.trim()
+        ? overrides.serviceName.trim()
+        : bundle.name || overrideId;
+    let overridePrefix =
+      typeof overrides.servicePrefix === 'string' && overrides.servicePrefix.trim()
+        ? overrides.servicePrefix.trim()
+        : bundle.prefix;
+    if (overridePrefix && !overridePrefix.startsWith('/')) {
+      overridePrefix = `/${overridePrefix}`;
+    }
+    const overrideDisplay =
+      typeof overrides.displayName === 'string' && overrides.displayName.trim()
+        ? overrides.displayName.trim()
+        : bundle.displayName || overrideName;
+    const overridePortRaw = overrides.internalPort ?? overrides.servicePort ?? overrides.port;
+    const overridePortNum = Number(overridePortRaw);
+    const overrideInternalPort =
+      Number.isFinite(overridePortNum) && overridePortNum > 0 ? overridePortNum : bundle.internalPort;
+    const mergedBundle = {
+      ...bundle,
+      id: overrideId,
+      name: overrideName,
+      displayName: overrideDisplay,
+      prefix: overridePrefix || `/${overrideId}`,
+      internalPort: overrideInternalPort,
+    };
+
+    const dockerfileInfo = ensureDockerfile(workDir);
+    addLog(
+      `upload-service: preparing ${mergedBundle.name} (id=${mergedBundle.id}, prefix=${mergedBundle.prefix}, port=${mergedBundle.internalPort || dockerfileInfo.internalPort || 'auto'})`
+    );
+    const dockerfilePath = dockerfileInfo.dockerfilePath;
+    if (!fs.existsSync(dockerfilePath)) {
+      addLog('upload-service: Dockerfile missing and no static site detected');
+      return res.status(400).json({ ok: false, error: 'dockerfile_missing' });
+    }
+
+    if (dockerfileInfo.generated) {
+      addLog(
+        `upload-service: generated nginx Dockerfile for static site (source: ${dockerfileInfo.source || '.'})`
+      );
+    }
+    if (bundle.configPath) {
+      addLog(`upload-service: detected config at ${bundle.configPath}`);
+    }
+
+    let services = loadServices();
+    const prefixConflict = services.find(
+      (s) =>
+        s.prefix === mergedBundle.prefix &&
+        s.id !== mergedBundle.id &&
+        s.name !== mergedBundle.name
+    );
+    if (prefixConflict) {
+      return res.status(409).json({ ok: false, error: 'prefix_in_use', conflict: prefixConflict });
+    }
+
+    const toReplace = services.filter((s) => s.id === mergedBundle.id || s.name === mergedBundle.name);
+    for (const svc of toReplace) {
+      try {
+        const u = new URL(svc.target);
+        await stopContainer(u.hostname);
+        addLog(`upload-service: stopped previous container ${u.hostname} for ${svc.name}`);
+      } catch (stopErr) {
+        addLog(`upload-service: could not stop previous container for ${svc.name} - ${stopErr.message}`);
+      }
+    }
+    services = services.filter((s) => !toReplace.includes(s));
+
+    const imageTag = `linartsystems-${mergedBundle.id}:${ts}`;
+    try {
+      await execAsync(`docker build -t ${imageTag} "${workDir}"`);
+      addLog(`upload-service: built image ${imageTag}`);
+    } catch (buildErr) {
+      addLog(`upload-service: build failed - ${buildErr.stderr || buildErr.message}`);
+      return res.status(500).json({ ok: false, error: 'build_failed', detail: buildErr.stderr || buildErr.message });
+    }
+
+    const containerName = `linart_${mergedBundle.id}_${ts}`;
+    const network = getProjectNetwork();
+    const envArgs = buildEnvArgs(mergedBundle.env);
+    const runCmd = [
+      'docker run -d',
+      `--name ${containerName}`,
+      `--network ${network}`,
+      envArgs,
+      imageTag,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    try {
+      await execAsync(runCmd);
+      addLog(`upload-service: started container ${containerName} on ${network}`);
+    } catch (runErr) {
+      addLog(`upload-service: run failed - ${runErr.stderr || runErr.message}`);
+      return res.status(500).json({ ok: false, error: 'run_failed', detail: runErr.stderr || runErr.message });
+    }
+
+    const internalPort = mergedBundle.internalPort || dockerfileInfo.internalPort || 3000;
+    const target = `http://${containerName}:${internalPort}`;
+    const registered = normalizeService({
+      ...mergedBundle,
+      target,
+    });
+    services.push(registered);
+    saveServices(services);
+    registerProxies(app);
+    addLog(`upload-service: registered proxy ${registered.prefix} -> ${registered.target}`);
+
+    res.json({
+      ok: true,
+      service: registered,
+      container: containerName,
+      image: imageTag,
+      network,
+      configPath: bundle.configPath || null,
+      generatedDockerfile: dockerfileInfo.generated,
+      internalPort,
+    });
   });
 });
 

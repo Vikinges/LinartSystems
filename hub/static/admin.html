@@ -71,6 +71,9 @@
     .social-card .fields label { display: flex; flex-direction: column; gap: 6px; font-size: 0.85rem; }
     .social-card .fields input { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; }
     .social-card .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .code-block { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 12px; font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 12px; overflow: auto; }
+    .logs-box { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 12px; font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; }
+    .logs-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -273,12 +276,50 @@
           Choose ZIP
           <input type="file" id="serviceZipInput" accept=".zip,application/zip" required>
         </label>
+        <label class="inline">
+          Service name (optional)
+          <input type="text" id="serviceNameInput" placeholder="My service">
+        </label>
+        <label class="inline">
+          Service ID (optional)
+          <input type="text" id="serviceIdInput" placeholder="my-service">
+        </label>
+        <label class="inline">
+          Prefix (optional)
+          <input type="text" id="servicePrefixInput" placeholder="/my-service">
+        </label>
+        <label class="inline">
+          Internal port (container)
+          <input type="number" id="servicePortInput" min="1" step="1" placeholder="3000">
+        </label>
         <div class="form-actions">
-          <button type="submit">Upload & build</button>
-          <span class="hint">ZIP must contain a Dockerfile. The container will be built and started on the project network.</span>
+          <button type="submit">Upload & run</button>
+          <span class="hint">ZIP can include hub-service.json + Dockerfile. If Dockerfile is missing but index.html is found, hub will build a static nginx container automatically.</span>
         </div>
         <div id="uploadServiceStatus" class="meta"></div>
       </form>
+      <pre class="code-block">hub-service.json example:
+{
+  "name": "crm",
+  "id": "crm",
+  "prefix": "/crm",
+  "internalPort": 3000,
+  "displayName": "Customer portal",
+  "description": "Service uploaded as ZIP",
+  "env": { "NODE_ENV": "production" }
+}</pre>
+      <div class="hint">Form fields override values inside hub-service.json. Only superadmin can upload and run services.</div>
+    </section>
+
+    <section>
+      <h3>Hub logs (last 100 lines)</h3>
+      <div class="card-form" style="grid-template-columns: 1fr;">
+        <div class="logs-header">
+          <button type="button" id="refreshLogs">Refresh logs</button>
+          <span class="hint">Automatic refresh after uploads.</span>
+        </div>
+        <pre id="logsOutput" class="logs-box">No logs yet.</pre>
+      </div>
     </section>
 
     <section>
@@ -404,7 +445,13 @@
     const newUserServices = document.getElementById('newUserServices');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
     const serviceZipInput = document.getElementById('serviceZipInput');
+    const serviceNameInput = document.getElementById('serviceNameInput');
+    const serviceIdInput = document.getElementById('serviceIdInput');
+    const servicePrefixInput = document.getElementById('servicePrefixInput');
+    const servicePortInput = document.getElementById('servicePortInput');
     const uploadServiceStatus = document.getElementById('uploadServiceStatus');
+    const refreshLogsBtn = document.getElementById('refreshLogs');
+    const logsOutput = document.getElementById('logsOutput');
     const socialList = document.getElementById('socialList');
     const addSocialForm = document.getElementById('addSocial');
     const newSocialLabelInput = document.getElementById('newSocialLabel');
@@ -910,6 +957,19 @@
       });
     }
 
+    async function loadLogs() {
+      if (!logsOutput) return;
+      logsOutput.textContent = 'Loading...';
+      try {
+        const data = await fetchJson('/admin/logs');
+        const lines = Array.isArray(data.logs) ? data.logs : [];
+        logsOutput.textContent = lines.length ? lines.join('\n') : 'No logs yet.';
+      } catch (error) {
+        logsOutput.textContent = 'Failed to load logs';
+        console.error(error);
+      }
+    }
+
     async function loadAll() {
       try {
         const [services, config, usersResp] = await Promise.all([
@@ -926,6 +986,11 @@
         renderNewUserServices();
         renderUsers();
         renderSocialLinks();
+        try {
+          await loadLogs();
+        } catch (logError) {
+          console.warn(logError);
+        }
       } catch (error) {
         handleError(error);
       }
@@ -975,18 +1040,41 @@
         uploadServiceStatus.textContent = 'Uploading and building...';
         const formData = new FormData();
         formData.append('bundle', serviceZipInput.files[0]);
+        if (serviceNameInput && serviceNameInput.value.trim()) {
+          formData.append('serviceName', serviceNameInput.value.trim());
+        }
+        if (serviceIdInput && serviceIdInput.value.trim()) {
+          formData.append('serviceId', serviceIdInput.value.trim());
+        }
+        if (servicePrefixInput && servicePrefixInput.value.trim()) {
+          formData.append('servicePrefix', servicePrefixInput.value.trim());
+        }
+        if (servicePortInput && servicePortInput.value.trim()) {
+          formData.append('internalPort', servicePortInput.value.trim());
+        }
         try {
           const data = await fetchJson('/admin/upload-service', {
             method: 'POST',
             body: formData
           });
-          uploadServiceStatus.textContent = `OK: ${data.service ? data.service.name : 'service'} running at ${data.service ? data.service.target : ''}`;
+          const svc = data.service || {};
+          uploadServiceStatus.textContent = `OK: ${svc.displayName || svc.name || 'service'} at ${svc.prefix || ''} -> ${svc.target || ''}`;
           serviceZipInput.value = '';
+          if (serviceNameInput) serviceNameInput.value = '';
+          if (serviceIdInput) serviceIdInput.value = '';
+          if (servicePrefixInput) servicePrefixInput.value = '';
+          if (servicePortInput) servicePortInput.value = '';
           await loadAll();
         } catch (error) {
           uploadServiceStatus.textContent = error.message || 'Upload failed';
           handleError(error);
         }
+      });
+    }
+
+    if (refreshLogsBtn) {
+      refreshLogsBtn.addEventListener('click', () => {
+        loadLogs().catch(() => {});
       });
     }
 
