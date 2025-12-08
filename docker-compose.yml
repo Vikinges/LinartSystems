@@ -23,7 +23,6 @@ services:
     build: ./hub
     container_name: linart_hub
     depends_on:
-      - service1
       - service2
     ports:
       - "8080:8080"
@@ -39,21 +38,15 @@ services:
       - traefik.http.routers.linart.tls=true
       - traefik.http.routers.linart.tls.certresolver=letsencrypt
       - traefik.http.services.linart.loadbalancer.server.port=8080
-
-  service1:
-    build: ./service1
-    container_name: linart_service1
-    restart: always
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O - http://localhost:3000/health || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
+    env_file:
+      - ./hub/.env
 
   service2:
     build: ./service2
     container_name: linart_service2
     restart: always
+    env_file:
+      - ./service2/.env
     volumes:
       - ./service2/data:/app/data
       - ./service2/public/form-template1.pdf:/app/public/form-template1.pdf:ro

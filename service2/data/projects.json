@@ -24,12 +24,33 @@
   "DBG-001": {
     "end_customer_name": "Debug Customer GmbH",
     "site_location": "Berlin, Teststrasse 1",
-    "led_display_model": "FA 1.5 / 1.9 / 2.5",
+    "led_display_model": "FA 1.5 / 1.9 / 2.5, LED-FE009I2/A31",
     "batch_number": "DBG-001",
     "lsc_project_number": "DBG-001",
     "date_of_service": "2025-12-04",
     "service_company_name": "Sharp / NEC LED Solution Center",
     "form_type": "service_report",
-    "updated_at": "2025-12-04T13:29:19.157Z"
+    "updated_at": "2025-12-08T10:48:19.801Z",
+    "customer_company": "Siemens"
+  },
+  "25-0000": {
+    "building_project": "slingen .....",
+    "batch_number": "25-0000",
+    "completion_date": "2025-12-08",
+    "acceptance_location": "Berlin",
+    "acceptance_date": "2025-12-08",
+    "attendee_client": "Debug Customer GmbH representative",
+    "attendee_supplier": "Sharp / NEC LED Solution Center representative",
+    "lsc_project_number": "25-0000",
+    "form_type": "installation_report",
+    "updated_at": "2025-12-08T09:55:39.546Z"
+  },
+  "TEST-001": {
+    "end_customer_name": "TestCustomer",
+    "site_location": "TestSite",
+    "batch_number": "TEST-001",
+    "lsc_project_number": "TEST-001",
+    "form_type": "installation_report",
+    "updated_at": "2025-12-08T09:48:04.883Z"
   }
 }

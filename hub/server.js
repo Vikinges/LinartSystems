@@ -13,7 +13,19 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const PROXY_PREFIXES = ['/service1', '/service2'];
+const PROXY_PREFIXES = ['/service2'];
+
+const SESSION_SECRET = process.env.SESSION_SECRET;
+if (!SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET environment variable is not set.');
+  process.exit(1);
+}
+
+const HUB_ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD;
+if (!HUB_ADMIN_PASSWORD) {
+  console.error('FATAL: HUB_ADMIN_PASSWORD environment variable is not set.');
+  process.exit(1);
+}
 
 const shouldBypassBodyParsing = (req) => {
   const urlPath = req.url || '';
@@ -24,7 +36,7 @@ const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 
 app.use(cookieParser());
-app.use(session({ secret: process.env.SESSION_SECRET || 'changeme', resave: false, saveUninitialized: false }));
+app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false }));
 app.use((req, res, next) => {
   if (shouldBypassBodyParsing(req)) {
     return next();
@@ -61,7 +73,7 @@ const DEFAULT_CONFIG = {
   welcomeImage: '',
   socialLinks: [],
 };
-const DEFAULT_ADMIN_PASSWORD = process.env.HUB_ADMIN_PASSWORD || 'admin';
+const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -859,16 +871,8 @@ app.post('/admin/upload-logo', requireAuth, (req, res, next) => {
   });
 });
 
-// Reverse-proxy routes: expose services under /service1/ and /service2/
-app.get('/service1', (req, res) => res.redirect(301, '/service1/'));
+// Reverse-proxy route: expose service2 under /service2/
 app.get('/service2', (req, res) => res.redirect(301, '/service2/'));
-app.use('/service1', createProxyMiddleware({
-  target: 'http://service1:3000',
-  changeOrigin: true,
-  pathRewrite: { '^/service1': '' },
-  logLevel: 'warn'
-}));
-
 app.use('/service2', createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,

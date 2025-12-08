@@ -70,7 +70,7 @@
 ### Мгновенная смена на произвольный пароль
 Иногда удобнее сразу установить новый пароль, не заходя в админку. Запустите:
 ```powershell
-$NEW_PASSWORD = "MyStrongPass123!"
+$NEW_PASSWORD = "<ваш_безопасный_пароль>"
 docker compose exec hub sh -lc "node - <<'NODE'
 const fs = require('fs');
 const bcrypt = require('bcryptjs');

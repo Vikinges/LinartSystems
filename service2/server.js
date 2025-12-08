@@ -3482,14 +3482,14 @@ function generateIndexHtml() {
   const renderTextInput = (
     name,
     label,
-    { type = 'text', textarea = false, placeholder = '', allowUnknown = false } = {},
+    { type = 'text', textarea = false, placeholder = '', allowUnknown = false, id: idOverride = null } = {},
   ) => {
     const descriptor = descriptorByName.get(name);
     if (!descriptor && !allowUnknown) {
       return `        <!-- Missing field: ${escapeHtml(label)} (${escapeHtml(name)}) -->`;
     }
     const requestName = descriptor ? descriptor.requestName : name;
-    const id = toHtmlId(name) || `field-${toHtmlId(descriptor ? descriptor.acroName : name)}`;
+    const id = idOverride || toHtmlId(name) || `field-${toHtmlId(descriptor ? descriptor.acroName : name)}`;
     const initial = demoValues.get(name);
     if (textarea) {
       const rows = type === 'textarea-lg' ? 8 : 4;
@@ -4857,7 +4857,7 @@ ${rows.join('\n')}
           <div class="grid two-col">
 ${renderTextInput('end_customer_name', 'End customer name')}
 ${renderTextInput('site_location', 'Site location')}
-${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
+${renderTextInput('building_project', 'Building project', { allowUnknown: true, id: 'building-project-acceptance' })}
 ${renderTextInput('led_display_model', 'LED display model / batch')}
 ${renderTextInput('batch_number', 'LSC Project number')}
 ${renderTextInput('service_company_name', 'Service company name')}
@@ -4867,9 +4867,9 @@ ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
         <section class="card" data-form-types="installation_report">
           <h2>Acceptance certificate</h2>
           <div class="grid two-col">
-${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true })}
+${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true, id: 'batch-number-acceptance' })}
 ${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
-${renderTextInput('customer_company', 'Client', { allowUnknown: true })}
+${renderTextInput('customer_company', 'Client', { allowUnknown: true, id: 'customer-company-acceptance' })}
 ${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_date', 'Acceptance date', { type: 'date', allowUnknown: true })}
 ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true })}
@@ -5135,7 +5135,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             ${renderTextInput('engineer_company', 'On-site engineer company')}
             ${renderTextInput('engineer_datetime', 'Engineer date & time', { type: 'datetime-local' })}
             ${renderTextInput('engineer_name', 'Engineer name')}
-            ${renderTextInput('customer_company', 'Customer company')}
+            ${renderTextInput('customer_company', 'Customer company', { id: 'customer-company-signoff' })}
             ${renderTextInput('customer_datetime', 'Customer date & time', { type: 'datetime-local' })}
             ${renderTextInput('customer_name', 'Customer name')}
           </div>

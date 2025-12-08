@@ -2131,6 +2131,14 @@
    <script src="/service2/vendor/pdfjs/pdf.min.js"></script>
     <script>
       (function () {
+        const escapeHTML = (str) => {
+          if (str === null || str === undefined) return '';
+          const text = String(str);
+          const p = document.createElement('p');
+          p.textContent = text;
+          return p.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        };
+
         const formEl = document.getElementById('pm-form');
         if (!formEl) return;
 
@@ -2731,7 +2739,7 @@
 
         const setTemplateStatus = (message, isError = false) => {
           if (!templateStatusEl) return;
-          templateStatusEl.textContent = message || '';
+          templateStatusEl.textContent = escapeHTML(message || '');
           templateStatusEl.style.color = isError ? '#b91c1c' : '#475569';
         };
 
@@ -2917,7 +2925,7 @@
           if (templateDescriptionEl) {
             if (selected && selected.description && selected.description.trim().length) {
               templateDescriptionEl.hidden = false;
-              templateDescriptionEl.textContent = selected.description;
+              templateDescriptionEl.textContent = escapeHTML(selected.description);
             } else {
               templateDescriptionEl.hidden = true;
               templateDescriptionEl.textContent = '';
@@ -3467,7 +3475,7 @@
                 loadAdminTemplates();
               })
               .catch((err) => {
-                if (adminLoginErrorEl) adminLoginErrorEl.textContent = err.message || 'Login failed.';
+                if (adminLoginErrorEl) adminLoginErrorEl.textContent = escapeHTML(message);
                 showAdminStatus(err.message || 'Login failed.', true);
               });
           });
