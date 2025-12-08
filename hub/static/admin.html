@@ -267,6 +267,21 @@
     </section>
 
     <section>
+      <h3>Upload service bundle (ZIP)</h3>
+      <form id="uploadServiceForm" class="card-form" enctype="multipart/form-data">
+        <label class="button">
+          Choose ZIP
+          <input type="file" id="serviceZipInput" accept=".zip,application/zip" required>
+        </label>
+        <div class="form-actions">
+          <button type="submit">Upload & build</button>
+          <span class="hint">ZIP must contain a Dockerfile. The container will be built and started on the project network.</span>
+        </div>
+        <div id="uploadServiceStatus" class="meta"></div>
+      </form>
+    </section>
+
+    <section>
       <h2>Footer social links</h2>
       <div id="socialList" class="social-list"></div>
       <form id="addSocial" class="card-form">
@@ -387,6 +402,9 @@
     const newUserPasswordInput = document.getElementById('newUserPassword');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
+    const uploadServiceForm = document.getElementById('uploadServiceForm');
+    const serviceZipInput = document.getElementById('serviceZipInput');
+    const uploadServiceStatus = document.getElementById('uploadServiceStatus');
     const socialList = document.getElementById('socialList');
     const addSocialForm = document.getElementById('addSocial');
     const newSocialLabelInput = document.getElementById('newSocialLabel');
@@ -942,6 +960,31 @@
           if (newUserAllowAll) newUserAllowAll.checked = true;
           await loadAll();
         } catch (error) {
+          handleError(error);
+        }
+      });
+    }
+
+    if (uploadServiceForm) {
+      uploadServiceForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!serviceZipInput || !serviceZipInput.files || !serviceZipInput.files.length) {
+          handleError(new Error('Select a ZIP file first'));
+          return;
+        }
+        uploadServiceStatus.textContent = 'Uploading and building...';
+        const formData = new FormData();
+        formData.append('bundle', serviceZipInput.files[0]);
+        try {
+          const data = await fetchJson('/admin/upload-service', {
+            method: 'POST',
+            body: formData
+          });
+          uploadServiceStatus.textContent = `OK: ${data.service ? data.service.name : 'service'} running at ${data.service ? data.service.target : ''}`;
+          serviceZipInput.value = '';
+          await loadAll();
+        } catch (error) {
+          uploadServiceStatus.textContent = error.message || 'Upload failed';
           handleError(error);
         }
       });
