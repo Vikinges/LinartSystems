@@ -1,10 +1,11 @@
 [
   {
+    "id": "service2",
     "name": "service2",
     "target": "http://service2:3001",
     "prefix": "/service2",
-    "displayName": "Another example service",
-    "description": "Example LED/PDF generator",
+    "displayName": "Service2 · PDF forms generator",
+    "description": "Installation/maintenance report generator (forms, PDF, uploads).",
     "logo": "/static/logo2.svg"
   }
 ]
