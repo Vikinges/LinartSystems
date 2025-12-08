@@ -69,6 +69,10 @@
         </div>
         <form id="adminLoginForm" class="modal__form">
           <label class="inline" style="gap:8px;">
+            Username
+            <input type="text" id="adminUsernameInput" autocomplete="username" value="admin" required>
+          </label>
+          <label class="inline" style="gap:8px;">
             Password
             <input type="password" id="adminPasswordInput" autocomplete="current-password" required>
           </label>
@@ -84,6 +88,7 @@
 <script>
   const openAdminModalBtn = document.getElementById('openAdminModal');
   const adminModalEl = document.getElementById('adminModal');
+  const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
   const adminLoginForm = document.getElementById('adminLoginForm');
   const adminLoginErrorEl = document.getElementById('adminLoginError');
@@ -159,29 +164,25 @@
   if (adminLoginForm) {
     adminLoginForm.addEventListener('submit', async (event) => {
       event.preventDefault();
-      if (!adminPasswordInput) return;
-      const password = adminPasswordInput.value;
-      if (!password) {
-        if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Enter the password.';
-        adminPasswordInput.focus();
-        return;
-      }
-      if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
-      const body = new URLSearchParams();
-      body.set('password', password);
-      try {
-        const response = await fetch('/admin/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: body.toString(),
-          credentials: 'same-origin'
-        });
-        if (response.type === 'opaqueredirect' || response.status === 0 || response.redirected) {
-          window.location.href = '/admin';
-          return;
-        }
+    if (!adminPasswordInput) return;
+    const username = adminUsernameInput ? adminUsernameInput.value.trim() : 'admin';
+    const password = adminPasswordInput.value;
+    if (!password) {
+      if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Enter the password.';
+      adminPasswordInput.focus();
+      return;
+    }
+    if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
+    const body = JSON.stringify({ username, password });
+    try {
+      const response = await fetch('/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        credentials: 'same-origin'
+      });
         if (response.ok) {
-          window.location.href = '/admin';
+          window.location.href = '/';
           return;
         }
         if (response.status === 403) {

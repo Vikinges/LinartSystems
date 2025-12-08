@@ -74,6 +74,7 @@ const DEFAULT_CONFIG = {
   socialLinks: [],
 };
 const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
+const DEFAULT_ADMIN_USERNAME = 'admin';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -213,14 +214,26 @@ function saveConfig(next){
 function loadAdminCredentials() {
   try {
     const data = JSON.parse(fs.readFileSync(ADMIN_STORE_FILE, 'utf8'));
-    if (data && data.passwordHash) {
-      return data;
+    if (data && (data.passwordHash || Array.isArray(data.users))) {
+      const normalized = { users: Array.isArray(data.users) ? data.users : [] };
+      if (data.passwordHash) {
+        normalized.superadmin = { username: DEFAULT_ADMIN_USERNAME, passwordHash: data.passwordHash };
+      } else if (data.superadmin && data.superadmin.passwordHash) {
+        normalized.superadmin = {
+          username: data.superadmin.username || DEFAULT_ADMIN_USERNAME,
+          passwordHash: data.superadmin.passwordHash,
+        };
+      }
+      return normalized;
     }
   } catch (err) {
     // ignore, will create defaults
   }
   const passwordHash = bcrypt.hashSync(DEFAULT_ADMIN_PASSWORD, 10);
-  const credentials = { passwordHash };
+  const credentials = {
+    superadmin: { username: DEFAULT_ADMIN_USERNAME, passwordHash },
+    users: [],
+  };
   fs.writeFileSync(ADMIN_STORE_FILE, JSON.stringify(credentials, null, 2));
   return credentials;
 }
@@ -260,6 +273,31 @@ function getProjectNetwork() {
 }
 
 let adminCredentials = loadAdminCredentials();
+
+function getSessionUser(req) {
+  return req.session && req.session.user ? req.session.user : null;
+}
+
+function setSessionUser(req, user) {
+  if (req.session) {
+    req.session.user = user;
+  }
+}
+
+function clearSessionUser(req) {
+  if (req.session) {
+    req.session.user = null;
+    req.session.authenticated = false;
+  }
+}
+
+function getAllowedServiceSet(req) {
+  const user = getSessionUser(req);
+  if (!user) return null;
+  if (user.isSuperadmin) return null;
+  if (!Array.isArray(user.allowedServices) || user.allowedServices.length === 0) return null;
+  return new Set(user.allowedServices.map((s) => String(s).trim()).filter(Boolean));
+}
 
 const allowedImageTypes = new Map([
   ['image/png', '.png'],
@@ -360,6 +398,7 @@ app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res,
   }
 
   let target = null;
+  const allowedSet = getAllowedServiceSet(req);
   try {
     const u = new URL(ref);
     const p = u.pathname || '/';
@@ -367,8 +406,10 @@ app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res,
     for (const s of services) {
       if (!s || !s.prefix) continue;
       if (p === s.prefix || p.startsWith(s.prefix + '/')) {
-        target = s.target;
-        break;
+        if (!allowedSet || allowedSet.has(s.name)) {
+          target = s.target;
+          break;
+        }
       }
     }
   } catch (err) {
@@ -408,9 +449,11 @@ app.get('/status', (req, res) => {
 app.get('/api/status', async (req, res) => {
   const config = loadConfig();
   const services = loadServices();
+  const allowed = getAllowedServiceSet(req);
+  const filteredServices = allowed ? services.filter((s) => allowed.has(s.name)) : services;
 
   const results = await Promise.all(
-    services.map(async (service) => {
+    filteredServices.map(async (service) => {
       const base = {
         name: service.name,
         displayName: service.displayName,
@@ -460,45 +503,86 @@ app.get('/api/status', async (req, res) => {
       surfaceOpacity: config.surfaceOpacity,
       welcomeImage: config.welcomeImage,
       socialLinks: config.socialLinks,
+      filtered: Boolean(allowed),
+      user: getSessionUser(req) ? { username: getSessionUser(req).username, isSuperadmin: getSessionUser(req).isSuperadmin, allowedServices: getSessionUser(req).allowedServices || [] } : null,
     },
   });
 });
 
 // Admin: login page
 app.get('/admin', (req, res) => {
-  if (req.session && req.session.authenticated) return res.sendFile(path.join(__dirname, 'static', 'admin.html'));
+  const user = getSessionUser(req);
+  if (user && user.isSuperadmin) return res.sendFile(path.join(__dirname, 'static', 'admin.html'));
   return res.sendFile(path.join(__dirname, 'static', 'admin-login.html'));
 });
 
 app.post('/admin/login', async (req, res) => {
+  const username = (req.body && typeof req.body.username === 'string' && req.body.username.trim()) || DEFAULT_ADMIN_USERNAME;
   const pass = req.body && req.body.password;
   if (typeof pass !== 'string' || !pass.length) {
-    return res.status(403).send('Forbidden');
+    return res.status(403).json({ ok: false, error: 'missing_credentials' });
   }
   try {
-    const ok = await bcrypt.compare(pass, adminCredentials.passwordHash);
-    if (ok) {
+    let matchedUser = null;
+    const superadmin = adminCredentials.superadmin;
+    if (
+      superadmin &&
+      typeof superadmin.passwordHash === 'string' &&
+      await bcrypt.compare(pass, superadmin.passwordHash) &&
+      username === (superadmin.username || DEFAULT_ADMIN_USERNAME)
+    ) {
+      matchedUser = { username: superadmin.username || DEFAULT_ADMIN_USERNAME, isSuperadmin: true, allowedServices: [] };
+    } else if (Array.isArray(adminCredentials.users)) {
+      for (const user of adminCredentials.users) {
+        if (!user || typeof user.username !== 'string' || typeof user.passwordHash !== 'string') continue;
+        if (user.username.trim() !== username.trim()) continue;
+        const ok = await bcrypt.compare(pass, user.passwordHash);
+        if (ok) {
+          matchedUser = {
+            username: user.username.trim(),
+            isSuperadmin: false,
+            allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
+          };
+          break;
+        }
+      }
+    }
+
+    if (matchedUser) {
       req.session.authenticated = true;
-      return res.redirect('/admin');
+      setSessionUser(req, matchedUser);
+      const payload = { ok: true, user: { username: matchedUser.username, isSuperadmin: matchedUser.isSuperadmin, allowedServices: matchedUser.allowedServices } };
+      const accept = req.headers.accept || '';
+      if (accept.includes('text/html')) {
+        return res.redirect(matchedUser.isSuperadmin ? '/admin' : '/');
+      }
+      return res.json(payload);
     }
   } catch (err) {
     console.warn('[hub] Failed to compare admin password', err);
+    return res.status(500).json({ ok: false, error: 'login_failed' });
   }
-  return res.status(403).send('Forbidden');
+  return res.status(403).json({ ok: false, error: 'forbidden' });
 });
 
 function requireAuth(req, res, next){
-  if (req.session && req.session.authenticated) return next();
+  if (req.session && req.session.authenticated && getSessionUser(req)) return next();
   return res.status(401).send({ ok: false, error: 'unauthorized' });
 }
 
+function requireSuperadmin(req, res, next) {
+  const user = getSessionUser(req);
+  if (user && user.isSuperadmin) return next();
+  return res.status(403).json({ ok: false, error: 'forbidden' });
+}
+
 // Admin API: list services
-app.get('/admin/services', requireAuth, (req, res) => {
+app.get('/admin/services', requireSuperadmin, (req, res) => {
   res.json(loadServices());
 });
 
 // Add service: { name, target, prefix }
-app.post('/admin/services', requireAuth, (req, res) => {
+app.post('/admin/services', requireSuperadmin, (req, res) => {
   const body = req.body || {};
   if (!body.name || !body.target) {
     return res.status(400).json({ ok: false, error: 'missing fields' });
@@ -529,7 +613,7 @@ app.post('/admin/services', requireAuth, (req, res) => {
   res.json({ ok: true, service });
 });
 
-app.patch('/admin/services/:name', requireAuth, (req, res) => {
+app.patch('/admin/services/:name', requireSuperadmin, (req, res) => {
   const list = loadServices();
   const idx = list.findIndex((s) => s.name === req.params.name);
   if (idx === -1) {
@@ -566,7 +650,7 @@ app.patch('/admin/services/:name', requireAuth, (req, res) => {
   res.json({ ok: true, service: normalized });
 });
 
-app.delete('/admin/services/:name', requireAuth, (req, res) => {
+app.delete('/admin/services/:name', requireSuperadmin, (req, res) => {
   const name = req.params.name;
   let list = loadServices();
   list = list.filter(s=>s.name !== name);
@@ -574,7 +658,7 @@ app.delete('/admin/services/:name', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/admin/password', requireAuth, async (req, res) => {
+app.post('/admin/password', requireSuperadmin, async (req, res) => {
   const body = req.body || {};
   const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
   const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
@@ -608,7 +692,7 @@ app.post('/admin/password', requireAuth, async (req, res) => {
 });
 
 // Upload a test service ZIP, build and run on next free port (admin-only)
-app.post('/admin/upload-service', requireAuth, upload.single('bundle'), async (req, res) => {
+app.post('/admin/upload-service', requireSuperadmin, upload.single('bundle'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ ok: false, error: 'missing_file' });
   }
@@ -678,11 +762,11 @@ app.post('/admin/upload-service', requireAuth, upload.single('bundle'), async (r
   });
 });
 
-app.get('/admin/config', requireAuth, (req, res) => {
+app.get('/admin/config', requireSuperadmin, (req, res) => {
   res.json(loadConfig());
 });
 
-app.post('/admin/config', requireAuth, (req, res) => {
+app.post('/admin/config', requireSuperadmin, (req, res) => {
   const body = req.body || {};
   const current = loadConfig();
   const next = { ...current };
@@ -784,12 +868,12 @@ app.post('/admin/config', requireAuth, (req, res) => {
   res.json({ ok: true, config: saved });
 });
 
-app.get('/admin/social-links', requireAuth, (req, res) => {
+app.get('/admin/social-links', requireSuperadmin, (req, res) => {
   const config = loadConfig();
   res.json({ ok: true, links: config.socialLinks });
 });
 
-app.post('/admin/social-links', requireAuth, (req, res) => {
+app.post('/admin/social-links', requireSuperadmin, (req, res) => {
   const body = req.body || {};
   const candidate = normalizeSocialLink({
     id: crypto.randomUUID(),
@@ -808,7 +892,7 @@ app.post('/admin/social-links', requireAuth, (req, res) => {
   res.json({ ok: true, link: candidate, links: saved.socialLinks });
 });
 
-app.patch('/admin/social-links/:id', requireAuth, (req, res) => {
+app.patch('/admin/social-links/:id', requireSuperadmin, (req, res) => {
   const linkId = String(req.params.id || '').trim();
   if (!linkId) {
     return res.status(400).json({ ok: false, error: 'missing_id' });
@@ -843,7 +927,7 @@ app.patch('/admin/social-links/:id', requireAuth, (req, res) => {
   res.json({ ok: true, link: saved.socialLinks[index], links: saved.socialLinks });
 });
 
-app.delete('/admin/social-links/:id', requireAuth, (req, res) => {
+app.delete('/admin/social-links/:id', requireSuperadmin, (req, res) => {
   const linkId = String(req.params.id || '').trim();
   if (!linkId) {
     return res.status(400).json({ ok: false, error: 'missing_id' });
