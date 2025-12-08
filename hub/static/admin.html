@@ -503,6 +503,7 @@
         if (service.description) {
           info.appendChild(buildMeta('Description', service.description));
         }
+        info.appendChild(buildMeta('ID', service.id || service.name));
         info.appendChild(buildMeta('Target', service.target));
         info.appendChild(buildMeta('Prefix', service.prefix));
         card.appendChild(info);

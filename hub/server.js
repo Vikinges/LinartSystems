@@ -161,6 +161,10 @@ function normalizeService(service) {
   if (!service || typeof service !== 'object') return null;
   const name = service.name ? String(service.name).trim() : '';
   if (!name) return null;
+  const id =
+    service.id && typeof service.id === 'string' && service.id.trim()
+      ? service.id.trim()
+      : name;
   const target = service.target ? String(service.target).trim() : '';
   let prefix = service.prefix ? String(service.prefix).trim() : `/${name}`;
   if (prefix && !prefix.startsWith('/')) {
@@ -171,6 +175,7 @@ function normalizeService(service) {
   const logo = service.logo ? String(service.logo).trim() : null;
 
   return {
+    id,
     name,
     target,
     prefix,
@@ -310,7 +315,14 @@ function getAllowedServiceSet(req) {
   if (!user) return null;
   if (user.isSuperadmin) return null;
   if (!Array.isArray(user.allowedServices) || user.allowedServices.length === 0) return null;
-  return new Set(user.allowedServices.map((s) => String(s).trim()).filter(Boolean));
+  return new Set(user.allowedServices.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
+}
+
+function isServiceAllowed(service, allowedSet) {
+  if (!allowedSet) return true;
+  const id = (service.id || service.name || '').toLowerCase();
+  const name = (service.name || '').toLowerCase();
+  return allowedSet.has(id) || allowedSet.has(name);
 }
 
 const allowedImageTypes = new Map([
@@ -420,7 +432,7 @@ app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res,
     for (const s of services) {
       if (!s || !s.prefix) continue;
       if (p === s.prefix || p.startsWith(s.prefix + '/')) {
-        if (!allowedSet || allowedSet.has(s.name)) {
+        if (isServiceAllowed(s, allowedSet)) {
           target = s.target;
           break;
         }
@@ -464,7 +476,7 @@ app.get('/api/status', async (req, res) => {
   const config = loadConfig();
   const services = loadServices();
   const allowed = getAllowedServiceSet(req);
-  const filteredServices = allowed ? services.filter((s) => allowed.has(s.name)) : services;
+  const filteredServices = services.filter((s) => isServiceAllowed(s, allowed));
 
   const results = await Promise.all(
     filteredServices.map(async (service) => {
