@@ -365,6 +365,15 @@ const allowedExtensions = new Set([
   '.ogv',
 ]);
 
+const HUB_LOG = [];
+const MAX_LOG_LINES = 100;
+function addLog(line) {
+  if (line === undefined || line === null) return;
+  const entry = `[${new Date().toISOString()}] ${String(line)}`;
+  if (HUB_LOG.length >= MAX_LOG_LINES) HUB_LOG.shift();
+  HUB_LOG.push(entry);
+}
+
 function buildStoredFilename(originalName, mimetype) {
   const rawExt = path.extname(originalName || '').toLowerCase();
   const extFromMime =
@@ -729,20 +738,25 @@ app.post('/admin/upload-service', requireSuperadmin, upload.single('bundle'), as
   fs.mkdirSync(workDir, { recursive: true });
 
   try {
+    addLog(`upload-service: received ${path.basename(zipPath)} (${req.file.size || 0} bytes)`);
     await execAsync(`unzip -q "${zipPath}" -d "${workDir}"`);
   } catch (err) {
+    addLog(`upload-service: unzip failed - ${err.stderr || err.message}`);
     return res.status(500).json({ ok: false, error: 'unzip_failed', detail: err.stderr || err.message });
   }
 
   const dockerfilePath = path.join(workDir, 'Dockerfile');
   if (!fs.existsSync(dockerfilePath)) {
+    addLog('upload-service: Dockerfile missing');
     return res.status(400).json({ ok: false, error: 'dockerfile_missing' });
   }
 
   const imageTag = `linartsystems-service-test:${ts}`;
   try {
     await execAsync(`docker build -t ${imageTag} "${workDir}"`);
+    addLog(`upload-service: built image ${imageTag}`);
   } catch (err) {
+    addLog(`upload-service: build failed - ${err.stderr || err.message}`);
     return res.status(500).json({ ok: false, error: 'build_failed', detail: err.stderr || err.message });
   }
 
@@ -762,7 +776,9 @@ app.post('/admin/upload-service', requireSuperadmin, upload.single('bundle'), as
   const network = getProjectNetwork();
   try {
     await execAsync(`docker run -d --name ${containerName} --network ${network} ${imageTag}`);
+    addLog(`upload-service: started container ${containerName} on ${network}`);
   } catch (err) {
+    addLog(`upload-service: run failed - ${err.stderr || err.message}`);
     return res.status(500).json({ ok: false, error: 'run_failed', detail: err.stderr || err.message });
   }
 
@@ -778,6 +794,7 @@ app.post('/admin/upload-service', requireSuperadmin, upload.single('bundle'), as
   services.push(testService);
   saveServices(services);
   registerProxies(app);
+  addLog(`upload-service: registered proxy ${testService.prefix} -> ${testService.target}`);
 
   res.json({
     ok: true,
@@ -1055,6 +1072,10 @@ app.post('/admin/upload-logo', requireSuperadmin, (req, res, next) => {
     const relativePath = `/static/uploads/${req.file.filename}`;
     res.json({ ok: true, path: relativePath });
   });
+});
+
+app.get('/admin/logs', requireSuperadmin, (_req, res) => {
+  res.json({ ok: true, logs: HUB_LOG });
 });
 
 // Reverse-proxy route: expose service2 under /service2/
