@@ -590,6 +590,34 @@
         container.appendChild(empty);
         return;
       }
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const selectAllBtn = document.createElement('button');
+      selectAllBtn.type = 'button';
+      selectAllBtn.className = 'secondary';
+      selectAllBtn.textContent = 'Select all';
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'secondary';
+      clearBtn.textContent = 'Clear';
+      actions.appendChild(selectAllBtn);
+      actions.appendChild(clearBtn);
+      container.appendChild(actions);
+
+      const list = document.createElement('div');
+      list.className = 'service-checkboxes__list';
+      container.appendChild(list);
+
+      const setAll = (value) => {
+        list.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => {
+          if (!cb.disabled) cb.checked = value;
+        });
+      };
+
+      selectAllBtn.addEventListener('click', () => setAll(true));
+      clearBtn.addEventListener('click', () => setAll(false));
+
       services.forEach((service) => {
         const label = document.createElement('label');
         label.className = 'inline';
@@ -600,7 +628,7 @@
         input.disabled = disabled;
         label.appendChild(input);
         label.appendChild(document.createTextNode(` ${service.displayName || service.name}`));
-        container.appendChild(label);
+        list.appendChild(label);
       });
     }
 
