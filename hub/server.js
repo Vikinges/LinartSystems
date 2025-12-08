@@ -161,10 +161,11 @@ function normalizeService(service) {
   if (!service || typeof service !== 'object') return null;
   const name = service.name ? String(service.name).trim() : '';
   if (!name) return null;
-  const id =
+  let id =
     service.id && typeof service.id === 'string' && service.id.trim()
       ? service.id.trim()
       : name;
+  id = id.replace(/[^a-z0-9_-]/gi, '').toLowerCase() || name;
   const target = service.target ? String(service.target).trim() : '';
   let prefix = service.prefix ? String(service.prefix).trim() : `/${name}`;
   if (prefix && !prefix.startsWith('/')) {
