@@ -243,6 +243,20 @@ function saveAdminCredentials(credentials) {
   adminCredentials = credentials;
 }
 
+function normalizeAllowedServices(input) {
+  if (!input) return [];
+  if (Array.isArray(input)) {
+    return input.map((s) => String(s || '').trim()).filter(Boolean);
+  }
+  if (typeof input === 'string') {
+    return input
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function getNextPort() {
   const services = loadServices();
   let maxPort = 3000;
@@ -943,7 +957,82 @@ app.delete('/admin/social-links/:id', requireSuperadmin, (req, res) => {
   res.json({ ok: true, links: saved.socialLinks });
 });
 
-app.post('/admin/upload-logo', requireAuth, (req, res, next) => {
+app.get('/admin/users', requireSuperadmin, (req, res) => {
+  const users = Array.isArray(adminCredentials.users)
+    ? adminCredentials.users.map((u) => ({
+        username: u.username,
+        allowedServices: normalizeAllowedServices(u.allowedServices),
+      }))
+    : [];
+  res.json({ ok: true, users });
+});
+
+app.post('/admin/users', requireSuperadmin, async (req, res) => {
+  const body = req.body || {};
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  const allowedServices = normalizeAllowedServices(body.allowedServices);
+  if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    return res.status(400).json({ ok: false, error: 'invalid_username' });
+  }
+  if (!password || password.length < 4) {
+    return res.status(400).json({ ok: false, error: 'weak_password' });
+  }
+  if (!Array.isArray(adminCredentials.users)) {
+    adminCredentials.users = [];
+  }
+  if (adminCredentials.users.find((u) => u.username === username)) {
+    return res.status(400).json({ ok: false, error: 'exists' });
+  }
+  const passwordHash = await bcrypt.hash(password, 10);
+  adminCredentials.users.push({ username, passwordHash, allowedServices });
+  saveAdminCredentials(adminCredentials);
+  res.json({ ok: true });
+});
+
+app.patch('/admin/users/:username', requireSuperadmin, async (req, res) => {
+  const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
+  if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    return res.status(400).json({ ok: false, error: 'invalid_username' });
+  }
+  const body = req.body || {};
+  if (!Array.isArray(adminCredentials.users)) {
+    adminCredentials.users = [];
+  }
+  const idx = adminCredentials.users.findIndex((u) => u.username === username);
+  if (idx === -1) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+  const user = { ...adminCredentials.users[idx] };
+  if (Object.prototype.hasOwnProperty.call(body, 'allowedServices')) {
+    user.allowedServices = normalizeAllowedServices(body.allowedServices);
+  }
+  if (typeof body.password === 'string' && body.password.length >= 4) {
+    user.passwordHash = await bcrypt.hash(body.password, 10);
+  }
+  adminCredentials.users[idx] = user;
+  saveAdminCredentials(adminCredentials);
+  res.json({ ok: true });
+});
+
+app.delete('/admin/users/:username', requireSuperadmin, (req, res) => {
+  const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
+  if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    return res.status(400).json({ ok: false, error: 'invalid_username' });
+  }
+  if (!Array.isArray(adminCredentials.users)) {
+    adminCredentials.users = [];
+  }
+  const initial = adminCredentials.users.length;
+  adminCredentials.users = adminCredentials.users.filter((u) => u.username !== username);
+  if (adminCredentials.users.length === initial) {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+  saveAdminCredentials(adminCredentials);
+  res.json({ ok: true });
+});
+
+app.post('/admin/upload-logo', requireSuperadmin, (req, res, next) => {
   upload.single('logo')(req, res, (err) => {
     if (err) return next(err);
     if (!req.file) {

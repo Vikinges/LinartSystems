@@ -239,6 +239,29 @@
     </section>
 
     <section>
+      <h2>User accounts</h2>
+      <div id="usersList" class="services-grid"></div>
+      <form id="addUser" class="card-form">
+        <label>
+          Username
+          <input type="text" id="newUserName" placeholder="operator1" required>
+        </label>
+        <label>
+          Password
+          <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
+        </label>
+        <label>
+          Allowed services (comma-separated IDs, leave empty for all)
+          <input type="text" id="newUserAllowed" placeholder="service2,service-test">
+        </label>
+        <div class="form-actions">
+          <button type="submit">Add user</button>
+        </div>
+      </form>
+      <div class="hint">Users are handled by the hub only. The superadmin account remains "admin".</div>
+    </section>
+
+    <section>
       <h2>Footer social links</h2>
       <div id="socialList" class="social-list"></div>
       <form id="addSocial" class="card-form">
@@ -302,7 +325,8 @@
         welcomeImage: '',
         socialLinks: [],
       },
-      services: []
+      services: [],
+      users: []
     };
 
     function handleError(error) {
@@ -352,6 +376,11 @@
     const welcomeImageFile = document.getElementById('welcomeImageFile');
     const welcomeImageRemove = document.getElementById('welcomeImageRemove');
     const servicesList = document.getElementById('servicesList');
+    const usersList = document.getElementById('usersList');
+    const addUserForm = document.getElementById('addUser');
+    const newUserNameInput = document.getElementById('newUserName');
+    const newUserPasswordInput = document.getElementById('newUserPassword');
+    const newUserAllowedInput = document.getElementById('newUserAllowed');
     const socialList = document.getElementById('socialList');
     const addSocialForm = document.getElementById('addSocial');
     const newSocialLabelInput = document.getElementById('newSocialLabel');
@@ -542,6 +571,92 @@
       });
     }
 
+
+    function renderUsers() {
+      usersList.innerHTML = '';
+      const users = Array.isArray(state.users) ? state.users : [];
+      if (!users.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = 'No users yet.';
+        usersList.appendChild(empty);
+        return;
+      }
+
+      users.forEach((user) => {
+        const card = document.createElement('div');
+        card.className = 'service-card';
+        const info = document.createElement('div');
+        info.className = 'info';
+        const title = document.createElement('strong');
+        title.textContent = user.username;
+        info.appendChild(title);
+        const allowed = Array.isArray(user.allowedServices) && user.allowedServices.length
+          ? user.allowedServices.join(', ')
+          : 'All services';
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = 'Allowed: ' + allowed;
+        info.appendChild(meta);
+        card.appendChild(info);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        const allowedInput = document.createElement('input');
+        allowedInput.type = 'text';
+        allowedInput.placeholder = 'service2,service-test';
+        allowedInput.value = Array.isArray(user.allowedServices) ? user.allowedServices.join(',') : '';
+        actions.appendChild(allowedInput);
+
+        const passwordInput = document.createElement('input');
+        passwordInput.type = 'password';
+        passwordInput.placeholder = 'New password (optional)';
+        passwordInput.minLength = 4;
+        actions.appendChild(passwordInput);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.textContent = 'Save';
+        saveBtn.addEventListener('click', async () => {
+          try {
+            const payload = { allowedServices: allowedInput.value };
+            if (passwordInput.value && passwordInput.value.length >= 4) {
+              payload.password = passwordInput.value;
+            }
+            await fetchJson(`/admin/users/${encodeURIComponent(user.username)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            passwordInput.value = '';
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(saveBtn);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'secondary';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', async () => {
+          if (!confirm(`Delete user "${user.username}"?`)) return;
+          try {
+            await fetchJson(`/admin/users/${encodeURIComponent(user.username)}`, { method: 'DELETE' });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+          }
+        });
+        actions.appendChild(deleteBtn);
+
+        card.appendChild(actions);
+        usersList.appendChild(card);
+      });
+    }
+
     function renderSocialLinks() {
       socialList.innerHTML = '';
 
@@ -682,19 +797,48 @@
 
     async function loadAll() {
       try {
-        const [services, config] = await Promise.all([
+        const [services, config, usersResp] = await Promise.all([
           fetchJson('/admin/services'),
-          fetchJson('/admin/config')
+          fetchJson('/admin/config'),
+          fetchJson('/admin/users')
         ]);
         state.services = services;
         state.config = config;
+        state.users = usersResp && usersResp.users ? usersResp.users : [];
         renderBranding();
         renderHero();
         renderServices();
+        renderUsers();
         renderSocialLinks();
       } catch (error) {
         handleError(error);
       }
+    }
+
+    if (addUserForm) {
+      addUserForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!newUserNameInput || !newUserPasswordInput) return;
+        const username = newUserNameInput.value.trim();
+        const password = newUserPasswordInput.value;
+        const allowed = newUserAllowedInput ? newUserAllowedInput.value : '';
+        if (!username || !password) {
+          handleError(new Error('Username and password are required'));
+          return;
+        }
+        try {
+          await fetchJson('/admin/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password, allowedServices: allowed })
+          });
+          newUserPasswordInput.value = '';
+          if (newUserAllowedInput) newUserAllowedInput.value = '';
+          await loadAll();
+        } catch (error) {
+          handleError(error);
+        }
+      });
     }
 
     document.getElementById('saveBranding').addEventListener('click', async () => {
