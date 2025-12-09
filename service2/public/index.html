@@ -2053,6 +2053,7 @@
             <pre data-debug-log>Debug output will appear here once enabled.</pre>
           </div>
           <pre id="status"></pre>
+          <div id="draft-status" class="meta"></div>
         </div>
       </form>
     </div>
@@ -2154,6 +2155,7 @@
         const DEBUG_KEY = 'pm-form-debug-enabled';
         const MOBILE_MODE_KEY = 'pm-form-mobile-mode';
         const MOBILE_SCALE_KEY = 'pm-form-mobile-scale';
+        const DRAFT_KEY = 'pm-form-draft';
         let debugState = { enabled: false, timeline: [] };
         const templateSelectEl = document.querySelector('[data-template-select]');
         const templateSlugInput = document.querySelector('[data-template-slug]');
@@ -2172,6 +2174,7 @@
         const partsOcrButton = document.querySelector('[data-parts-ocr]');
         const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
         const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
+        const draftStatusEl = document.getElementById('draft-status');
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -2205,6 +2208,100 @@
         const adminTemplateListEl = adminSectionEl
           ? adminSectionEl.querySelector('[data-admin-template-list]')
           : null;
+        const debounce = (fn, delay = 400) => {
+          let t;
+          return (...args) => {
+            clearTimeout(t);
+            t = setTimeout(() => fn(...args), delay);
+          };
+        };
+
+        const saveDraft = () => {
+          try {
+            const draft = {};
+            const elements = formEl.querySelectorAll('input, textarea, select');
+            elements.forEach((el) => {
+              if (!el.name) return;
+              const type = (el.type || '').toLowerCase();
+              if (type === 'file' || type === 'password') return;
+              if (el.tagName === 'SELECT' && el.multiple) {
+                draft[el.name] = Array.from(el.selectedOptions).map((opt) => opt.value);
+                return;
+              }
+              if (type === 'checkbox') {
+                draft[el.name] = el.checked;
+                return;
+              }
+              if (type === 'radio') {
+                if (el.checked) {
+                  draft[el.name] = el.value;
+                }
+                return;
+              }
+              draft[el.name] = el.value;
+            });
+            window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+            if (draftStatusEl) {
+              draftStatusEl.textContent = 'Draft saved locally';
+            }
+          } catch (err) {
+            if (draftStatusEl) {
+              draftStatusEl.textContent = '';
+            }
+          }
+        };
+
+        const debouncedSaveDraft = debounce(saveDraft, 800);
+
+        const loadDraft = () => {
+          try {
+            const raw = window.localStorage.getItem(DRAFT_KEY);
+            if (!raw) return;
+            const draft = JSON.parse(raw);
+            if (!draft || typeof draft !== 'object') return;
+            const elements = formEl.querySelectorAll('input, textarea, select');
+            elements.forEach((el) => {
+              if (!el.name || !(el.name in draft)) return;
+              const val = draft[el.name];
+              const type = (el.type || '').toLowerCase();
+              if (type === 'file' || type === 'password') return;
+              if (el.tagName === 'SELECT' && el.multiple && Array.isArray(val)) {
+                const set = new Set(val.map(String));
+                Array.from(el.options).forEach((opt) => {
+                  opt.selected = set.has(opt.value);
+                });
+                return;
+              }
+              if (type === 'checkbox') {
+                el.checked = !!val;
+                return;
+              }
+              if (type === 'radio') {
+                el.checked = val === el.value;
+                return;
+              }
+              if (typeof val === 'string') {
+                el.value = val;
+              }
+            });
+            if (draftStatusEl) {
+              draftStatusEl.textContent = 'Draft loaded from your browser storage';
+            }
+          } catch (err) {
+            // ignore
+          }
+        };
+
+        const clearDraft = () => {
+          try {
+            window.localStorage.removeItem(DRAFT_KEY);
+            if (draftStatusEl) {
+              draftStatusEl.textContent = 'Draft cleared after successful submission';
+            }
+          } catch (err) {
+            // ignore
+          }
+        };
 
         const isMobileMode = () => {
           return mobileModeToggle ? mobileModeToggle.checked : false;
@@ -2234,6 +2331,19 @@
               'px';
           }
         };
+
+        const attachDraftSaving = () => {
+          const elements = formEl.querySelectorAll('input, textarea, select');
+          elements.forEach((el) => {
+            const type = (el.type || '').toLowerCase();
+            if (type === 'file' || type === 'password') return;
+            const evt = type === 'checkbox' || type === 'radio' || el.tagName === 'SELECT' ? 'change' : 'input';
+            el.addEventListener(evt, debouncedSaveDraft);
+          });
+        };
+
+        loadDraft();
+        attachDraftSaving();
 
         const getContainerRect = () => {
           const container = document.querySelector('.container');
@@ -5852,6 +5962,7 @@
                 statusEl.textContent = 'Download starting...';
               }
               setProgress(100, 'Upload complete');
+              clearDraft();
               setTimeout(() => {
                 hideProgress();
               const downloadUrl = new URL(payload.url || '', window.location.href).toString();
