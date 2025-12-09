@@ -436,14 +436,7 @@
           : 'Add services in the admin panel to get started.';
         empty.appendChild(title);
         empty.appendChild(subtitle);
-        if (filtered && loginButton) {
-          const btn = document.createElement('button');
-          btn.className = 'link-button';
-          btn.type = 'button';
-          btn.textContent = 'Log in';
-          btn.addEventListener('click', openAdminModal);
-          empty.appendChild(btn);
-        }
+        // Single login entry point (header button)
         servicesContainer.appendChild(empty);
         servicesContainer.style.color = '#94a3b8';
         return;
