@@ -74,6 +74,8 @@
     .code-block { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 12px; font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 12px; overflow: auto; }
     .logs-box { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 12px; font-family: SFMono-Regular, Consolas, 'Liberation Mono', monospace; font-size: 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; }
     .logs-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: #e0f2fe; color: #075985; }
+    .pill-danger { background: #fee2e2; color: #991b1b; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -233,6 +235,10 @@
         <label>
           Logo URL
           <input name="logo" type="text" placeholder="/static/uploads/service3.png">
+        </label>
+        <label class="inline" style="flex-direction:row; align-items:center; gap:8px;">
+          <input name="allowPublic" type="checkbox">
+          <span>Available to everyone (no login)</span>
         </label>
         <label class="button">
           Upload logo
@@ -575,6 +581,10 @@
         info.appendChild(buildMeta('ID', service.id || service.name));
         info.appendChild(buildMeta('Target', service.target));
         info.appendChild(buildMeta('Prefix', service.prefix));
+        const publicPill = document.createElement('div');
+        publicPill.className = 'pill';
+        publicPill.textContent = service.allowPublic ? 'Public (visible to all)' : 'Restricted (login required)';
+        info.appendChild(publicPill);
         card.appendChild(info);
 
         const actions = document.createElement('div');
@@ -622,6 +632,32 @@
           }
         });
         actions.appendChild(clearBtn);
+
+        const publicToggle = document.createElement('label');
+        publicToggle.className = 'inline';
+        publicToggle.style.flexDirection = 'row';
+        publicToggle.style.gap = '6px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !!service.allowPublic;
+        const span = document.createElement('span');
+        span.textContent = 'Available to everyone';
+        publicToggle.appendChild(cb);
+        publicToggle.appendChild(span);
+        cb.addEventListener('change', async () => {
+          try {
+            await fetchJson(`/admin/services/${encodeURIComponent(service.name)}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ allowPublic: cb.checked })
+            });
+            await loadAll();
+          } catch (error) {
+            handleError(error);
+            cb.checked = !cb.checked;
+          }
+        });
+        actions.appendChild(publicToggle);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
@@ -1270,7 +1306,8 @@
         description: fd.get('description'),
         target: fd.get('target'),
         prefix: fd.get('prefix'),
-        logo: fd.get('logo')
+        logo: fd.get('logo'),
+        allowPublic: !!fd.get('allowPublic')
       };
 
       const fileInput = document.getElementById('addLogoFile');

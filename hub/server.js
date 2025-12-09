@@ -161,6 +161,8 @@ function normalizeService(service) {
   if (!service || typeof service !== 'object') return null;
   const name = service.name ? String(service.name).trim() : '';
   if (!name) return null;
+
+  const toBool = (val) => val === true || val === 'true' || val === '1' || val === 1;
   const id = sanitizeId(
     service.id && typeof service.id === 'string' && service.id.trim()
       ? service.id.trim()
@@ -175,6 +177,7 @@ function normalizeService(service) {
   const displayName = service.displayName ? String(service.displayName).trim() : name;
   const description = service.description ? String(service.description).trim() : '';
   const logo = service.logo ? String(service.logo).trim() : null;
+  const allowPublic = toBool(service.allowPublic);
 
   return {
     id,
@@ -184,6 +187,7 @@ function normalizeService(service) {
     displayName,
     description,
     logo,
+    allowPublic,
   };
 }
 
@@ -320,8 +324,16 @@ function getAllowedServiceSet(req) {
   return new Set(user.allowedServices.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
 }
 
-function isServiceAllowed(service, allowedSet) {
+function isServiceAllowed(service, allowedSet, user) {
+  // Public services are always visible
+  if (service.allowPublic) return true;
+
+  // Unauthenticated users can only see public services
+  if (!user) return false;
+
+  // Superadmin or user with no restrictions
   if (!allowedSet) return true;
+
   const id = (service.id || service.name || '').toLowerCase();
   const name = (service.name || '').toLowerCase();
   return allowedSet.has(id) || allowedSet.has(name);
@@ -585,6 +597,7 @@ app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res,
 
   let target = null;
   const allowedSet = getAllowedServiceSet(req);
+  const user = getSessionUser(req);
   try {
     const u = new URL(ref);
     const p = u.pathname || '/';
@@ -592,7 +605,7 @@ app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res,
     for (const s of services) {
       if (!s || !s.prefix) continue;
       if (p === s.prefix || p.startsWith(s.prefix + '/')) {
-        if (isServiceAllowed(s, allowedSet)) {
+        if (isServiceAllowed(s, allowedSet, user)) {
           target = s.target;
           break;
         }
@@ -635,8 +648,9 @@ app.get('/status', (req, res) => {
 app.get('/api/status', async (req, res) => {
   const config = loadConfig();
   const services = loadServices();
+  const user = getSessionUser(req);
   const allowed = getAllowedServiceSet(req);
-  const filteredServices = services.filter((s) => isServiceAllowed(s, allowed));
+  const filteredServices = services.filter((s) => isServiceAllowed(s, allowed, user));
 
   const results = await Promise.all(
     filteredServices.map(async (service) => {
@@ -647,6 +661,7 @@ app.get('/api/status', async (req, res) => {
         prefix: service.prefix,
         logo: service.logo,
         target: service.target,
+        allowPublic: service.allowPublic === true,
       };
 
       let healthUrl = null;
@@ -689,8 +704,8 @@ app.get('/api/status', async (req, res) => {
       surfaceOpacity: config.surfaceOpacity,
       welcomeImage: config.welcomeImage,
       socialLinks: config.socialLinks,
-      filtered: Boolean(allowed),
-      user: getSessionUser(req) ? { username: getSessionUser(req).username, isSuperadmin: getSessionUser(req).isSuperadmin, allowedServices: getSessionUser(req).allowedServices || [] } : null,
+      filtered: Boolean(allowed) || !user,
+      user: user ? { username: user.username, isSuperadmin: user.isSuperadmin, allowedServices: user.allowedServices || [] } : null,
     },
   });
 });
@@ -751,6 +766,14 @@ app.post('/admin/login', async (req, res) => {
   return res.status(403).json({ ok: false, error: 'forbidden' });
 });
 
+app.post('/api/logout', (req, res) => {
+  clearSessionUser(req);
+  if (req.session) {
+    req.session.destroy(() => {});
+  }
+  res.json({ ok: true });
+});
+
 function requireAuth(req, res, next){
   if (req.session && req.session.authenticated && getSessionUser(req)) return next();
   return res.status(401).send({ ok: false, error: 'unauthorized' });
@@ -786,6 +809,7 @@ app.post('/admin/services', requireSuperadmin, (req, res) => {
     displayName: body.displayName,
     description: body.description,
     logo: body.logo,
+    allowPublic: body.allowPublic,
   });
 
   if (!service) {
@@ -808,13 +832,15 @@ app.patch('/admin/services/:name', requireSuperadmin, (req, res) => {
 
   const payload = { ...list[idx] };
   const body = req.body || {};
-  const fields = ['displayName', 'description', 'logo', 'target', 'prefix'];
+  const fields = ['displayName', 'description', 'logo', 'target', 'prefix', 'allowPublic'];
 
   fields.forEach((field) => {
     if (Object.prototype.hasOwnProperty.call(body, field)) {
       const value = body[field];
       if (field === 'logo' && (value === null || value === '')) {
         payload.logo = null;
+      } else if (field === 'allowPublic') {
+        payload.allowPublic = value;
       } else if (typeof value === 'string') {
         payload[field] = value;
       }

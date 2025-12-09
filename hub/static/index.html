@@ -21,6 +21,9 @@
             </div>
           </div>
           <div class="header-actions">
+            <span id="currentUserBadge" class="pill" style="display:none;"></span>
+            <button id="loginButton" class="link-button secondary" type="button">Log in</button>
+            <button id="logoutButton" class="link-button secondary" type="button" style="display:none;">Log out</button>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
@@ -62,15 +65,15 @@
 
     <div id="adminModal" class="modal" aria-hidden="true" inert>
       <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle">
-        <button type="button" class="modal-close" id="closeAdminModal" aria-label="Close">�</button>
+        <button type="button" class="modal-close" id="closeAdminModal" aria-label="Close">✕</button>
         <div class="modal__header">
-          <h3 id="adminModalTitle">Admin Login</h3>
-          <p>Enter your admin password to continue.</p>
+          <h3 id="adminModalTitle">Secure login</h3>
+          <p>Sign in to see your assigned services. Admins use the same form.</p>
         </div>
         <form id="adminLoginForm" class="modal__form">
           <label class="inline" style="gap:8px;">
             Username
-            <input type="text" id="adminUsernameInput" autocomplete="username" value="admin" required>
+            <input type="text" id="adminUsernameInput" autocomplete="username" placeholder="admin or operator" required>
           </label>
           <label class="inline" style="gap:8px;">
             Password
@@ -86,7 +89,9 @@
     </div>    
     
 <script>
-  const openAdminModalBtn = document.getElementById('openAdminModal');
+  const loginButton = document.getElementById('loginButton');
+  const logoutButton = document.getElementById('logoutButton');
+  const currentUserBadge = document.getElementById('currentUserBadge');
   const adminModalEl = document.getElementById('adminModal');
   const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
@@ -126,11 +131,11 @@
     adminModalEl.setAttribute('inert', '');
     if (adminLoginErrorEl) adminLoginErrorEl.textContent = '';
     if (adminPasswordInput) adminPasswordInput.value = '';
-    if (openAdminModalBtn) openAdminModalBtn.focus();
+    if (loginButton) loginButton.focus();
   }
 
-  if (openAdminModalBtn && adminModalEl) {
-    openAdminModalBtn.addEventListener('click', () => {
+  if (loginButton && adminModalEl) {
+    loginButton.addEventListener('click', () => {
       openAdminModal();
     });
   }
@@ -182,7 +187,8 @@
         credentials: 'same-origin'
       });
         if (response.ok) {
-          window.location.href = '/';
+          closeAdminModal();
+          await load();
           return;
         }
         if (response.status === 403) {
@@ -194,6 +200,17 @@
         if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Login failed. Please try again.';
       } catch (error) {
         if (adminLoginErrorEl) adminLoginErrorEl.textContent = 'Connection error. Please try again.';
+      }
+    });
+  }
+
+  if (logoutButton) {
+    logoutButton.addEventListener('click', async () => {
+      try {
+        await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' });
+        await load();
+      } catch (err) {
+        console.error(err);
       }
     });
   }
@@ -394,9 +411,24 @@
         }
       }
 
+      const user = (data.hub && data.hub.user) || null;
+      if (currentUserBadge) {
+        if (user) {
+          currentUserBadge.textContent = user.username + (user.isSuperadmin ? ' (admin)' : '');
+          currentUserBadge.style.display = 'inline-flex';
+        } else {
+          currentUserBadge.style.display = 'none';
+        }
+      }
+      if (loginButton) loginButton.style.display = user ? 'none' : 'inline-flex';
+      if (logoutButton) logoutButton.style.display = user ? 'inline-flex' : 'none';
+
       servicesContainer.innerHTML = '';
+      const filtered = data.hub && data.hub.filtered;
       if (!data.services || !data.services.length) {
-        servicesContainer.textContent = 'No services are registered yet.';
+        servicesContainer.textContent = filtered
+          ? 'Services are hidden. Please log in to see your assigned services.'
+          : 'No services are registered yet.';
         servicesContainer.style.color = '#94a3b8';
         return;
       }
@@ -435,6 +467,14 @@
         status.className = 'badge ' + (service.ok ? 'badge--ok' : 'badge--fail');
         status.textContent = service.ok ? 'Online' : 'Offline';
         text.appendChild(status);
+        if (service.allowPublic) {
+          const scope = document.createElement('span');
+          scope.className = 'badge';
+          scope.style.background = '#e0f2fe';
+          scope.style.color = '#075985';
+          scope.textContent = 'Public';
+          text.appendChild(scope);
+        }
 
         link.appendChild(text);
         servicesContainer.appendChild(link);
