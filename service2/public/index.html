@@ -2057,6 +2057,9 @@
           </div>
           <pre id="status"></pre>
           <div id="draft-status" class="meta"></div>
+          <div class="draft-actions">
+            <button type="button" id="clear-draft" class="link-button secondary">Clear draft</button>
+          </div>
           <div id="download-hint" class="meta" hidden>
             <a href="#" id="download-link" class="link-button">Open generated PDF</a>
           </div>
@@ -2162,6 +2165,10 @@
         const MOBILE_MODE_KEY = 'pm-form-mobile-mode';
         const MOBILE_SCALE_KEY = 'pm-form-mobile-scale';
         const DRAFT_KEY = 'pm-form-draft';
+        const formatTime = (date) => {
+          const pad = (n) => (n < 10 ? '0' + n : n);
+          return pad(date.getHours()) + ':' + pad(date.getMinutes());
+        };
         let debugState = { enabled: false, timeline: [] };
         const templateSelectEl = document.querySelector('[data-template-select]');
         const templateSlugInput = document.querySelector('[data-template-slug]');
@@ -2183,6 +2190,7 @@
         const draftStatusEl = document.getElementById('draft-status');
         const downloadHintEl = document.getElementById('download-hint');
         const downloadLinkEl = document.getElementById('download-link');
+        const clearDraftBtn = document.getElementById('clear-draft');
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -2250,7 +2258,7 @@
             });
             window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
             if (draftStatusEl) {
-              draftStatusEl.textContent = 'Draft saved locally';
+              draftStatusEl.textContent = 'Draft saved locally at ' + formatTime(new Date());
               draftStatusEl.className = 'meta meta--success';
             }
           } catch (err) {
@@ -2294,7 +2302,7 @@
                 el.value = val;
               }
             });
-              if (draftStatusEl) {
+            if (draftStatusEl) {
               draftStatusEl.textContent = 'Draft loaded from your browser storage';
               draftStatusEl.className = 'meta meta--success';
             }
@@ -2356,6 +2364,17 @@
 
         loadDraft();
         attachDraftSaving();
+
+        if (clearDraftBtn) {
+          clearDraftBtn.addEventListener('click', () => {
+            window.localStorage.removeItem(DRAFT_KEY);
+            if (draftStatusEl) {
+              draftStatusEl.textContent = 'Draft cleared manually';
+              draftStatusEl.className = 'meta';
+            }
+            formEl.reset();
+          });
+        }
 
         const getContainerRect = () => {
           const container = document.querySelector('.container');
