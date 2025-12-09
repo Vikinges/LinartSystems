@@ -12,7 +12,7 @@
         <video id="heroVideo" autoplay muted loop playsinline class="is-hidden"></video>
       </div>
       <div class="container hero-content">
-  <header>
+        <header>
           <div class="brand">
             <img id="brandLogo" class="brand-logo" src="/static/logo1.svg" alt="Hub logo">
             <div class="brand-copy">
@@ -24,12 +24,10 @@
             <span id="currentUserBadge" class="pill" style="display:none;"></span>
             <button id="loginButton" class="link-button secondary" type="button">Log in</button>
             <button id="logoutButton" class="link-button secondary" type="button" style="display:none;">Log out</button>
+            <a id="adminLink" class="link-button secondary" href="/admin" style="display:none;">Admin</a>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
-
-        <!-- floating admin button -->
-        <a class="admin-fab" href="/admin" title="Admin">Admin</a>
 
         <div class="intro-card" id="introCard">
           <div class="intro-content">
@@ -92,6 +90,7 @@
   const loginButton = document.getElementById('loginButton');
   const logoutButton = document.getElementById('logoutButton');
   const currentUserBadge = document.getElementById('currentUserBadge');
+  const adminLink = document.getElementById('adminLink');
   const adminModalEl = document.getElementById('adminModal');
   const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
@@ -422,6 +421,7 @@
       }
       if (loginButton) loginButton.style.display = user ? 'none' : 'inline-flex';
       if (logoutButton) logoutButton.style.display = user ? 'inline-flex' : 'none';
+      if (adminLink) adminLink.style.display = user && user.isSuperadmin ? 'inline-flex' : 'none';
 
       servicesContainer.innerHTML = '';
       const filtered = data.hub && data.hub.filtered;
@@ -429,18 +429,18 @@
         const empty = document.createElement('div');
         empty.className = 'service-empty';
         const title = document.createElement('strong');
-        title.textContent = filtered ? 'Войдите, чтобы увидеть доступные сервисы' : 'Пока нет зарегистрированных сервисов';
+        title.textContent = filtered ? 'Sign in to view your available services' : 'No services registered yet';
         const subtitle = document.createElement('p');
         subtitle.textContent = filtered
-          ? 'После входа появится список сервисов, разрешённых вашему аккаунту.'
-          : 'Добавьте сервисы в админке, чтобы начать.';
+          ? 'After signing in, you will see the services assigned to your account.'
+          : 'Add services in the admin panel to get started.';
         empty.appendChild(title);
         empty.appendChild(subtitle);
         if (filtered && loginButton) {
           const btn = document.createElement('button');
           btn.className = 'link-button';
           btn.type = 'button';
-          btn.textContent = 'Войти';
+          btn.textContent = 'Log in';
           btn.addEventListener('click', openAdminModal);
           empty.appendChild(btn);
         }
