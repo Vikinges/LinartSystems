@@ -336,6 +336,10 @@
       <div class="card-form" style="grid-template-columns: 1fr;">
         <div class="logs-header">
           <button type="button" id="refreshLogs">Refresh logs</button>
+          <label class="inline" style="flex-direction:row; align-items:center; gap:6px; margin:0;">
+            <input type="checkbox" id="autoRefreshLogs">
+            <span>Auto-refresh</span>
+          </label>
           <span class="hint">Automatic refresh after uploads.</span>
         </div>
         <pre id="logsOutput" class="logs-box">No logs yet.</pre>
@@ -474,6 +478,7 @@
     const userSearchInput = document.getElementById('userSearch');
     const refreshLogsBtn = document.getElementById('refreshLogs');
     const logsOutput = document.getElementById('logsOutput');
+    const autoRefreshLogs = document.getElementById('autoRefreshLogs');
     const socialList = document.getElementById('socialList');
     const addSocialForm = document.getElementById('addSocial');
     const newSocialLabelInput = document.getElementById('newSocialLabel');
@@ -1063,6 +1068,9 @@
         } catch (logError) {
           console.warn(logError);
         }
+        if (autoRefreshLogs) {
+          setLogsInterval(autoRefreshLogs.checked);
+        }
       } catch (error) {
         handleError(error);
       }
@@ -1154,6 +1162,25 @@
     if (refreshLogsBtn) {
       refreshLogsBtn.addEventListener('click', () => {
         loadLogs().catch(() => {});
+      });
+    }
+
+    let logsInterval = null;
+    function setLogsInterval(enabled) {
+      if (logsInterval) {
+        clearInterval(logsInterval);
+        logsInterval = null;
+      }
+      if (enabled) {
+        logsInterval = setInterval(() => {
+          loadLogs().catch(() => {});
+        }, 10000);
+      }
+    }
+
+    if (autoRefreshLogs) {
+      autoRefreshLogs.addEventListener('change', () => {
+        setLogsInterval(autoRefreshLogs.checked);
       });
     }
 
