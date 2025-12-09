@@ -426,9 +426,25 @@
       servicesContainer.innerHTML = '';
       const filtered = data.hub && data.hub.filtered;
       if (!data.services || !data.services.length) {
-        servicesContainer.textContent = filtered
-          ? 'Services are hidden. Please log in to see your assigned services.'
-          : 'No services are registered yet.';
+        const empty = document.createElement('div');
+        empty.className = 'service-empty';
+        const title = document.createElement('strong');
+        title.textContent = filtered ? 'Войдите, чтобы увидеть доступные сервисы' : 'Пока нет зарегистрированных сервисов';
+        const subtitle = document.createElement('p');
+        subtitle.textContent = filtered
+          ? 'После входа появится список сервисов, разрешённых вашему аккаунту.'
+          : 'Добавьте сервисы в админке, чтобы начать.';
+        empty.appendChild(title);
+        empty.appendChild(subtitle);
+        if (filtered && loginButton) {
+          const btn = document.createElement('button');
+          btn.className = 'link-button';
+          btn.type = 'button';
+          btn.textContent = 'Войти';
+          btn.addEventListener('click', openAdminModal);
+          empty.appendChild(btn);
+        }
+        servicesContainer.appendChild(empty);
         servicesContainer.style.color = '#94a3b8';
         return;
       }

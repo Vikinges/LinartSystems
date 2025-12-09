@@ -76,6 +76,8 @@
     .logs-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: #e0f2fe; color: #075985; }
     .pill-danger { background: #fee2e2; color: #991b1b; }
+    .meta.status-success { color: #166534; }
+    .meta.status-error { color: #b91c1c; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -202,6 +204,12 @@
 
     <section>
       <h2>Services</h2>
+      <div class="card-form" style="grid-template-columns: 1fr;">
+        <label class="inline">
+          Filter services
+          <input type="text" id="serviceSearch" placeholder="Search by name, id, prefix">
+        </label>
+      </div>
       <div id="servicesList" class="services-grid"></div>
     </section>
 
@@ -253,6 +261,12 @@
 
     <section>
       <h2>User accounts</h2>
+      <div class="card-form" style="grid-template-columns: 1fr;">
+        <label class="inline">
+          Filter users
+          <input type="text" id="userSearch" placeholder="Search by username">
+        </label>
+      </div>
       <div id="usersList" class="services-grid"></div>
       <form id="addUser" class="card-form">
         <label>
@@ -451,11 +465,13 @@
     const newUserServices = document.getElementById('newUserServices');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
     const serviceZipInput = document.getElementById('serviceZipInput');
+    const serviceSearchInput = document.getElementById('serviceSearch');
     const serviceNameInput = document.getElementById('serviceNameInput');
     const serviceIdInput = document.getElementById('serviceIdInput');
     const servicePrefixInput = document.getElementById('servicePrefixInput');
     const servicePortInput = document.getElementById('servicePortInput');
     const uploadServiceStatus = document.getElementById('uploadServiceStatus');
+    const userSearchInput = document.getElementById('userSearch');
     const refreshLogsBtn = document.getElementById('refreshLogs');
     const logsOutput = document.getElementById('logsOutput');
     const socialList = document.getElementById('socialList');
@@ -553,15 +569,31 @@
 
     function renderServices() {
       servicesList.innerHTML = '';
-      if (!state.services.length) {
+      const query = serviceSearchInput ? serviceSearchInput.value.trim().toLowerCase() : '';
+      const filtered = query
+        ? state.services.filter((s) => {
+            const haystack = [
+              s.name,
+              s.id,
+              s.prefix,
+              s.displayName,
+              s.description
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+            return haystack.includes(query);
+          })
+        : state.services.slice();
+      if (!filtered.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
-        empty.textContent = 'No services registered yet.';
+        empty.textContent = state.services.length ? 'No services match your search.' : 'No services registered yet.';
         servicesList.appendChild(empty);
         return;
       }
 
-      state.services.forEach((service) => {
+      filtered.forEach((service) => {
         const card = document.createElement('div');
         card.className = 'service-card';
 
@@ -736,15 +768,19 @@
     function renderUsers() {
       usersList.innerHTML = '';
       const users = Array.isArray(state.users) ? state.users : [];
-      if (!users.length) {
+      const query = userSearchInput ? userSearchInput.value.trim().toLowerCase() : '';
+      const filtered = query
+        ? users.filter((u) => u.username && u.username.toLowerCase().includes(query))
+        : users;
+      if (!filtered.length) {
         const empty = document.createElement('div');
         empty.className = 'meta';
-        empty.textContent = 'No users yet.';
+        empty.textContent = users.length ? 'No users match your search.' : 'No users yet.';
         usersList.appendChild(empty);
         return;
       }
 
-      users.forEach((user) => {
+      filtered.forEach((user) => {
         const card = document.createElement('div');
         card.className = 'service-card';
         const info = document.createElement('div');
@@ -1074,6 +1110,9 @@
           return;
         }
         uploadServiceStatus.textContent = 'Uploading and building...';
+        uploadServiceStatus.className = 'meta';
+        const submitBtn = uploadServiceForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
         const formData = new FormData();
         formData.append('bundle', serviceZipInput.files[0]);
         if (serviceNameInput && serviceNameInput.value.trim()) {
@@ -1095,6 +1134,7 @@
           });
           const svc = data.service || {};
           uploadServiceStatus.textContent = `OK: ${svc.displayName || svc.name || 'service'} at ${svc.prefix || ''} -> ${svc.target || ''}`;
+          uploadServiceStatus.className = 'meta status-success';
           serviceZipInput.value = '';
           if (serviceNameInput) serviceNameInput.value = '';
           if (serviceIdInput) serviceIdInput.value = '';
@@ -1103,7 +1143,10 @@
           await loadAll();
         } catch (error) {
           uploadServiceStatus.textContent = error.message || 'Upload failed';
+          uploadServiceStatus.className = 'meta status-error';
           handleError(error);
+        } finally {
+          if (submitBtn) submitBtn.disabled = false;
         }
       });
     }
@@ -1111,6 +1154,18 @@
     if (refreshLogsBtn) {
       refreshLogsBtn.addEventListener('click', () => {
         loadLogs().catch(() => {});
+      });
+    }
+
+    if (serviceSearchInput) {
+      serviceSearchInput.addEventListener('input', () => {
+        renderServices();
+      });
+    }
+
+    if (userSearchInput) {
+      userSearchInput.addEventListener('input', () => {
+        renderUsers();
       });
     }
 
