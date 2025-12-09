@@ -38,7 +38,7 @@ header h1{margin:0;font-size:2rem;color:var(--surface-text-strong,#f8fafc)}
 .contact-link{display:inline-flex;align-items:center;gap:10px;text-decoration:none;color:#10b981;font-weight:600;background:rgba(16,185,129,.12);border-radius:999px;padding:8px 16px;border:1px solid rgba(16,185,129,.25);transition:background .15s ease}
 .contact-link:hover{background:rgba(16,185,129,.2)}
 .contact-link svg{width:18px;height:18px}
-main{position:relative;z-index:1;margin-top:36px}
+main{position:relative;z-index:1;margin-top:12px}
 .services{display:flex;gap:20px;flex-wrap:wrap;justify-content:center;margin-top:16px}
 .service{display:flex;flex-direction:column;align-items:center;padding:22px 20px 20px;border-radius:14px;text-decoration:none;color:var(--service-text-strong,#0b1220);background:var(--service-card-background,rgba(255,255,255,.94));border:1px solid var(--service-card-border,rgba(226,232,240,.6));width:220px;transition:transform .15s ease,box-shadow .15s ease}
 .service:hover{transform:translateY(-4px);box-shadow:0 18px 38px rgba(12,24,48,.25)}
