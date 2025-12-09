@@ -919,6 +919,9 @@
         color: #1e293b;
         white-space: pre-wrap;
       }
+      .meta { font-size: 0.9rem; color: #475569; }
+      .meta--success { color: #166534; }
+      .meta--error { color: #b91c1c; }
       .admin-template__actions {
         display: flex;
         gap: 0.5rem;
@@ -2243,10 +2246,12 @@
             window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
             if (draftStatusEl) {
               draftStatusEl.textContent = 'Draft saved locally';
+              draftStatusEl.className = 'meta meta--success';
             }
           } catch (err) {
             if (draftStatusEl) {
               draftStatusEl.textContent = '';
+              draftStatusEl.className = 'meta';
             }
           }
         };
@@ -2284,8 +2289,9 @@
                 el.value = val;
               }
             });
-            if (draftStatusEl) {
+              if (draftStatusEl) {
               draftStatusEl.textContent = 'Draft loaded from your browser storage';
+              draftStatusEl.className = 'meta meta--success';
             }
           } catch (err) {
             // ignore
@@ -2297,6 +2303,7 @@
             window.localStorage.removeItem(DRAFT_KEY);
             if (draftStatusEl) {
               draftStatusEl.textContent = 'Draft cleared after successful submission';
+              draftStatusEl.className = 'meta';
             }
           } catch (err) {
             // ignore
