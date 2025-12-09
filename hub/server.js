@@ -27,6 +27,8 @@ if (!HUB_ADMIN_PASSWORD) {
   process.exit(1);
 }
 
+const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+
 const shouldBypassBodyParsing = (req) => {
   const urlPath = req.url || '';
   return PROXY_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
@@ -36,7 +38,16 @@ const jsonParser = express.json();
 const urlencodedParser = express.urlencoded({ extended: true });
 
 app.use(cookieParser());
-app.use(session({ secret: SESSION_SECRET, resave: false, saveUninitialized: false }));
+app.use(session({
+  secret: SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: IS_PROD,
+  },
+}));
 app.use((req, res, next) => {
   if (shouldBypassBodyParsing(req)) {
     return next();
@@ -507,6 +518,42 @@ function addLog(line) {
   HUB_LOG.push(entry);
 }
 
+// Simple per-IP rate limiter (login)
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 10 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function rateLimitLogin(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const bucket = loginAttempts.get(key) || { count: 0, ts: now };
+  if (now - bucket.ts > LOGIN_WINDOW_MS) {
+    bucket.count = 0;
+    bucket.ts = now;
+  }
+  bucket.count += 1;
+  loginAttempts.set(key, bucket);
+  if (bucket.count > LOGIN_MAX_ATTEMPTS) {
+    return res.status(429).json({ ok: false, error: 'too_many_attempts' });
+  }
+  return next();
+}
+
+// Basic same-origin guard for admin POST-like requests
+function requireSameOrigin(req, res, next) {
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (safeMethods.includes(req.method)) return next();
+  const origin = req.get('origin') || '';
+  const referer = req.get('referer') || '';
+  const host = req.get('host') || '';
+  const isSameOrigin =
+    (origin && origin.endsWith(host)) ||
+    (referer && referer.includes(host));
+  if (!isSameOrigin) {
+    return res.status(403).json({ ok: false, error: 'invalid_origin' });
+  }
+  return next();
+}
+
 function buildStoredFilename(originalName, mimetype) {
   const rawExt = path.extname(originalName || '').toLowerCase();
   const extFromMime =
@@ -717,7 +764,7 @@ app.get('/admin', (req, res) => {
   return res.sendFile(path.join(__dirname, 'static', 'admin-login.html'));
 });
 
-app.post('/admin/login', async (req, res) => {
+app.post('/admin/login', rateLimitLogin, async (req, res) => {
   const username = (req.body && typeof req.body.username === 'string' && req.body.username.trim()) || DEFAULT_ADMIN_USERNAME;
   const pass = req.body && req.body.password;
   if (typeof pass !== 'string' || !pass.length) {
@@ -791,7 +838,7 @@ app.get('/admin/services', requireSuperadmin, (req, res) => {
 });
 
 // Add service: { name, target, prefix }
-app.post('/admin/services', requireSuperadmin, (req, res) => {
+app.post('/admin/services', requireSuperadmin, requireSameOrigin, (req, res) => {
   const body = req.body || {};
   if (!body.name || !body.target) {
     return res.status(400).json({ ok: false, error: 'missing fields' });
@@ -862,7 +909,7 @@ app.patch('/admin/services/:name', requireSuperadmin, (req, res) => {
   res.json({ ok: true, service: normalized });
 });
 
-app.delete('/admin/services/:name', requireSuperadmin, (req, res) => {
+app.delete('/admin/services/:name', requireSuperadmin, requireSameOrigin, (req, res) => {
   const name = req.params.name;
   let list = loadServices();
   list = list.filter(s=>s.name !== name);
@@ -870,7 +917,7 @@ app.delete('/admin/services/:name', requireSuperadmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/admin/password', requireSuperadmin, async (req, res) => {
+app.post('/admin/password', requireSuperadmin, requireSameOrigin, async (req, res) => {
   const body = req.body || {};
   const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
   const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
@@ -904,7 +951,7 @@ app.post('/admin/password', requireSuperadmin, async (req, res) => {
 });
 
 // Upload a service bundle (ZIP), build and run it on the project network (admin-only)
-app.post('/admin/upload-service', requireSuperadmin, (req, res, next) => {
+app.post('/admin/upload-service', requireSuperadmin, requireSameOrigin, (req, res, next) => {
   bundleUpload.single('bundle')(req, res, async (err) => {
     if (err) return next(err);
     if (!req.file) {
@@ -1060,7 +1107,7 @@ app.get('/admin/config', requireSuperadmin, (req, res) => {
   res.json(loadConfig());
 });
 
-app.post('/admin/config', requireSuperadmin, (req, res) => {
+app.post('/admin/config', requireSuperadmin, requireSameOrigin, (req, res) => {
   const body = req.body || {};
   const current = loadConfig();
   const next = { ...current };
@@ -1167,7 +1214,7 @@ app.get('/admin/social-links', requireSuperadmin, (req, res) => {
   res.json({ ok: true, links: config.socialLinks });
 });
 
-app.post('/admin/social-links', requireSuperadmin, (req, res) => {
+app.post('/admin/social-links', requireSuperadmin, requireSameOrigin, (req, res) => {
   const body = req.body || {};
   const candidate = normalizeSocialLink({
     id: crypto.randomUUID(),
@@ -1186,7 +1233,7 @@ app.post('/admin/social-links', requireSuperadmin, (req, res) => {
   res.json({ ok: true, link: candidate, links: saved.socialLinks });
 });
 
-app.patch('/admin/social-links/:id', requireSuperadmin, (req, res) => {
+app.patch('/admin/social-links/:id', requireSuperadmin, requireSameOrigin, (req, res) => {
   const linkId = String(req.params.id || '').trim();
   if (!linkId) {
     return res.status(400).json({ ok: false, error: 'missing_id' });
@@ -1221,7 +1268,7 @@ app.patch('/admin/social-links/:id', requireSuperadmin, (req, res) => {
   res.json({ ok: true, link: saved.socialLinks[index], links: saved.socialLinks });
 });
 
-app.delete('/admin/social-links/:id', requireSuperadmin, (req, res) => {
+app.delete('/admin/social-links/:id', requireSuperadmin, requireSameOrigin, (req, res) => {
   const linkId = String(req.params.id || '').trim();
   if (!linkId) {
     return res.status(400).json({ ok: false, error: 'missing_id' });
@@ -1247,7 +1294,7 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
   res.json({ ok: true, users });
 });
 
-app.post('/admin/users', requireSuperadmin, async (req, res) => {
+app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) => {
   const body = req.body || {};
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
@@ -1270,7 +1317,7 @@ app.post('/admin/users', requireSuperadmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.patch('/admin/users/:username', requireSuperadmin, async (req, res) => {
+app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async (req, res) => {
   const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
@@ -1295,7 +1342,7 @@ app.patch('/admin/users/:username', requireSuperadmin, async (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete('/admin/users/:username', requireSuperadmin, (req, res) => {
+app.delete('/admin/users/:username', requireSuperadmin, requireSameOrigin, (req, res) => {
   const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
@@ -1312,7 +1359,7 @@ app.delete('/admin/users/:username', requireSuperadmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.post('/admin/upload-logo', requireSuperadmin, (req, res, next) => {
+app.post('/admin/upload-logo', requireSuperadmin, requireSameOrigin, (req, res, next) => {
   upload.single('logo')(req, res, (err) => {
     if (err) return next(err);
     if (!req.file) {
