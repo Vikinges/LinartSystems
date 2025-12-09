@@ -86,9 +86,13 @@ const DEFAULT_CONFIG = {
 };
 const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
 const DEFAULT_ADMIN_USERNAME = 'admin';
+const DISABLE_UPLOADS = process.env.DISABLE_UPLOADS === '1';
 
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-fs.mkdirSync(TEMP_DIR, { recursive: true });
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+  if (DISABLE_UPLOADS) {
+    console.warn('[hub] DISABLE_UPLOADS=1 is set: upload endpoints are disabled.');
+  }
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
@@ -952,16 +956,19 @@ app.post('/admin/password', requireSuperadmin, requireSameOrigin, async (req, re
 
 // Upload a service bundle (ZIP), build and run it on the project network (admin-only)
 app.post('/admin/upload-service', requireSuperadmin, requireSameOrigin, (req, res, next) => {
+  if (DISABLE_UPLOADS) {
+    return res.status(403).json({ ok: false, error: 'uploads_disabled' });
+  }
   bundleUpload.single('bundle')(req, res, async (err) => {
     if (err) return next(err);
     if (!req.file) {
       return res.status(400).json({ ok: false, error: 'missing_file' });
     }
 
-    const ts = Date.now();
-    const zipPath = req.file.path;
-    const workDir = path.join(TEMP_DIR, `svc-${ts}`);
-    fs.mkdirSync(workDir, { recursive: true });
+  const ts = Date.now();
+  const zipPath = req.file.path;
+  const workDir = path.join(TEMP_DIR, `svc-${ts}`);
+  fs.mkdirSync(workDir, { recursive: true });
 
     try {
       addLog(`upload-service: received ${path.basename(zipPath)} (${req.file.size || 0} bytes)`);
@@ -1362,6 +1369,9 @@ app.delete('/admin/users/:username', requireSuperadmin, requireSameOrigin, (req,
 });
 
 app.post('/admin/upload-logo', requireSuperadmin, requireSameOrigin, (req, res, next) => {
+  if (DISABLE_UPLOADS) {
+    return res.status(403).json({ ok: false, error: 'uploads_disabled' });
+  }
   upload.single('logo')(req, res, (err) => {
     if (err) return next(err);
     if (!req.file) {
