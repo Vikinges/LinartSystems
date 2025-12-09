@@ -18301,8 +18301,6 @@ app.use(express.json({ limit: '2mb' }));
 
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-app.use(cookieParser());
-
 // Simple rate limit for submissions (per IP)
 const submitBuckets = new Map();
 const SUBMIT_WINDOW_MS = 10 * 60 * 1000;
