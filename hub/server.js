@@ -1061,10 +1061,12 @@ app.post('/admin/upload-service', requireSuperadmin, requireSameOrigin, (req, re
     const containerName = `linart_${mergedBundle.id}_${ts}`;
     const network = getProjectNetwork();
     const envArgs = buildEnvArgs(mergedBundle.env);
+    const safetyArgs = ['--memory 512m', '--cpus 0.5', '--pids-limit 256'];
     const runCmd = [
       'docker run -d',
       `--name ${containerName}`,
       `--network ${network}`,
+      safetyArgs.join(' '),
       envArgs,
       imageTag,
     ]
