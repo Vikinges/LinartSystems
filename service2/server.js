@@ -80,6 +80,8 @@ const DEFAULT_PAGE_WIDTH = 595.28;
 
 const DEFAULT_PAGE_HEIGHT = 841.89;
 
+const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+
 
 
 function loadProjectsStore() {
@@ -18299,6 +18301,28 @@ app.use(express.json({ limit: '2mb' }));
 
 app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
+app.use(cookieParser());
+
+// Simple rate limit for submissions (per IP)
+const submitBuckets = new Map();
+const SUBMIT_WINDOW_MS = 10 * 60 * 1000;
+const SUBMIT_MAX = 30;
+function rateLimitSubmit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+  const bucket = submitBuckets.get(key) || { count: 0, ts: now };
+  if (now - bucket.ts > SUBMIT_WINDOW_MS) {
+    bucket.count = 0;
+    bucket.ts = now;
+  }
+  bucket.count += 1;
+  submitBuckets.set(key, bucket);
+  if (bucket.count > SUBMIT_MAX) {
+    return res.status(429).json({ ok: false, error: 'too_many_requests' });
+  }
+  return next();
+}
+
 // Serve assets both at root and under /service2 (for proxied paths)
 
 app.use('/service2', express.static(PUBLIC_DIR));
@@ -19409,7 +19433,7 @@ app.get('/api/templates', (req, res) => {
 
 
 
-app.post('/submit', (req, res, next) => {
+app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
   uploadFields(req, res, (err) => {
 
