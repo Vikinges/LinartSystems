@@ -33,11 +33,15 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.linart.rule=Host(`linart.club`)
-      - traefik.http.routers.linart.entrypoints=web,websecure
-      - traefik.http.routers.linart.tls=true
-      - traefik.http.routers.linart.tls.certresolver=letsencrypt
+      - traefik.http.routers.linart-secure.rule=Host(`linart.club`)
+      - traefik.http.routers.linart-secure.entrypoints=websecure
+      - traefik.http.routers.linart-secure.tls=true
+      - traefik.http.routers.linart-secure.tls.certresolver=letsencrypt
       - traefik.http.services.linart.loadbalancer.server.port=8080
+      - traefik.http.routers.linart-http.rule=Host(`linart.club`)
+      - traefik.http.routers.linart-http.entrypoints=web
+      - traefik.http.routers.linart-http.middlewares=redirect-to-https
+      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
     env_file:
       - ./hub/.env
 
