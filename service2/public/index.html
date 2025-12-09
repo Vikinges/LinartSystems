@@ -2057,6 +2057,9 @@
           </div>
           <pre id="status"></pre>
           <div id="draft-status" class="meta"></div>
+          <div id="download-hint" class="meta" hidden>
+            <a href="#" id="download-link" class="link-button">Open generated PDF</a>
+          </div>
         </div>
       </form>
     </div>
@@ -2178,6 +2181,8 @@
         const partsOcrInput = document.querySelector('[data-parts-ocr-input]');
         const partsOcrStatus = document.querySelector('[data-parts-ocr-status]');
         const draftStatusEl = document.getElementById('draft-status');
+        const downloadHintEl = document.getElementById('download-hint');
+        const downloadLinkEl = document.getElementById('download-link');
         const adminModalEl = document.querySelector('[data-admin-modal]');
         const adminOpenBtn = document.querySelector('[data-admin-open]');
         const adminCloseButtons = adminModalEl
@@ -5967,6 +5972,8 @@
               submitButton.classList.add('is-success');
               if (statusEl) {
                 statusEl.textContent = 'Download starting...';
+                statusEl.classList.remove('meta--error');
+                statusEl.classList.add('meta--success');
               }
               setProgress(100, 'Upload complete');
               clearDraft();
@@ -5974,19 +5981,25 @@
                 hideProgress();
               const downloadUrl = new URL(payload.url || '', window.location.href).toString();
               window.location.href = downloadUrl;
+              if (downloadHintEl && downloadLinkEl) {
+                downloadLinkEl.href = downloadUrl;
+                downloadHintEl.hidden = false;
+              }
               }, 200);
             } else {
               submitButton.classList.add('is-error');
               const message =
                 (payload && (payload.error || payload.message)) ||
-                'Submission failed (status ' + xhr.status + ')';
-              if (statusEl) {
-                statusEl.textContent = message;
-              }
-              hideProgress();
+              'Submission failed (status ' + xhr.status + ')';
+            if (statusEl) {
+              statusEl.textContent = message;
+              statusEl.classList.remove('meta--success');
+              statusEl.classList.add('meta--error');
             }
+            hideProgress();
+          }
 
-            resetSubmitState();
+          resetSubmitState();
           };
 
           xhr.send(formData);
