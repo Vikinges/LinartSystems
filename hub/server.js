@@ -29,6 +29,9 @@ if (!HUB_ADMIN_PASSWORD) {
 
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 
+// Trust reverse proxy (Traefik) so secure cookies work behind TLS
+app.set('trust proxy', 1);
+
 const shouldBypassBodyParsing = (req) => {
   const urlPath = req.url || '';
   return PROXY_PREFIXES.some((prefix) => urlPath.startsWith(prefix));
