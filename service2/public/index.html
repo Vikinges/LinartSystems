@@ -5998,10 +5998,14 @@
               clearDraft();
               setTimeout(() => {
                 hideProgress();
-              const downloadUrl = new URL(payload.url || '', window.location.href).toString();
+              const downloadUrlObj = new URL(payload.url || '', window.location.href);
+              const downloadUrl = downloadUrlObj.toString();
+              const downloadFilename = downloadUrlObj.pathname.split('/').pop() || 'report.pdf';
               window.location.href = downloadUrl;
               if (downloadHintEl && downloadLinkEl) {
                 downloadLinkEl.href = downloadUrl;
+                downloadLinkEl.setAttribute('download', downloadFilename);
+                downloadLinkEl.textContent = 'Download PDF';
                 downloadHintEl.hidden = false;
               }
               }, 200);
