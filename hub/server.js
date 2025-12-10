@@ -1399,6 +1399,13 @@ app.use('/service2', createProxyMiddleware({
   logLevel: 'warn'
 }));
 
+// Allow direct PDF download links without /service2 prefix
+app.use('/download', createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  logLevel: 'warn'
+}));
+
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     return res.status(400).json({ ok: false, error: err.message });
