@@ -9707,7 +9707,8 @@ ${renderTextInput('end_customer_name', 'End customer name')}
 
 ${renderTextInput('site_location', 'Site location')}
 
-${renderTextInput('building_project', 'Building project', { allowUnknown: true, id: 'building-project-acceptance' })}
+${renderTextInput('customer_representative', 'Customer representative', { allowUnknown: true })}
+<input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
 ${renderTextInput('led_display_model', 'LED display model / batch')}
 
@@ -13445,6 +13446,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         const customerCompanyInput = document.getElementById('customer-company');
 
+        const customerRepresentativeInput = document.getElementById('customer-representative');
+
+        const attendeeClientHidden = document.getElementById('attendee-client-hidden');
+
         const signatureCompanySync = { engineerManual: false, customerManual: false };
 
 
@@ -13631,7 +13636,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         }
 
+        const syncCustomerRepToSignature = () => {
+          if (attendeeClientHidden) {
+            attendeeClientHidden.value = (customerRepresentativeInput && customerRepresentativeInput.value.trim()) || '';
+          }
+        };
 
+        if (customerRepresentativeInput) {
+          ['input', 'change'].forEach((eventName) => {
+            customerRepresentativeInput.addEventListener(eventName, syncCustomerRepToSignature);
+          });
+          syncCustomerRepToSignature();
+        }
 
         const clampNumber = (value, min, max) => {
 
