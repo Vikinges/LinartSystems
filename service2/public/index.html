@@ -1200,6 +1200,12 @@
           <input type="text" id="end-customer-name" name="end_customer_name" placeholder="End customer name" data-suggest-field="end_customer_name" list="suggest-end-customer-name" autocomplete="off" />
           <datalist id="suggest-end-customer-name" data-suggest-list="end_customer_name"></datalist>
         </label>
+        <label class="field" for="customer-representative" data-form-types="service_report,maintenance">
+          <span>Customer representative</span>
+          <input type="text" id="customer-representative" name="customer_representative" placeholder="Authorized customer representative" data-suggest-field="customer_representative" list="suggest-customer-representative" autocomplete="off" />
+          <datalist id="suggest-customer-representative" data-suggest-list="customer_representative"></datalist>
+        </label>
+        <input type="hidden" id="attendee-client-hidden" name="attendee_client" data-form-types="service_report,maintenance" />
         <label class="field" for="site-location">
           <span>Site location</span>
           <input type="text" id="site-location" name="site_location" placeholder="Site location" data-suggest-field="site_location" list="suggest-site-location" autocomplete="off" />
@@ -3711,6 +3717,8 @@
         const serviceCompanyInput = document.getElementById('service-company-name');
         const engineerCompanyInput = document.getElementById('engineer-company');
         const customerCompanyInput = document.getElementById('customer-company');
+        const customerRepresentativeInput = document.getElementById('customer-representative');
+        const attendeeClientHidden = document.getElementById('attendee-client-hidden');
         const signatureCompanySync = { engineerManual: false, customerManual: false };
 
         const syncCustomerNameFromSite = () => {
@@ -3803,6 +3811,19 @@
             }
             signatureCompanySync.customerManual = current !== source;
           });
+        }
+
+        const syncCustomerRepToSignature = () => {
+          if (attendeeClientHidden) {
+            attendeeClientHidden.value = (customerRepresentativeInput && customerRepresentativeInput.value.trim()) || '';
+          }
+        };
+
+        if (customerRepresentativeInput) {
+          ['input', 'change'].forEach((eventName) => {
+            customerRepresentativeInput.addEventListener(eventName, syncCustomerRepToSignature);
+          });
+          syncCustomerRepToSignature();
         }
 
         const clampNumber = (value, min, max) => {
