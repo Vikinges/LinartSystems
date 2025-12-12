@@ -19738,6 +19738,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
       assignIfValue('service_company_name', toSingleValue(req.body?.service_company_name));
       assignIfValue('supplier_name', toSingleValue(req.body?.supplier_name));
       assignIfValue('customer_company', toSingleValue(req.body?.customer_company));
+      assignIfValue('customer_representative', toSingleValue(req.body?.customer_representative));
       assignIfValue('completion_date', toSingleValue(req.body?.completion_date));
       assignIfValue('acceptance_location', toSingleValue(req.body?.acceptance_location));
       assignIfValue('acceptance_date', toSingleValue(req.body?.acceptance_date));

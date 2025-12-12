@@ -1215,6 +1215,11 @@
           <span>Building project</span>
           <input type="text" id="building-project" name="building_project" placeholder="Building project" />
         </label>
+        <label class="field" for="customer-representative" data-form-types="service_report,maintenance">
+          <span>Customer representative</span>
+          <input type="text" id="customer-representative" name="customer_representative" placeholder="Authorized customer representative" data-suggest-field="customer_representative" list="suggest-customer-representative" autocomplete="off" />
+          <datalist id="suggest-customer-representative" data-suggest-list="customer_representative"></datalist>
+        </label>
         <label class="field" for="led-display-model">
           <span>LED display model / batch</span>
           <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model / batch" />
