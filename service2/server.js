@@ -11049,6 +11049,38 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           });
 
+        const loadZxing = () =>
+
+          new Promise((resolve, reject) => {
+
+            if (window.ZXing) return resolve(window.ZXing);
+
+            const script = document.createElement('script');
+
+            script.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js';
+
+            script.onload = () => resolve(window.ZXing);
+
+            script.onerror = () => reject(new Error('Failed to load ZXing'));
+
+            document.head.appendChild(script);
+
+          });
+
+        const readFileAsDataUrl = (file) =>
+
+          new Promise((resolve, reject) => {
+
+            const reader = new FileReader();
+
+            reader.onload = () => resolve(reader.result);
+
+            reader.onerror = () => reject(new Error('Failed to read file'));
+
+            reader.readAsDataURL(file);
+
+          });
+
 
 
         const setPartsOcrStatus = (msg, isError = false) => {
@@ -11398,6 +11430,41 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           setPartsOcrStatus('Reading photo...');
 
           try {
+
+            // Try barcode decoding first (more reliable for serial stickers).
+            try {
+
+              setPartsOcrStatus('Checking barcode...');
+
+              const ZXing = await loadZxing();
+
+              const dataUrl = await readFileAsDataUrl(file);
+
+              const reader = new ZXing.BrowserBarcodeReader();
+
+              const result = await reader.decodeFromImageUrl(dataUrl);
+
+              if (result && result.text) {
+
+                const barcode = String(result.text).trim();
+
+                fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
+
+                setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
+
+                return;
+
+              }
+
+            } catch (barcodeErr) {
+
+              // Fallback silently to OCR
+
+              recordDebug('parts-ocr-barcode-error', { error: String(barcodeErr && barcodeErr.message ? barcodeErr.message : barcodeErr) });
+
+            }
+
+
 
             const Tesseract = await loadTesseract();
 
