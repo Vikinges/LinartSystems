@@ -5,19 +5,25 @@ What I added
 - Two example microservices in `service1/` and `service2/`
 - `docker-compose.yml` to build and run all three containers
 
-Run locally (requires Docker & Docker Compose):
+Quick start (Docker Compose):
 
-1. From the repository root run:
-
-```powershell
-# optional: if 8080 on host is busy, set a different host port (e.g. 8088) in a .env file
-# HUB_PORT=8088
-docker compose up --build
-```
-
-2. Open http://localhost:8080 in your browser. Click the service tiles to open each service.
+1. Copy `.env.example` to `.env` and set values:
+   - `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`
+   - `ADMIN_PASSWORD` (service2 admin)
+   - `HUB_PORT` (leave 8080 unless busy)
+   - `LETSENCRYPT_EMAIL`
+2. From the repository root run:
+   ```powershell
+   docker compose up --build -d
+   ```
+3. Open http://localhost:8080 (or your `HUB_PORT`).
 
 Notes
 - The hub runs on port 8080 and redirects /service/1 to http://service1:3000 inside the compose network.
 - The docker-compose maps host ports for convenience.
 - You can also proxy paths /s1 and /s2 through the hub (e.g. http://localhost:8080/s1/).
+
+Portainer (few clicks)
+- Build method: Repository → `https://github.com/Vikinges/LinartSystems.git`, reference `refs/heads/feature/hub-service-zip`, compose path `docker-compose.yml`.
+- Environment variables (Advanced mode): `HUB_PORT` (optional), `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`, `ADMIN_PASSWORD`, `LETSENCRYPT_EMAIL`.
+- Deploy. No extra env files are needed because compose now reads vars directly.
