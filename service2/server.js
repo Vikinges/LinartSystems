@@ -11069,6 +11069,44 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         const parseOcrText = (text) => {
 
+          const STOP_WORDS = new Set([
+
+            'DATE',
+
+            'TIME',
+
+            'TOTAL',
+
+            'PRICE',
+
+            'CASH',
+
+            'EUR',
+
+            'USD',
+
+            'TAX',
+
+            'QTY',
+
+            'ITEM',
+
+            'SN',
+
+            'S/N',
+
+            'SERIAL',
+
+            'MODEL',
+
+            'REF',
+
+            'ORDER',
+
+          ]);
+
+
+
           const lines = text
 
             .split('\\n')
@@ -11077,21 +11115,61 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             .filter(Boolean);
 
+
+
           const normalizeToken = (t) =>
 
             t
 
-              .replace(/[^A-Za-z0-9-]/g, ' ')
+              .replace(/[^A-Za-z0-9/-]/g, ' ')
 
-              .replace(/\\s+/g, '')
-
-              .replace(/--+/g, '-')
+              .replace(/\\s+/g, ' ')
 
               .trim();
 
-          const rawTokens = text.split(/\\s+/).map(normalizeToken).filter(Boolean);
+
+
+          const rawTokens = text
+
+            .split(/\\s+/)
+
+            .map(normalizeToken)
+
+            .map((t) => t.replace(/\\s+/g, ''))
+
+            .filter(Boolean);
+
+
 
           const tokens = rawTokens.map((t) => t.toUpperCase());
+
+
+
+          const tokenScore = (value) => {
+
+            const v = value || '';
+
+            if (STOP_WORDS.has(v)) return -5;
+
+            let score = 0;
+
+            if (/[A-Z]/.test(v) && /[0-9]/.test(v)) score += 4;
+
+            if (v.includes('-') || v.includes('/')) score += 1;
+
+            if (v.length >= 6 && v.length <= 18) score += 3;
+
+            if (v.length > 18) score -= 2;
+
+            if (v.length < 5) score -= 2;
+
+            const uniqueChars = new Set(v.split(''));
+
+            score += Math.min(uniqueChars.size, 5) * 0.2;
+
+            return score;
+
+          };
 
 
 
@@ -11103,9 +11181,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             if (/^FA0?\\d+[A-Z0-9]*/i.test(value)) return true;
 
-            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 16;
+            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 20;
 
           };
+
+
+
+          const scoredTokens = tokens
+
+            .map((t, idx) => ({ t, idx, score: tokenScore(t) }))
+
+            .filter((s) => s.score > 0)
+
+            .sort((a, b) => b.score - a.score);
 
 
 
@@ -11113,59 +11201,53 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           let modelIndex = -1;
 
-          tokens.some((token, idx) => {
+          const modelCandidate = scoredTokens.find((s) => looksLikeModel(s.t));
 
-            if (looksLikeModel(token)) {
+          if (modelCandidate) {
 
-              model = token;
+            model = modelCandidate.t;
 
-              modelIndex = idx;
+            modelIndex = modelCandidate.idx;
 
-              return true;
+          } else {
 
-            }
+            const lineModel = lines
 
-            return false;
+              .map((l) => normalizeToken(l).toUpperCase())
 
-          });
+              .find((l) => looksLikeModel(l.replace(/\\s+/g, '')));
 
-          if (!model) {
-
-            const lineModel = lines.find((l) => looksLikeModel(normalizeToken(l).toUpperCase()));
-
-            if (lineModel) {
-
-              model = normalizeToken(lineModel).toUpperCase();
-
-            }
+            if (lineModel) model = lineModel.replace(/\\s+/g, '');
 
           }
 
 
 
-          const pickSerialFromTokens = (list, startIndex = 0) => {
+          const pickSerial = (list, startIdx = 0) => {
 
-            const candidates = list
+            const candidates = list.filter(
 
-              .slice(startIndex)
+              (s) =>
 
-              .filter((t) => /[0-9]/.test(t) && t.replace(/[^A-Z0-9]/gi, '').length >= 7);
+                s.idx >= startIdx &&
+
+                /[0-9]/.test(s.t) &&
+
+                s.t.replace(/[^A-Z0-9]/gi, '').length >= 7,
+
+            );
 
             if (!candidates.length) return '';
 
-            return candidates.sort((a, b) => b.length - a.length)[0];
+            return candidates[0].t;
 
           };
 
 
 
-          let serialCandidate = pickSerialFromTokens(tokens, modelIndex >= 0 ? modelIndex + 1 : 0);
+          let serialCandidate = pickSerial(scoredTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
 
-          if (!serialCandidate) {
-
-            serialCandidate = pickSerialFromTokens(tokens, 0);
-
-          }
+          if (!serialCandidate) serialCandidate = pickSerial(scoredTokens, 0);
 
 
 
@@ -11185,11 +11267,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             if (digitsOnly.length >= 3) {
 
-              const start = Math.max(0, Math.min(digitsOnly.length - 3, Math.floor(digitsOnly.length / 2) - 1));
+              const midStart = Math.max(0, Math.floor(digitsOnly.length / 2) - 1);
 
-              const midChunk = digitsOnly.slice(start, start + 3);
-
-              if (midChunk) return midChunk;
+              return digitsOnly.slice(midStart, midStart + 3);
 
             }
 
@@ -11209,7 +11289,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-          return { model, serial: serialCandidate, batch };
+          const topCandidates = scoredTokens.slice(0, 3).map((c) => c.t);
+
+
+
+          return { model, serial: serialCandidate, batch, candidates: topCandidates };
 
         };
 
@@ -11321,7 +11405,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const { data } = await Tesseract.recognize(file, 'eng', {
 
-              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789- ',
+              tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/ ',
+
+              tessedit_pageseg_mode: 6,
 
             });
 
@@ -11350,6 +11436,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               '; Batch: ' +
 
               (parsed.batch || 'n/a') +
+
+              '; Top tokens: ' +
+
+              (parsed.candidates && parsed.candidates.length ? parsed.candidates.join(', ') : 'n/a') +
 
               '. Check and edit if needed.';
 
