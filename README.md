@@ -1,28 +1,28 @@
-Linart Systems — Central Hub + Example Services
+Linart Systems — Hub + PDF service
+==================================
 
-What I added
-- A small central "hub" web app in `hub/` that serves a static main page and proxies/redirects to demo services
-- Two example microservices in `service1/` and `service2/`
-- `docker-compose.yml` to build and run all three containers
+Состав
+- Hub (`hub/`) — главная страница и прокси.
+- Service2 (`service2/`) — PDF формы/заявки.
 
-Quick start (Docker Compose):
-
-1. Copy `.env.example` to `.env` and set values:
+Быстрый запуск (Docker/Portainer)
+1) Скопируйте `.env.example` → `.env` и задайте переменные:
    - `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`
-   - `ADMIN_PASSWORD` (service2 admin)
-   - `HUB_PORT` (leave 8080 unless busy)
-2. From the repository root run:
-   ```powershell
-   docker compose up --build -d
-   ```
-3. Open http://localhost:8080 (or your `HUB_PORT`).
+   - `ADMIN_PASSWORD` (админ парол service2)
+   - `HUB_PORT` (8080 по умолчанию; смените если занят)
+2) В Portainer:
+   - Repository: `https://github.com/Vikinges/LinartSystems.git`
+   - Reference: `refs/heads/feature/hub-service-zip`
+   - Compose path: `docker-compose.yml`
+   - Env (Advanced mode): `HUB_PORT`, `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`, `ADMIN_PASSWORD`
+   - Deploy.
 
-Notes
-- The hub runs on port 8080 and redirects /service/1 to http://service1:3000 inside the compose network.
-- The docker-compose maps host ports for convenience.
-- You can also proxy paths /s1 and /s2 through the hub (e.g. http://localhost:8080/s1/).
+Запуск из консоли (если нужно)
+```bash
+docker compose --env-file .env up -d
+docker compose --env-file .env ps
+```
 
-Portainer (few clicks)
-- Build method: Repository → `https://github.com/Vikinges/LinartSystems.git`, reference `refs/heads/feature/hub-service-zip`, compose path `docker-compose.yml`.
-- Environment variables (Advanced mode): `HUB_PORT` (optional), `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`, `ADMIN_PASSWORD`.
-- Deploy. No extra env files are needed because compose now reads vars directly.
+Доступ
+- Hub: `http://localhost:<HUB_PORT>` (или ваш домен через Cloudflare/Tunnel)
+- Service2 внутри сети: `http://service2:3001`
