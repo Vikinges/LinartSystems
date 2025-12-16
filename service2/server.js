@@ -81,6 +81,7 @@ const DEFAULT_PAGE_WIDTH = 595.28;
 const DEFAULT_PAGE_HEIGHT = 841.89;
 
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+const PADDLE_OCR_URL = process.env.PADDLE_OCR_URL || '';
 
 
 
@@ -11083,6 +11084,29 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+        
+        const callPaddleOcr = async (dataUrl) => {
+          const base64 = (dataUrl || '').split(',').pop();
+          if (!base64) throw new Error('Unable to read image.');
+          const response = await fetch('/api/ocr/paddle', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 }),
+          });
+          let payload = {};
+          try {
+            payload = await response.json();
+          } catch (err) {
+            payload = {};
+          }
+          if (!response.ok) {
+            const message = (payload && payload.error) || response.statusText || 'Paddle OCR failed';
+            throw new Error(message);
+          }
+          const textResult = payload && typeof payload.text === 'string' ? payload.text : '';
+          return textResult.trim();
+        };
+
         const setPartsOcrStatus = (msg, isError = false) => {
 
           const section = findActivePartsSection();
@@ -11423,108 +11447,92 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+        
         const handlePartsOcrFile = async (file) => {
-
           if (!file) return;
-
           setPartsOcrStatus('Reading photo...');
-
+          let dataUrl = '';
           try {
-
             // Try barcode decoding first (more reliable for serial stickers).
             try {
-
               setPartsOcrStatus('Checking barcode...');
-
               const ZXing = await loadZxing();
-
-              const dataUrl = await readFileAsDataUrl(file);
-
+              dataUrl = dataUrl || (await readFileAsDataUrl(file));
               const reader = new ZXing.BrowserBarcodeReader();
-
               const result = await reader.decodeFromImageUrl(dataUrl);
-
               if (result && result.text) {
-
                 const barcode = String(result.text).trim();
-
                 fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
-
                 setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
-
                 return;
-
               }
-
             } catch (barcodeErr) {
-
               // Fallback silently to OCR
-
-              recordDebug('parts-ocr-barcode-error', { error: String(barcodeErr && barcodeErr.message ? barcodeErr.message : barcodeErr) });
-
+              recordDebug('parts-ocr-barcode-error', {
+                error: String(barcodeErr && barcodeErr.message ? barcodeErr.message : barcodeErr),
+              });
             }
 
-
+            // Paddle OCR as next fallback (better for noisy images).
+            try {
+              setPartsOcrStatus('Recognizing text (Paddle OCR)...');
+              dataUrl = dataUrl || (await readFileAsDataUrl(file));
+              const paddleText = await callPaddleOcr(dataUrl);
+              if (paddleText) {
+                const parsedPaddle = parseOcrText(paddleText);
+                if (parsedPaddle.serial || parsedPaddle.model) {
+                  fillPartsFromOcr(parsedPaddle);
+                  const summary =
+                    'OCR ok (Paddle). Serial: ' +
+                    (parsedPaddle.serial || 'n/a') +
+                    '; Model: ' +
+                    (parsedPaddle.model || 'n/a') +
+                    '; Batch: ' +
+                    (parsedPaddle.batch || 'n/a') +
+                    '; Top tokens: ' +
+                    (parsedPaddle.candidates && parsedPaddle.candidates.length
+                      ? parsedPaddle.candidates.join(', ')
+                      : 'n/a') +
+                    '. Check and edit if needed.';
+                  setPartsOcrStatus(summary);
+                  return;
+                }
+              }
+            } catch (paddleErr) {
+              recordDebug('parts-ocr-paddle-error', {
+                error: String(paddleErr && paddleErr.message ? paddleErr.message : paddleErr),
+              });
+            }
 
             const Tesseract = await loadTesseract();
-
             setPartsOcrStatus('Recognizing text...');
-
             const { data } = await Tesseract.recognize(file, 'eng', {
-
               tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-/ ',
-
               tessedit_pageseg_mode: 6,
-
             });
-
             const parsed = parseOcrText(data.text || '');
-
             if (!parsed.serial && !parsed.model) {
-
               setPartsOcrStatus('No text found, please try a clearer photo.', true);
-
               return;
-
             }
-
             fillPartsFromOcr(parsed);
-
             const summary =
-
               'OCR ok. Serial: ' +
-
               (parsed.serial || 'n/a') +
-
               '; Model: ' +
-
               (parsed.model || 'n/a') +
-
               '; Batch: ' +
-
               (parsed.batch || 'n/a') +
-
               '; Top tokens: ' +
-
               (parsed.candidates && parsed.candidates.length ? parsed.candidates.join(', ') : 'n/a') +
-
               '. Check and edit if needed.';
-
             setPartsOcrStatus(summary);
-
           } catch (err) {
-
             setPartsOcrStatus(err.message || 'OCR failed.', true);
-
           } finally {
-
             if (partsOcrInput) partsOcrInput.value = '';
-
           }
-
         };
-
-
 
         const adminPreviewEl = adminSectionEl ? adminSectionEl.querySelector('[data-admin-preview]') : null;
 
@@ -19200,6 +19208,64 @@ function buildAdminProfilePayload() {
   };
 
 }
+
+
+app.post('/api/ocr/paddle', async (req, res) => {
+  if (!PADDLE_OCR_URL) {
+    return res.status(503).json({ ok: false, error: 'PADDLE_OCR_URL is not configured on the server.' });
+  }
+
+  const imageBase64 = typeof req.body?.image === 'string' ? req.body.image.trim() : '';
+  if (!imageBase64) {
+    return res.status(400).json({ ok: false, error: 'image (base64-encoded) is required.' });
+  }
+
+  try {
+    const response = await fetch(PADDLE_OCR_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ images: [imageBase64] }),
+    });
+    if (!response.ok) {
+      return res
+        .status(502)
+        .json({
+          ok: false,
+          error: 'Paddle OCR request failed (' + response.status + ' ' + response.statusText + ')',
+        });
+    }
+    const payload = await response.json();
+    const texts = [];
+    const collectText = (node) => {
+      if (!node) return;
+      if (Array.isArray(node)) {
+        node.forEach(collectText);
+        return;
+      }
+      if (typeof node === 'string') {
+        const t = node.trim();
+        if (t) texts.push(t);
+        return;
+      }
+      if (node && typeof node === 'object') {
+        if (node.text) collectText(node.text);
+        if (node.data) collectText(node.data);
+        if (node.result) collectText(node.result);
+        Object.values(node).forEach(collectText);
+      }
+    };
+    collectText(payload);
+    const text = texts.join('\n').trim();
+    return res.json({ ok: true, text });
+  } catch (err) {
+    console.error('[server] Paddle OCR request failed', err);
+    return res.status(502).json({
+      ok: false,
+      error: 'Paddle OCR request failed: ' + (err && err.message ? err.message : 'Unknown error'),
+    });
+  }
+});
+
 
 
 
