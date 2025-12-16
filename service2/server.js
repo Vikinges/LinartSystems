@@ -10268,7 +10268,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             ${renderTextInput('customer_datetime', 'Customer date & time', { type: 'datetime-local' })}
 
-            ${renderTextInput('customer_name', 'Customer name')}
+            ${renderTextInput('customer_name', 'Customer representative(s)', {
+              allowUnknown: true,
+              placeholder: 'List representatives (comma-separated)',
+            })}
 
           </div>
 

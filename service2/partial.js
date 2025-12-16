@@ -2434,7 +2434,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const customerDetails = [
     { label: 'Customer company', value: toSingleValue(body?.customer_company) || '' },
     { label: 'Customer date & time', value: toSingleValue(body?.customer_datetime) || '' },
-    { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
+    { label: 'Customer representative(s)', value: toSingleValue(body?.customer_name) || '' },
   ];
   const detailRows = engineerDetails.length;
   const detailHeight = 28;
@@ -2605,7 +2605,7 @@ function generateIndexHtml() {
     ['led_notes_2', 'Pattern test passed on all colors.'],
     ['led_notes_3', 'Replaced one Pixel card cabinet B2.'],
     ['control_notes_1', 'Controllers reseated and firmware checked.'],
-    ['control_notes_3', 'Brightness aligned with preset 450 cd/mÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â².'],
+    ['control_notes_3', 'Brightness aligned with preset 450 cd/m2.'],
     ['spares_notes_1', 'Swapped in spare pixel card from inventory.'],
     ['spares_notes_2', 'Inventory log updated for remaining spares.'],
     ['general_notes', 'Updated monitoring agent and logged minor seam adjustment.\nPlease schedule follow-up for cabinet C4 fan swap.'],
