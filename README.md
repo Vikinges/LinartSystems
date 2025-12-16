@@ -11,7 +11,6 @@ Quick start (Docker Compose):
    - `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`
    - `ADMIN_PASSWORD` (service2 admin)
    - `HUB_PORT` (leave 8080 unless busy)
-   - `LETSENCRYPT_EMAIL`
 2. From the repository root run:
    ```powershell
    docker compose up --build -d
@@ -25,5 +24,5 @@ Notes
 
 Portainer (few clicks)
 - Build method: Repository → `https://github.com/Vikinges/LinartSystems.git`, reference `refs/heads/feature/hub-service-zip`, compose path `docker-compose.yml`.
-- Environment variables (Advanced mode): `HUB_PORT` (optional), `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`, `ADMIN_PASSWORD`, `LETSENCRYPT_EMAIL`.
+- Environment variables (Advanced mode): `HUB_PORT` (optional), `SESSION_SECRET`, `HUB_ADMIN_PASSWORD`, `ADMIN_PASSWORD`.
 - Deploy. No extra env files are needed because compose now reads vars directly.

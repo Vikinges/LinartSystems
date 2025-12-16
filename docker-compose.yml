@@ -7,14 +7,9 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.email=${LETSENCRYPT_EMAIL:-vladimir@linart.club}
-      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
-      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      # ACME disabled; Cloudflare tunnel terminates TLS upstream.
     ports:
       - "80:80"
-      - "443:443"
     volumes:
       - ./traefik/letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -33,15 +28,9 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.linart-secure.rule=Host(`hub.linart.club`)
-      - traefik.http.routers.linart-secure.entrypoints=websecure
-      - traefik.http.routers.linart-secure.tls=true
-      - traefik.http.routers.linart-secure.tls.certresolver=letsencrypt
+      - traefik.http.routers.linart.rule=Host(`hub.linart.club`)
+      - traefik.http.routers.linart.entrypoints=web
       - traefik.http.services.linart.loadbalancer.server.port=8080
-      - traefik.http.routers.linart-http.rule=Host(`hub.linart.club`)
-      - traefik.http.routers.linart-http.entrypoints=web
-      - traefik.http.routers.linart-http.middlewares=redirect-to-https
-      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
     environment:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
       - HUB_ADMIN_PASSWORD=${HUB_ADMIN_PASSWORD:?HUB_ADMIN_PASSWORD is required}
