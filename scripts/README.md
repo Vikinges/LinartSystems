@@ -13,7 +13,7 @@ chmod +x scripts/site-doctor.sh    # при первом запуске
 - показывает состояние контейнеров (`docker compose ps`);
 - предупреждает, если не запущены `reverse-proxy`, `hub`, `service1`;
 - проверяет доступность hub и service1 локально (через `curl`), если curl установлен;
-- проверяет HTTPS `linart.club` и кратко выводит информацию о сертификате (через openssl, если есть).
+- проверяет HTTPS `hub.linart.club` и кратко выводит информацию о сертификате (через openssl, если есть).
 
 Типовые действия при проблемах:
 - контейнеры не запущены: `docker compose up -d reverse-proxy hub service1 service2`;

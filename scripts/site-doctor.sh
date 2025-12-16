@@ -65,17 +65,17 @@ check_http "http://localhost:8080/" "hub root (локально)"
 
 if [[ $has_curl -eq 1 ]]; then
   info "Проверяю HTTPS до публичного домена..."
-  if curl -vk --max-time 10 "https://linart.club/" >/dev/null 2>&1; then
-    info "HTTPS linart.club отвечает."
+  if curl -vk --max-time 10 "https://hub.linart.club/" >/dev/null 2>&1; then
+    info "HTTPS hub.linart.club отвечает."
   else
-    warn "HTTPS linart.club не отвечает или self-signed. Проверьте Traefik и сертификат."
+    warn "HTTPS hub.linart.club не отвечает или self-signed. Проверьте Traefik и сертификат."
   fi
 fi
 
 if command -v openssl &>/dev/null; then
-  info "Информация о сертификате linart.club:"
+  info "Информация о сертификате hub.linart.club:"
   # Показываем даты и subject; ошибки скрываем, чтобы не падать.
-  openssl s_client -servername linart.club -connect linart.club:443 </dev/null 2>/dev/null \
+  openssl s_client -servername hub.linart.club -connect hub.linart.club:443 </dev/null 2>/dev/null \
     | openssl x509 -noout -dates -subject || warn "Не удалось получить сертификат (Traefik не слушает 443?)."
 else
   warn "openssl не установлен, пропускаю проверку сертификата."
