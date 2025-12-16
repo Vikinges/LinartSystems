@@ -10,6 +10,8 @@ Run locally (requires Docker & Docker Compose):
 1. From the repository root run:
 
 ```powershell
+# optional: if 8080 on host is busy, set a different host port (e.g. 8088) in a .env file
+# HUB_PORT=8088
 docker compose up --build
 ```
 
