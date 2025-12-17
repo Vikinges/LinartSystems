@@ -4895,6 +4895,7 @@
 
             .filter(Boolean);
 
+
           const regexModelCandidate = (() => {
             const m1 = text.match(/FA\d+[A-Z0-9]*/i);
             if (m1) return m1[0].toUpperCase();
@@ -4929,7 +4930,19 @@
 
 
 
-          const tokens = rawTokens.map((t) => t.toUpperCase());
+        const tokens = rawTokens.map((t) => t.toUpperCase());
+        const tokensWithCombos = [...tokens];
+        for (let i = 0; i < tokens.length - 1; i += 1) {
+          const joined = `${tokens[i]}${tokens[i + 1]}`;
+          if (
+            joined.length >= 7 &&
+            joined.length <= 24 &&
+            /[A-Z]/.test(joined) &&
+              /[0-9]/.test(joined)
+            ) {
+              tokensWithCombos.push(joined);
+            }
+          }
 
 
 
@@ -4975,7 +4988,7 @@
 
 
 
-          const scoredTokens = tokens
+          const scoredTokens = tokensWithCombos
 
             .map((t, idx) => ({ t, idx, score: tokenScore(t) }))
 
@@ -12135,3 +12148,5 @@
   </body>
 
 </html>
+
+
