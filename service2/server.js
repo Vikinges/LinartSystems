@@ -11172,6 +11172,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             .filter(Boolean);
 
 
+          const regexModelCandidate = (() => {
+            const m1 = text.match(/FA\\d+[A-Z0-9]*/i);
+            if (m1) return m1[0].toUpperCase();
+            const m2 = text.match(/LED-[A-Z0-9]+/i);
+            if (m2) return m2[0].toUpperCase();
+            return '';
+          })();
+
+
 
           const normalizeToken = (t) =>
 
@@ -11259,7 +11268,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const modelCandidate = scoredTokens.find((s) => looksLikeModel(s.t));
 
-          if (modelCandidate) {
+          if (regexModelCandidate) {
+
+            model = regexModelCandidate;
+
+            modelIndex = tokens.findIndex((t) => t.includes(regexModelCandidate));
+
+          } else if (modelCandidate) {
 
             model = modelCandidate.t;
 
@@ -11313,13 +11328,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
+            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
+            if (digitsOnly.length >= 8 && digitsOnly.length <= 10) {
+              return digitsOnly.slice(2, 5);
+            }
+
             const letterDigit3 = cleaned.match(/[A-Z][0-9]{2}/);
 
             if (letterDigit3) return letterDigit3[0];
 
 
-
-            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
 
             if (digitsOnly.length >= 3) {
 
