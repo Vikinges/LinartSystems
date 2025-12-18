@@ -11486,34 +11486,38 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-        
+
+        const disableBarcodeOcr = true;
+
         const handlePartsOcrFile = async (file) => {
           if (!file) return;
           setPartsOcrStatus('Reading photo...');
           let dataUrl = '';
           try {
-            // Try barcode decoding first (more reliable for serial stickers).
-            try {
-              setPartsOcrStatus('Checking barcode...');
-              const ZXing = await loadZxing();
-              dataUrl = dataUrl || (await readFileAsDataUrl(file));
-              const reader = new ZXing.BrowserBarcodeReader();
-              const result = await reader.decodeFromImageUrl(dataUrl);
-              if (result && result.text) {
-                const barcode = String(result.text).trim();
-                if (isLikelySerialBarcode(barcode)) {
-                  fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
-                  setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
-                  return;
+            if (!disableBarcodeOcr) {
+              // Try barcode decoding first (more reliable for serial stickers).
+              try {
+                setPartsOcrStatus('Checking barcode...');
+                const ZXing = await loadZxing();
+                dataUrl = dataUrl || (await readFileAsDataUrl(file));
+                const reader = new ZXing.BrowserBarcodeReader();
+                const result = await reader.decodeFromImageUrl(dataUrl);
+                if (result && result.text) {
+                  const barcode = String(result.text).trim();
+                  if (isLikelySerialBarcode(barcode)) {
+                    fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
+                    setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
+                    return;
+                  }
+                  recordDebug('parts-ocr-barcode-skip', { barcode });
+                  setPartsOcrStatus('Barcode looks incorrect. Switching to OCR...');
                 }
-                recordDebug('parts-ocr-barcode-skip', { barcode });
-                setPartsOcrStatus('Barcode looks incorrect. Switching to OCR...');
+              } catch (barcodeErr) {
+                // Fallback silently to OCR
+                recordDebug('parts-ocr-barcode-error', {
+                  error: String(barcodeErr && barcodeErr.message ? barcodeErr.message : barcodeErr),
+                });
               }
-            } catch (barcodeErr) {
-              // Fallback silently to OCR
-              recordDebug('parts-ocr-barcode-error', {
-                error: String(barcodeErr && barcodeErr.message ? barcodeErr.message : barcodeErr),
-              });
             }
 
             // Paddle OCR as next fallback (better for noisy images).
