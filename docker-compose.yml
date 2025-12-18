@@ -38,6 +38,8 @@ services:
   service2:
     build: ./service2
     container_name: linart_service2
+    depends_on:
+      - paddle-ocr
     restart: always
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
