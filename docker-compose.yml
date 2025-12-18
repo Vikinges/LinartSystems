@@ -43,7 +43,7 @@ services:
     restart: always
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
-      - PADDLE_OCR_URL=${PADDLE_OCR_URL:-http://paddle-ocr:8890/predict/ocr_system}
+      - PADDLE_OCR_URL=${PADDLE_OCR_URL:-http://paddle-ocr:8866/ocr}
     volumes:
       - ./service2/data:/app/data
       - ./service2/public/form-template1.pdf:/app/public/form-template1.pdf:ro
@@ -56,8 +56,8 @@ services:
       retries: 3
 
   paddle-ocr:
-    image: paddlepaddle/paddleocr:latest
+    image: 987846/paddleocr:latest
     container_name: paddle_ocr
     restart: always
     ports:
-      - "8890:8890"
+      - "8866:8866"

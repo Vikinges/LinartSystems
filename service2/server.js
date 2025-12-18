@@ -19294,26 +19294,12 @@ app.post('/api/ocr/paddle', async (req, res) => {
     return res.status(400).json({ ok: false, error: 'image (base64-encoded) is required.' });
   }
 
-  try {
-    const response = await fetch(PADDLE_OCR_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ images: [imageBase64] }),
-    });
-    if (!response.ok) {
-      return res
-        .status(502)
-        .json({
-          ok: false,
-          error: 'Paddle OCR request failed (' + response.status + ' ' + response.statusText + ')',
-        });
-    }
-    const payload = await response.json();
+  const collectText = (payload) => {
     const texts = [];
-    const collectText = (node) => {
+    const walk = (node) => {
       if (!node) return;
       if (Array.isArray(node)) {
-        node.forEach(collectText);
+        node.forEach(walk);
         return;
       }
       if (typeof node === 'string') {
@@ -19322,22 +19308,66 @@ app.post('/api/ocr/paddle', async (req, res) => {
         return;
       }
       if (node && typeof node === 'object') {
-        if (node.text) collectText(node.text);
-        if (node.data) collectText(node.data);
-        if (node.result) collectText(node.result);
-        Object.values(node).forEach(collectText);
+        if (node.text) walk(node.text);
+        if (node.data) walk(node.data);
+        if (node.result) walk(node.result);
+        Object.values(node).forEach(walk);
       }
     };
-    collectText(payload);
-    const text = texts.join('\n').trim();
-    return res.json({ ok: true, text });
-  } catch (err) {
-    console.error('[server] Paddle OCR request failed', err);
-    return res.status(502).json({
-      ok: false,
-      error: 'Paddle OCR request failed: ' + (err && err.message ? err.message : 'Unknown error'),
-    });
+    walk(payload);
+    return texts.join('\n').trim();
+  };
+
+  const buildAltUrl = (url) => {
+    if (!url) return '';
+    if (url.includes('/predict/ocr_system')) {
+      return url.replace(/\/predict\/ocr_system$/, '/ocr');
+    }
+    if (url.endsWith('/ocr')) {
+      return url.replace(/\/ocr$/, '/predict/ocr_system');
+    }
+    return '';
+  };
+
+  const attempts = [];
+  const pushAttempt = (url, body) => {
+    if (!url) return;
+    attempts.push({ url, body });
+  };
+
+  pushAttempt(PADDLE_OCR_URL, { images: [imageBase64] });
+  pushAttempt(PADDLE_OCR_URL, { image: imageBase64 });
+  const altUrl = buildAltUrl(PADDLE_OCR_URL);
+  if (altUrl && altUrl !== PADDLE_OCR_URL) {
+    pushAttempt(altUrl, { images: [imageBase64] });
+    pushAttempt(altUrl, { image: imageBase64 });
   }
+
+  let lastError = 'Paddle OCR request failed';
+  for (const attempt of attempts) {
+    try {
+      const response = await fetch(attempt.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attempt.body),
+      });
+      if (!response.ok) {
+        lastError = 'Paddle OCR request failed (' + response.status + ' ' + response.statusText + ')';
+        continue;
+      }
+      const payload = await response.json();
+      const text = collectText(payload);
+      if (text) {
+        return res.json({ ok: true, text });
+      }
+      lastError = 'Paddle OCR response was empty.';
+    } catch (err) {
+      lastError = 'Paddle OCR request failed: ' + (err && err.message ? err.message : 'Unknown error');
+    }
+  }
+
+  console.error('[server] Paddle OCR request failed', lastError);
+  return res.status(502).json({ ok: false, error: lastError });
 });
 
 
