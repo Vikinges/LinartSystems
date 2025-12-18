@@ -4930,14 +4930,14 @@
 
 
 
-        const tokens = rawTokens.map((t) => t.toUpperCase());
-        const tokensWithCombos = [...tokens];
-        for (let i = 0; i < tokens.length - 1; i += 1) {
-          const joined = tokens[i] + tokens[i + 1];
-          if (
-            joined.length >= 7 &&
-            joined.length <= 24 &&
-            /[A-Z]/.test(joined) &&
+          const tokens = rawTokens.map((t) => t.toUpperCase());
+          const tokensWithCombos = [...tokens];
+          for (let i = 0; i < tokens.length - 1; i += 1) {
+            const joined = tokens[i] + tokens[i + 1];
+            if (
+              joined.length >= 7 &&
+              joined.length <= 24 &&
+              /[A-Z]/.test(joined) &&
               /[0-9]/.test(joined)
             ) {
               tokensWithCombos.push(joined);
@@ -5064,16 +5064,14 @@
 
             const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
-            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
-            if (digitsOnly.length >= 8 && digitsOnly.length <= 10) {
-              return digitsOnly.slice(2, 5);
-            }
-
             const letterDigit3 = cleaned.match(/[A-Z][0-9]{2}/);
 
             if (letterDigit3) return letterDigit3[0];
 
-
+            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
+            if (digitsOnly.length >= 8 && digitsOnly.length <= 12) {
+              return digitsOnly.slice(2, 5);
+            }
 
             if (digitsOnly.length >= 3) {
 
@@ -5200,6 +5198,17 @@
         };
 
 
+        const isLikelySerialBarcode = (value) => {
+          if (!value) return false;
+          const cleaned = String(value).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          if (cleaned.length < 8 || cleaned.length > 24) return false;
+          if (!/[A-Z]/.test(cleaned) || !/[0-9]/.test(cleaned)) return false;
+          const longPattern = /^\d{2}[A-Z0-9]{6,}$/;
+          const shortPattern = /^\d{8,12}T?$/;
+          return longPattern.test(cleaned) || shortPattern.test(cleaned);
+        };
+
+
 
         
         const handlePartsOcrFile = async (file) => {
@@ -5212,14 +5221,18 @@
               setPartsOcrStatus('Checking barcode...');
               const ZXing = await loadZxing();
               dataUrl = dataUrl || (await readFileAsDataUrl(file));
-              const reader = new ZXing.BrowserBarcodeReader();
-              const result = await reader.decodeFromImageUrl(dataUrl);
-              if (result && result.text) {
-                const barcode = String(result.text).trim();
+            const reader = new ZXing.BrowserBarcodeReader();
+            const result = await reader.decodeFromImageUrl(dataUrl);
+            if (result && result.text) {
+              const barcode = String(result.text).trim();
+              if (isLikelySerialBarcode(barcode)) {
                 fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
                 setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
                 return;
               }
+              recordDebug('parts-ocr-barcode-skip', { barcode });
+              setPartsOcrStatus('Barcode looks incorrect. Switching to OCR...');
+            }
             } catch (barcodeErr) {
               // Fallback silently to OCR
               recordDebug('parts-ocr-barcode-error', {
@@ -12148,5 +12161,3 @@
   </body>
 
 </html>
-
-

@@ -11264,7 +11264,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-          const scoredTokens = tokens
+          const scoredTokens = tokensWithCombos
 
             .map((t, idx) => ({ t, idx, score: tokenScore(t) }))
 
@@ -11340,16 +11340,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const cleaned = serial.replace(/[^A-Z0-9]/gi, '').toUpperCase();
 
-            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
-            if (digitsOnly.length >= 8 && digitsOnly.length <= 10) {
-              return digitsOnly.slice(2, 5);
-            }
-
             const letterDigit3 = cleaned.match(/[A-Z][0-9]{2}/);
 
             if (letterDigit3) return letterDigit3[0];
 
-
+            const digitsOnly = cleaned.replace(/[^0-9]/g, '');
+            if (digitsOnly.length >= 8 && digitsOnly.length <= 12) {
+              return digitsOnly.slice(2, 5);
+            }
 
             if (digitsOnly.length >= 3) {
 
@@ -11476,6 +11474,17 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         };
 
 
+        const isLikelySerialBarcode = (value) => {
+          if (!value) return false;
+          const cleaned = String(value).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+          if (cleaned.length < 8 || cleaned.length > 24) return false;
+          if (!/[A-Z]/.test(cleaned) || !/[0-9]/.test(cleaned)) return false;
+          const longPattern = /^\d{2}[A-Z0-9]{6,}$/;
+          const shortPattern = /^\d{8,12}T?$/;
+          return longPattern.test(cleaned) || shortPattern.test(cleaned);
+        };
+
+
 
         
         const handlePartsOcrFile = async (file) => {
@@ -11492,9 +11501,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               const result = await reader.decodeFromImageUrl(dataUrl);
               if (result && result.text) {
                 const barcode = String(result.text).trim();
-                fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
-                setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
-                return;
+                if (isLikelySerialBarcode(barcode)) {
+                  fillPartsFromOcr({ model: '', serial: barcode, batch: '', candidates: [barcode] });
+                  setPartsOcrStatus('Barcode decoded: ' + barcode + '. Check and edit if needed.');
+                  return;
+                }
+                recordDebug('parts-ocr-barcode-skip', { barcode });
+                setPartsOcrStatus('Barcode looks incorrect. Switching to OCR...');
               }
             } catch (barcodeErr) {
               // Fallback silently to OCR
