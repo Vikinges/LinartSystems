@@ -11254,11 +11254,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             if (!value) return false;
 
-            if (/^LED-[A-Z0-9]{3,}/i.test(value)) return true;
+            if (/^LED-[A-Z0-9]{3,}$/i.test(value)) return true;
 
-            if (/^FA0?\\d+[A-Z0-9]*/i.test(value)) return true;
+            if (/^FA\\d+[A-Z0-9]*$/i.test(value)) return true;
 
-            return /[A-Z]/.test(value) && /[0-9]/.test(value) && value.length >= 6 && value.length <= 20;
+            return false;
 
           };
 
@@ -11304,6 +11304,29 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           }
 
+          const serialRegexes = [
+            /\\b\\d{2}[A-Z0-9]{6,18}T?\\b/,
+            /\\b\\d{8,10}T?\\b/,
+          ];
+
+          const pickSerialFromRegex = (values) => {
+            const candidates = [];
+            values.forEach((value) => {
+              serialRegexes.forEach((regex) => {
+                const match = String(value || '').toUpperCase().match(regex);
+                if (match && match[0]) candidates.push(match[0]);
+              });
+            });
+            if (!candidates.length) return '';
+            const unique = Array.from(new Set(candidates));
+            const withTrailingT = unique.filter((v) => v.endsWith('T'));
+            const pool = withTrailingT.length ? withTrailingT : unique;
+            pool.sort((a, b) => b.length - a.length);
+            return pool[0];
+          };
+
+          const regexSerial = pickSerialFromRegex(tokensWithCombos);
+
 
 
           const pickSerial = (list, startIdx = 0) => {
@@ -11328,7 +11351,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-          let serialCandidate = pickSerial(scoredTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
+          let serialCandidate = regexSerial || pickSerial(scoredTokens, modelIndex >= 0 ? modelIndex + 1 : 0);
 
           if (!serialCandidate) serialCandidate = pickSerial(scoredTokens, 0);
 
@@ -11343,6 +11366,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             const letterDigit3 = cleaned.match(/[A-Z][0-9]{2}/);
 
             if (letterDigit3) return letterDigit3[0];
+
+            const digitLetter2 = cleaned.match(/[0-9]{2}[A-Z]/);
+
+            if (digitLetter2) return digitLetter2[0];
 
             const digitsOnly = cleaned.replace(/[^0-9]/g, '');
             if (digitsOnly.length >= 8 && digitsOnly.length <= 12) {
