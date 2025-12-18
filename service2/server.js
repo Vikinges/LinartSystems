@@ -11209,7 +11209,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const tokens = rawTokens.map((t) => t.toUpperCase());
           const tokensWithCombos = [...tokens];
           for (let i = 0; i < tokens.length - 1; i += 1) {
-            const joined = `${tokens[i]}${tokens[i + 1]}`;
+            const joined = tokens[i] + tokens[i + 1];
             if (
               joined.length >= 7 &&
               joined.length <= 24 &&
