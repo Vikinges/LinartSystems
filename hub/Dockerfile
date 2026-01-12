@@ -2,8 +2,7 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Create a non-root user and group
-
+RUN apk add --no-cache su-exec
 
 COPY package.json package-lock.json* ./
 
@@ -12,13 +11,11 @@ RUN npm ci --omit=dev || npm install
 
 COPY server.js services.json ./
 COPY static ./static
+COPY entrypoint.sh /entrypoint.sh
 
-# Change ownership of the app directory
-RUN chown -R node:node /app
-
-# Switch to the non-root user
-USER node
+RUN chmod +x /entrypoint.sh && chown -R node:node /app
 
 EXPOSE 8080
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["node", "server.js"]
