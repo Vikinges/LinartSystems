@@ -4191,11 +4191,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const LABEL_FONT_SIZE = 10;
 
-  const LABEL_LINE_HEIGHT = LABEL_FONT_SIZE + 2;
-
-  const LABEL_GAP = 4;
-
   const FIELD_GAP = 10;
+  const BLOCK_HEADER_HEIGHT = 18;
+  const BLOCK_HEADER_FONT_SIZE = 8.5;
+  const BLOCK_VALUE_MIN_HEIGHT = 34;
+  const BLOCK_VALUE_FONT_SIZE = 10.5;
+  const BLOCK_COL_GAP = 10;
+  const BLOCK_ROW_GAP = 12;
 
   const initialStartY =
 
@@ -4311,84 +4313,71 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-  const drawLabeledField = (label, value, { height = 32, allowEmpty = true } = {}) => {
-
-    const text = toSingleValue(value);
-
+  const normalizeBlockField = (field) => {
+    if (!field || !field.label) return null;
+    const text = toSingleValue(field.value);
     const hasText = text !== undefined && text !== null && String(text).trim() !== '';
+    if (!hasText && field.allowEmpty === false) return null;
+    return { ...field, text: text ?? '' };
+  };
 
-    if (!hasText && !allowEmpty) return;
-
-    const blockHeight = Math.max(height, 26);
-
-    const totalHeight = LABEL_LINE_HEIGHT + LABEL_GAP + blockHeight + FIELD_GAP;
-
-    ensureSpace(totalHeight);
-
-    page.drawText(label, {
-
-      x: margin,
-
-      y: cursorY,
-
-      size: LABEL_FONT_SIZE,
-
-      font,
-
-      color: headingColor,
-
+  const drawBlockRow = (fields, { fullWidth = false } = {}) => {
+    const normalized = (fields || []).map(normalizeBlockField).filter(Boolean);
+    if (!normalized.length) return;
+    const columns = fullWidth || normalized.length === 1 ? 1 : 2;
+    const colGap = columns === 1 ? 0 : BLOCK_COL_GAP;
+    const columnWidth =
+      columns === 1 ? page.getWidth() - margin * 2 : (page.getWidth() - margin * 2 - colGap) / 2;
+    const maxDataHeight = Math.max(
+      BLOCK_VALUE_MIN_HEIGHT,
+      ...normalized.map((field) => {
+        const height = Number(field.height);
+        return Number.isFinite(height) ? Math.max(height, BLOCK_VALUE_MIN_HEIGHT) : BLOCK_VALUE_MIN_HEIGHT;
+      }),
+    );
+    const rowHeight = BLOCK_HEADER_HEIGHT + maxDataHeight;
+    ensureSpace(rowHeight + BLOCK_ROW_GAP);
+    normalized.forEach((field, index) => {
+      const x = margin + index * (columnWidth + colGap);
+      const headerY = cursorY - BLOCK_HEADER_HEIGHT;
+      const dataY = headerY - maxDataHeight;
+      page.drawRectangle({
+        x,
+        y: headerY,
+        width: columnWidth,
+        height: BLOCK_HEADER_HEIGHT,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(0.92, 0.95, 0.99),
+      });
+      page.drawText(field.label, {
+        x: x + 6,
+        y: headerY + BLOCK_HEADER_HEIGHT - BLOCK_HEADER_FONT_SIZE,
+        size: BLOCK_HEADER_FONT_SIZE,
+        font,
+        color: headingColor,
+      });
+      page.drawRectangle({
+        x,
+        y: dataY,
+        width: columnWidth,
+        height: maxDataHeight,
+        borderWidth: TABLE_BORDER_WIDTH,
+        borderColor: TABLE_BORDER_COLOR,
+        color: rgb(1, 1, 1),
+      });
+      drawCenteredTextBlock(page, String(field.text ?? ''), font, { x, y: dataY, width: columnWidth, height: maxDataHeight }, {
+        align: field.align || 'center',
+        verticalAlign: field.verticalAlign || 'middle',
+        paddingX: 8,
+        paddingY: field.paddingY ?? 10,
+        color: textColor,
+        fontSize: BLOCK_VALUE_FONT_SIZE,
+        minFontSize: 9,
+        lineHeightMultiplier: 1.15,
+      });
     });
-
-    const rect = {
-
-      x: margin,
-
-      y: cursorY - LABEL_GAP - blockHeight,
-
-      width: page.getWidth() - margin * 2,
-
-      height: blockHeight,
-
-    };
-
-    page.drawRectangle({
-
-      x: rect.x,
-
-      y: rect.y,
-
-      width: rect.width,
-
-      height: rect.height,
-
-      borderWidth: 0.8,
-
-      borderColor: TABLE_BORDER_COLOR,
-
-      color: rgb(1, 1, 1),
-
-    });
-
-    drawCenteredTextBlock(page, String(text ?? ''), font, rect, {
-
-      align: 'left',
-
-      paddingX: 8,
-
-      paddingY: 8,
-
-      color: textColor,
-
-      fontSize: LABEL_FONT_SIZE,
-
-      minFontSize: 9,
-
-      verticalAlign: 'middle',
-
-    });
-
-    cursorY = rect.y - FIELD_GAP;
-
+    cursorY -= rowHeight + BLOCK_ROW_GAP;
   };
 
 
@@ -4501,27 +4490,32 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   drawSectionTitle('Project details');
 
-  drawLabeledField('LSC Projekt-No.', val('batch_number') || val('lsc_project_number'));
-
-  drawLabeledField('Building project', val('building_project_acceptance') || val('building_project'));
-
-  drawLabeledField('Client', val('end_customer_name') || val('customer_company'));
-
-  drawLabeledField('Completion', val('completion_date'));
+  drawBlockRow([
+    { label: 'LSC Projekt-No.', value: val('batch_number') || val('lsc_project_number') },
+    { label: 'Building project', value: val('building_project_acceptance') || val('building_project') },
+  ]);
+  drawBlockRow([
+    { label: 'Client', value: val('end_customer_name') || val('customer_company') },
+    { label: 'Completion', value: val('completion_date') },
+  ]);
 
 
 
   drawSectionTitle('Attendees');
 
-  drawLabeledField('For the client', val('attendee_client') || val('customer_name'));
-
-  drawLabeledField('For the supplier', val('attendee_supplier') || val('engineer_name'));
+  drawBlockRow([
+    { label: 'For the client', value: val('attendee_client') || val('customer_name') },
+    { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') },
+  ]);
 
 
 
   drawSectionTitle('Acceptance');
 
-  drawLabeledField('Appointment date', val('acceptance_date') || val('date_of_service'));
+  drawBlockRow(
+    [{ label: 'Appointment date', value: val('acceptance_date') || val('date_of_service') }],
+    { fullWidth: true },
+  );
 
   drawCheckboxList(
 
@@ -4537,7 +4531,19 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   );
 
-  drawLabeledField('Partial service(s)', val('partial_services'), { height: 60 });
+  drawBlockRow(
+    [
+      {
+        label: 'Partial service(s)',
+        value: val('partial_services'),
+        height: 60,
+        align: 'left',
+        verticalAlign: 'top',
+        paddingY: 8,
+      },
+    ],
+    { fullWidth: true },
+  );
 
 
 
@@ -4559,11 +4565,23 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   );
 
-  drawLabeledField('Defects to be remediated before', val('defects_deadline'), { height: 30 });
-
-  drawLabeledField('Remaining activities to be remediated before', val('remaining_deadline'), { height: 30 });
-
-  drawLabeledField('Objections of the supplier', val('supplier_objections'), { height: 64 });
+  drawBlockRow([
+    { label: 'Defects to be remediated before', value: val('defects_deadline'), height: 30 },
+    { label: 'Remaining activities to be remediated before', value: val('remaining_deadline'), height: 30 },
+  ]);
+  drawBlockRow(
+    [
+      {
+        label: 'Objections of the supplier',
+        value: val('supplier_objections'),
+        height: 64,
+        align: 'left',
+        verticalAlign: 'top',
+        paddingY: 8,
+      },
+    ],
+    { fullWidth: true },
+  );
 
 
 
@@ -4597,11 +4615,14 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   drawSectionTitle('Warranty');
 
-  drawLabeledField('Warranty (years)', val('warranty_years'));
-
-  drawLabeledField('Warranty begins on', val('warranty_begin'), { height: 28 });
-
-  drawLabeledField('Warranty ends on', val('warranty_end'), { height: 28 });
+  drawBlockRow([
+    { label: 'Warranty (years)', value: val('warranty_years') },
+    { label: 'Warranty begins on', value: val('warranty_begin'), height: 28 },
+  ]);
+  drawBlockRow(
+    [{ label: 'Warranty ends on', value: val('warranty_end'), height: 28 }],
+    { fullWidth: true },
+  );
 
 
 
@@ -4624,25 +4645,74 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     if (!annex1NewPage) {
       drawSectionTitle('Annex 1');
     }
-    drawLabeledField('Annex 1 date', val('annex1_date') || val('acceptance_date'), { height: 28 });
-
-    drawLabeledField('Building project', val('annex1_building_project') || val('building_project'), { height: 32 });
+    drawBlockRow([
+      { label: 'Annex 1 date', value: val('annex1_date') || val('acceptance_date'), height: 28 },
+      { label: 'Building project', value: val('annex1_building_project') || val('building_project'), height: 32 },
+    ]);
 
     drawSectionTitle('Defects');
 
-    drawLabeledField('Details', val('annex1_defects'), { height: 100 });
+    drawBlockRow(
+      [
+        {
+          label: 'Details',
+          value: val('annex1_defects'),
+          height: 100,
+          align: 'left',
+          verticalAlign: 'top',
+          paddingY: 8,
+        },
+      ],
+      { fullWidth: true },
+    );
 
     drawSectionTitle('Remaining activities');
 
-    drawLabeledField('Details', val('annex1_remaining'), { height: 80 });
+    drawBlockRow(
+      [
+        {
+          label: 'Details',
+          value: val('annex1_remaining'),
+          height: 80,
+          align: 'left',
+          verticalAlign: 'top',
+          paddingY: 8,
+        },
+      ],
+      { fullWidth: true },
+    );
 
     drawSectionTitle('Objections of the supplier');
 
-    drawLabeledField('Details', val('annex1_objections'), { height: 80 });
+    drawBlockRow(
+      [
+        {
+          label: 'Details',
+          value: val('annex1_objections'),
+          height: 80,
+          align: 'left',
+          verticalAlign: 'top',
+          paddingY: 8,
+        },
+      ],
+      { fullWidth: true },
+    );
 
     drawSectionTitle('Reservations of the client');
 
-    drawLabeledField('Details', val('annex1_reservations'), { height: 80 });
+    drawBlockRow(
+      [
+        {
+          label: 'Details',
+          value: val('annex1_reservations'),
+          height: 80,
+          align: 'left',
+          verticalAlign: 'top',
+          paddingY: 8,
+        },
+      ],
+      { fullWidth: true },
+    );
 
   }
 
@@ -4658,25 +4728,14 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     if (!annex2NewPage) {
       drawSectionTitle('Annex 2 (Spare parts)');
     }
-    drawLabeledField(
-
-      'Acceptance date',
-
-      val('annex1_date') || val('acceptance_date'),
-
-      { height: 28 },
-
-    );
-
-    drawLabeledField(
-
-      'Building project',
-
-      val('annex1_building_project') || val('building_project') || val('building_project_acceptance'),
-
-      { height: 32 },
-
-    );
+    drawBlockRow([
+      { label: 'Acceptance date', value: val('annex1_date') || val('acceptance_date'), height: 28 },
+      {
+        label: 'Building project',
+        value: val('annex1_building_project') || val('building_project') || val('building_project_acceptance'),
+        height: 32,
+      },
+    ]);
 
     const tableWidth = page.getWidth() - margin * 2;
 
