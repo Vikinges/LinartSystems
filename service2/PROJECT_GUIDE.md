@@ -29,6 +29,10 @@ npm run extract-fields       # optional, keeps fields.json in sync with PDF
 npm start
 `
 
+Sample payloads (server must be running):
+- Maintenance: `FORM_HOST=http://localhost:3001 node tools/gen-sample.js`
+- Installation report: `FORM_HOST=http://localhost:3001 node tools/gen-installation-sample.js`
+
 ### Docker
 `ash
 docker compose up --build -d
