@@ -32,6 +32,10 @@ services:
     environment:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
       - HUB_ADMIN_PASSWORD=${HUB_ADMIN_PASSWORD:?HUB_ADMIN_PASSWORD is required}
+      - HUB_DATA_DIR=/app/data
+    volumes:
+      - hub-data:/app/data
+      - hub-uploads:/app/static/uploads
 
   service2:
     build: ./service2
@@ -59,3 +63,7 @@ services:
       - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     ports:
       - "8866:8866"
+
+volumes:
+  hub-data:
+  hub-uploads:

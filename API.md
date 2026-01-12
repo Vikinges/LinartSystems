@@ -55,7 +55,7 @@ Base URL (локально): `http://localhost:8080`
 - `POST /admin/password` — сменить пароль superadmin.
   - Body: `{ "currentPassword": "...", "newPassword": "..." }`
 
-Примечание: данные пользователей хранятся в `hub/admin.json`. Для сохранения настроек между пересборками контейнера используйте bind-mount для `hub/admin.json`, `hub/services.json`, `hub/config.json`, `hub/static/uploads`.
+Примечание: данные пользователей и настройки hub хранятся в `admin.json`, `services.json`, `config.json`. Для персистентности задайте `HUB_DATA_DIR=/app/data` и смонтируйте volume `hub-data:/app/data`. Логотипы/медиа хранятся в `static/uploads` — смонтируйте volume `hub-uploads:/app/static/uploads`.
 
 ## Service API (пример: service1)
 Base URL (в контейнерной сети): `http://service1:3000`

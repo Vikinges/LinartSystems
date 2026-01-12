@@ -1,4 +1,5 @@
 hub/admin.json
+hub/data/
 hub/static/uploads/
 hub/node_modules/
 traefik/letsencrypt/acme.json

@@ -64,9 +64,18 @@ app.use((req, res, next) => {
   return urlencodedParser(req, res, next);
 });
 
-const SERVICES_FILE = path.join(__dirname, 'services.json');
-const CONFIG_FILE = path.join(__dirname, 'config.json');
-const ADMIN_STORE_FILE = path.join(__dirname, 'admin.json');
+const DATA_DIR = process.env.HUB_DATA_DIR ? path.resolve(process.env.HUB_DATA_DIR) : null;
+const DEFAULT_SERVICES_FILE = path.join(__dirname, 'services.json');
+const DEFAULT_CONFIG_FILE = path.join(__dirname, 'config.json');
+const SERVICES_FILE = process.env.HUB_SERVICES_FILE
+  ? path.resolve(process.env.HUB_SERVICES_FILE)
+  : (DATA_DIR ? path.join(DATA_DIR, 'services.json') : DEFAULT_SERVICES_FILE);
+const CONFIG_FILE = process.env.HUB_CONFIG_FILE
+  ? path.resolve(process.env.HUB_CONFIG_FILE)
+  : (DATA_DIR ? path.join(DATA_DIR, 'config.json') : DEFAULT_CONFIG_FILE);
+const ADMIN_STORE_FILE = process.env.HUB_ADMIN_STORE_FILE
+  ? path.resolve(process.env.HUB_ADMIN_STORE_FILE)
+  : (DATA_DIR ? path.join(DATA_DIR, 'admin.json') : path.join(__dirname, 'admin.json'));
 const UPLOAD_DIR = path.join(__dirname, 'static', 'uploads');
 const TEMP_DIR = path.join(UPLOAD_DIR, 'tmp');
 const DEFAULT_CONFIG = {
@@ -91,11 +100,38 @@ const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
 const DEFAULT_ADMIN_USERNAME = 'admin';
 const DISABLE_UPLOADS = process.env.DISABLE_UPLOADS === '1';
 
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-  fs.mkdirSync(TEMP_DIR, { recursive: true });
-  if (DISABLE_UPLOADS) {
-    console.warn('[hub] DISABLE_UPLOADS=1 is set: upload endpoints are disabled.');
+function ensureDir(dirPath) {
+  if (!dirPath) return;
+  try {
+    fs.mkdirSync(dirPath, { recursive: true });
+  } catch (err) {
+    // ignore mkdir errors here; file ops will surface issues
   }
+}
+
+function seedFile(targetPath, fallbackPath, fallbackContent) {
+  if (!targetPath || fs.existsSync(targetPath)) return;
+  if (fallbackPath && fs.existsSync(fallbackPath)) {
+    fs.copyFileSync(fallbackPath, targetPath);
+    return;
+  }
+  if (fallbackContent !== undefined) {
+    fs.writeFileSync(targetPath, fallbackContent);
+  }
+}
+
+ensureDir(DATA_DIR);
+ensureDir(path.dirname(ADMIN_STORE_FILE));
+if (DATA_DIR) {
+  seedFile(SERVICES_FILE, DEFAULT_SERVICES_FILE, JSON.stringify([], null, 2));
+  seedFile(CONFIG_FILE, DEFAULT_CONFIG_FILE, JSON.stringify(DEFAULT_CONFIG, null, 2));
+}
+
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+fs.mkdirSync(TEMP_DIR, { recursive: true });
+if (DISABLE_UPLOADS) {
+  console.warn('[hub] DISABLE_UPLOADS=1 is set: upload endpoints are disabled.');
+}
 
 const HEX_COLOR_PATTERN = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
