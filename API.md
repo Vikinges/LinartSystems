@@ -56,6 +56,7 @@ Base URL (локально): `http://localhost:8080`
   - Body: `{ "currentPassword": "...", "newPassword": "..." }`
 
 Примечание: данные пользователей и настройки hub хранятся в `admin.json`, `services.json`, `config.json`. Для персистентности задайте `HUB_DATA_DIR=/app/data` и смонтируйте volume `hub-data:/app/data`. Логотипы/медиа хранятся в `static/uploads` — смонтируйте volume `hub-uploads:/app/static/uploads`.
+Для восстановления доступа можно задать `HUB_ADMIN_PASSWORD_FORCE=1` — при старте hub обновит пароль супер‑админа из `HUB_ADMIN_PASSWORD` и сохранит список пользователей.
 
 ## Service API (пример: service1)
 Base URL (в контейнерной сети): `http://service1:3000`

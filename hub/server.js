@@ -99,6 +99,9 @@ const DEFAULT_CONFIG = {
 const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
 const DEFAULT_ADMIN_USERNAME = 'admin';
 const DISABLE_UPLOADS = process.env.DISABLE_UPLOADS === '1';
+const FORCE_ADMIN_PASSWORD = ['1', 'true', 'yes', 'on'].includes(
+  String(process.env.HUB_ADMIN_PASSWORD_FORCE || '').trim().toLowerCase()
+);
 
 function ensureDir(dirPath) {
   if (!dirPath) return;
@@ -308,6 +311,26 @@ function saveAdminCredentials(credentials) {
   adminCredentials = credentials;
 }
 
+function getSuperadminHash(credentials) {
+  if (credentials && credentials.superadmin && typeof credentials.superadmin.passwordHash === 'string') {
+    return credentials.superadmin.passwordHash;
+  }
+  if (credentials && typeof credentials.passwordHash === 'string') {
+    return credentials.passwordHash;
+  }
+  return null;
+}
+
+function buildSuperadminCredentials(existing, password) {
+  const username =
+    existing && existing.superadmin && typeof existing.superadmin.username === 'string' && existing.superadmin.username.trim()
+      ? existing.superadmin.username.trim()
+      : DEFAULT_ADMIN_USERNAME;
+  const users = Array.isArray(existing && existing.users) ? existing.users : [];
+  const passwordHash = bcrypt.hashSync(password, 10);
+  return { superadmin: { username, passwordHash }, users };
+}
+
 function normalizeAllowedServices(input) {
   if (!input) return [];
   if (Array.isArray(input)) {
@@ -352,6 +375,21 @@ function getProjectNetwork() {
 }
 
 let adminCredentials = loadAdminCredentials();
+if (FORCE_ADMIN_PASSWORD) {
+  try {
+    const existingHash = getSuperadminHash(adminCredentials);
+    const matches = existingHash ? bcrypt.compareSync(HUB_ADMIN_PASSWORD, existingHash) : false;
+    if (!matches) {
+      const next = buildSuperadminCredentials(adminCredentials, HUB_ADMIN_PASSWORD);
+      saveAdminCredentials(next);
+      console.warn('[hub] HUB_ADMIN_PASSWORD_FORCE=1: superadmin password reset from env.');
+    } else {
+      console.warn('[hub] HUB_ADMIN_PASSWORD_FORCE=1: superadmin password already matches env.');
+    }
+  } catch (err) {
+    console.warn('[hub] Failed to apply HUB_ADMIN_PASSWORD_FORCE', err);
+  }
+}
 
 function getSessionUser(req) {
   return req.session && req.session.user ? req.session.user : null;
