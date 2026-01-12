@@ -934,7 +934,15 @@ app.post('/admin/password', requireSuperadmin, requireSameOrigin, async (req, re
   }
 
   try {
-    const matches = await bcrypt.compare(currentPassword, adminCredentials.passwordHash);
+    const superadmin = adminCredentials && adminCredentials.superadmin
+      ? adminCredentials.superadmin
+      : (adminCredentials && adminCredentials.passwordHash
+        ? { username: DEFAULT_ADMIN_USERNAME, passwordHash: adminCredentials.passwordHash }
+        : null);
+    if (!superadmin || typeof superadmin.passwordHash !== 'string') {
+      return res.status(500).json({ ok: false, error: 'missing_admin_credentials' });
+    }
+    const matches = await bcrypt.compare(currentPassword, superadmin.passwordHash);
     if (!matches) {
       return res.status(400).json({ ok: false, error: 'invalid_current_password' });
     }
@@ -949,7 +957,18 @@ app.post('/admin/password', requireSuperadmin, requireSameOrigin, async (req, re
 
   try {
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    saveAdminCredentials({ passwordHash });
+    const users = Array.isArray(adminCredentials && adminCredentials.users) ? adminCredentials.users : [];
+    const nextCredentials = {
+      superadmin: {
+        username:
+          adminCredentials && adminCredentials.superadmin && adminCredentials.superadmin.username
+            ? adminCredentials.superadmin.username
+            : DEFAULT_ADMIN_USERNAME,
+        passwordHash,
+      },
+      users,
+    };
+    saveAdminCredentials(nextCredentials);
     res.json({ ok: true });
   } catch (err) {
     console.error('[hub] Failed to update password', err);

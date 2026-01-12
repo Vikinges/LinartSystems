@@ -2,7 +2,6 @@ version: '3.8'
 services:
   reverse-proxy:
     image: traefik:v2.11
-    container_name: linart_proxy
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
@@ -16,7 +15,6 @@ services:
 
   hub:
     build: ./hub
-    container_name: linart_hub
     depends_on:
       - service2
     ports:
@@ -37,7 +35,6 @@ services:
 
   service2:
     build: ./service2
-    container_name: linart_service2
     depends_on:
       - paddle-ocr
     restart: always
@@ -57,7 +54,8 @@ services:
 
   paddle-ocr:
     image: 987846/paddleocr:latest
-    container_name: paddle_ocr
     restart: always
+    environment:
+      - PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python
     ports:
       - "8866:8866"

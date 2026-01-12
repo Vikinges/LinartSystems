@@ -38,6 +38,25 @@ Base URL (локально): `http://localhost:8080`
 }
 ```
 
+### Admin API (только superadmin)
+Base URL (локально): `http://localhost:8080`
+
+- `GET /admin/users` — список пользователей (без паролей). Ответ:
+
+```json
+{ "ok": true, "users": [ { "username": "operator1", "allowedServices": ["service2"] } ] }
+```
+
+- `POST /admin/users` — создать пользователя.
+  - Body: `{ "username": "operator1", "password": "secret", "allowedServices": ["service2"] }`
+- `PATCH /admin/users/:username` — обновить права/пароль.
+  - Body: `{ "allowedServices": ["service2"], "password": "newpass" }`
+- `DELETE /admin/users/:username` — удалить пользователя.
+- `POST /admin/password` — сменить пароль superadmin.
+  - Body: `{ "currentPassword": "...", "newPassword": "..." }`
+
+Примечание: данные пользователей хранятся в `hub/admin.json`. Для сохранения настроек между пересборками контейнера используйте bind-mount для `hub/admin.json`, `hub/services.json`, `hub/config.json`, `hub/static/uploads`.
+
 ## Service API (пример: service1)
 Base URL (в контейнерной сети): `http://service1:3000`
 Base URL (локально, если проброшен): `http://localhost:3002` (см. `docker-compose.yml`)
@@ -125,6 +144,19 @@ healthcheck:
 ## Безопасность и приватность
 - Не коммитьте конфиденциальные данные (ключи, секреты, store.json с реальными данными). Если в репозитории есть тестовые data-файлы — пометьте их как тестовые.
 - Для production используйте TLS, защиту /api/status (например, basic auth или токены) и ограничьте доступ к Docker API.
+
+## Деплой / Webhook (Portainer)
+Для обновления стека после push в Git используйте webhook Portainer:
+
+```
+POST https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2
+```
+
+Пример:
+
+```bash
+curl -X POST https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2
+```
 
 ## Где искать исходные примеры
 - Полный список полей: `service1/fields.json`.
