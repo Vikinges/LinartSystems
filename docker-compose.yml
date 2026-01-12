@@ -47,7 +47,6 @@ services:
       - PADDLE_OCR_URL=${PADDLE_OCR_URL:-http://paddle-ocr:8866/ocr}
     volumes:
       - ./service2/data:/app/data
-      - ./service2/public/form-template1.pdf:/app/public/form-template1.pdf:ro
       - ./service2/public/templates:/app/public/templates
       - ./service2/out:/app/out
     healthcheck:
