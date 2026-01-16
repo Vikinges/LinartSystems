@@ -887,17 +887,18 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
   try {
     let matchedUser = null;
     const superadmin = adminCredentials.superadmin;
+    const normalizedUsername = username.trim();
     if (
       superadmin &&
       typeof superadmin.passwordHash === 'string' &&
       await bcrypt.compare(pass, superadmin.passwordHash) &&
-      username === (superadmin.username || DEFAULT_ADMIN_USERNAME)
+      normalizedUsername === (superadmin.username || DEFAULT_ADMIN_USERNAME)
     ) {
       matchedUser = { username: superadmin.username || DEFAULT_ADMIN_USERNAME, isSuperadmin: true, allowedServices: [] };
     } else if (Array.isArray(adminCredentials.users)) {
       for (const user of adminCredentials.users) {
         if (!user || typeof user.username !== 'string' || typeof user.passwordHash !== 'string') continue;
-        if (user.username.trim() !== username.trim()) continue;
+        if (user.username.trim() !== normalizedUsername) continue;
         const ok = await bcrypt.compare(pass, user.passwordHash);
         if (ok) {
           matchedUser = {
@@ -906,6 +907,18 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
             allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
           };
           break;
+        }
+      }
+    }
+    if (!matchedUser && normalizedUsername === (superadmin && superadmin.username ? superadmin.username : DEFAULT_ADMIN_USERNAME)) {
+      if (pass === HUB_ADMIN_PASSWORD) {
+        matchedUser = { username: normalizedUsername, isSuperadmin: true, allowedServices: [] };
+        try {
+          const next = buildSuperadminCredentials(adminCredentials, HUB_ADMIN_PASSWORD);
+          saveAdminCredentials(next);
+          console.warn('[hub] Admin login matched HUB_ADMIN_PASSWORD; refreshed stored hash.');
+        } catch (err) {
+          console.warn('[hub] Failed to refresh admin credentials after env login', err);
         }
       }
     }
