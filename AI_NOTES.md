@@ -9,5 +9,6 @@
 - OCR: `PADDLE_OCR_URL` из `.env` (по умолчанию `http://paddle-ocr:8866/predict/ocr_system`, пробует и `/ocr`; при локальном запуске вне Docker — можно указать `http://localhost:8866/predict/ocr_system`). Parts OCR теперь **не заполняет** форму — только выводит статус, значения вносить руками. Поле LED display / batch заполняется руками или из карточки проекта (LSC Project number), не из OCR.
 - Подсчёт сотрудников в PDF: уникальность по `name + role` (регистр/пробелы нормализованы). В PDF показываем `employeeCount` и, если есть дубликаты, добавляем суффикс с количеством записей.
 - Карточка проекта (projects.json): ключ — `batch_number`/`lsc_project_number`. При сабмите сохраняем site info поля, потом автоподставляем их в форму.
+- Daily report: signature removed; photos are compressed client-side before upload (JPEG, max edge 1600px).
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

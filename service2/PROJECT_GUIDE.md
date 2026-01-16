@@ -3,7 +3,7 @@
 ## 1. Overview
 - Node.js 20 + Express application that serves a maintenance checklist form and produces a filled PDF plus JSON metadata.
 - PDF generation relies on pdf-lib and an AcroForm template stored at public/form-template1.pdf.
-- Daily report form (template_type=daily_report) captures project number, date, submitter, notes, photos, and signature.
+- Daily report form (template_type=daily_report) captures project number, date, submitter, notes, and photos.
 - Field definitions come from ields.json; human-friendly labels can be overridden via mapping.json.
 - The service can be containerised via the provided Dockerfile/docker-compose.
 
@@ -45,15 +45,16 @@ docker compose up --build -d
 - GET /form/:templateId – Serves a generated HTML form for the chosen template (currently maintenance).
 - GET /templates – Returns catalogue of available templates (id, label, description, default).
 - POST /submit – Accepts multipart form data, produces the filled PDF, and returns { ok, url, overflowCount, partsRowsHidden } with a download link.
-- POST /submit (daily_report) expects daily_project_number, daily_report_date, submitter_name, daily_report_text, daily_signature (required), and daily_photos.
+- POST /submit (daily_report) expects daily_project_number, daily_report_date, submitter_name, daily_report_text, and daily_photos.
 - GET /download/:file – Streams the generated PDF.
 - GET /suggest – Returns autocomplete suggestions for supported text fields.
 
 ## 5. Front-end Form Highlights
 - Photos card contains three upload slots (photo_before, photo_after, photos[]).
+- Photo uploads are compressed client-side before submission (JPEG, max edge 1600px, min size 350 KB).
 - Parts table renders 15 rows; only the first is visible, additional rows can be toggled via + Add another part / – Remove last row (handled by setupPartsTable() in the generated script).
 - Signature pads use <canvas> elements; drawings are captured as base64 PNG strings and submitted with the form.
-- Daily report form adds project/date/submitter inputs, a report text area, daily photo upload, and a single signature pad.
+- Daily report form adds project/date/submitter inputs, a report text area, and daily photo upload.
 - Debug toggle (in UI) can be added later; currently no debug flag is exposed on the form.
 
 ## 6. PDF Generation Flow

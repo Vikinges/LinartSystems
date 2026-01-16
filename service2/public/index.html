@@ -2454,42 +2454,6 @@
 
         </section>
 
-        <section class="card" data-form-types="daily_report">
-
-          <h2>Signature</h2>
-
-          <div class="signature-row">
-
-                    <div class="signature-pad" data-field="daily_signature" data-sample="">
-
-          <div class="signature-pad__label">
-
-            <span>Signature</span>
-
-            <div class="signature-pad__actions">
-
-              <button type="button" class="signature-fullscreen">Fullscreen</button>
-
-              <button type="button" class="signature-clear">Clear</button>
-
-            </div>
-
-          </div>
-
-          <div class="signature-canvas-wrapper">
-
-            <canvas aria-label="Signature signature area"></canvas>
-
-          </div>
-
-          <input type="hidden" name="daily_signature" value="" />
-
-        </div>
-
-          </div>
-
-        </section>
-
         <section class="card" data-form-types="service_report,maintenance">
 
           <h2>Site information</h2>
@@ -8817,6 +8781,118 @@
 
 
 
+        const PHOTO_COMPRESS_MAX_EDGE = 1600;
+        const PHOTO_COMPRESS_QUALITY = 0.78;
+        const PHOTO_COMPRESS_MIN_BYTES = 350 * 1024;
+
+        const loadImageFromFile = (file) =>
+          new Promise((resolve, reject) => {
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(img);
+            };
+            img.onerror = (err) => {
+              URL.revokeObjectURL(objectUrl);
+              reject(err || new Error('Image load failed.'));
+            };
+            img.src = objectUrl;
+          });
+
+        const normalizeCompressedName = (name, mimeType) => {
+          const base = String(name || 'upload').replace(/.[^/.]+$/, '');
+          if (mimeType === 'image/jpeg') {
+            return base + '.jpg';
+          }
+          return base;
+        };
+
+        const compressImageFile = async (file) => {
+          if (!(file instanceof File)) return file;
+          if (!file.type || !file.type.startsWith('image/')) return file;
+          if (file.size && file.size < PHOTO_COMPRESS_MIN_BYTES) return file;
+          let img;
+          try {
+            img = await loadImageFromFile(file);
+          } catch (err) {
+            return file;
+          }
+          const width = img.naturalWidth || img.width || 0;
+          const height = img.naturalHeight || img.height || 0;
+          if (!width || !height) return file;
+          const maxEdge = Math.max(width, height);
+          const scale = maxEdge > PHOTO_COMPRESS_MAX_EDGE ? PHOTO_COMPRESS_MAX_EDGE / maxEdge : 1;
+          const targetWidth = Math.max(1, Math.round(width * scale));
+          const targetHeight = Math.max(1, Math.round(height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return file;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, targetWidth, targetHeight);
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          const blob = await new Promise((resolve) => {
+            canvas.toBlob((value) => resolve(value), 'image/jpeg', PHOTO_COMPRESS_QUALITY);
+          });
+          if (!blob || !blob.size || blob.size >= file.size) return file;
+          return new File([blob], normalizeCompressedName(file.name, blob.type), {
+            type: blob.type,
+            lastModified: file.lastModified,
+          });
+        };
+
+        const compressFormImages = async (rawFormData) => {
+          let originalBytes = 0;
+          let compressedBytes = 0;
+          let compressedCount = 0;
+          let totalFiles = 0;
+          const compressedFormData = new FormData();
+
+          for (const [key, value] of rawFormData.entries()) {
+            if (value instanceof File) {
+              totalFiles += 1;
+              const size = value.size || 0;
+              originalBytes += size;
+              let nextFile = value;
+              try {
+                nextFile = await compressImageFile(value);
+              } catch (err) {
+                nextFile = value;
+              }
+              if (nextFile !== value) {
+                compressedCount += 1;
+                compressedBytes += nextFile.size || 0;
+              } else {
+                compressedBytes += size;
+              }
+              compressedFormData.append(key, nextFile, nextFile.name);
+            } else {
+              compressedFormData.append(key, value);
+            }
+          }
+
+          if (!totalFiles) {
+            return {
+              formData: rawFormData,
+              originalBytes: 0,
+              compressedBytes: 0,
+              compressedCount: 0,
+              totalFiles: 0,
+            };
+          }
+
+          return {
+            formData: compressedFormData,
+            originalBytes,
+            compressedBytes,
+            compressedCount,
+            totalFiles,
+          };
+        };
+
+
         function revokePreviewUrls(fieldName) {
 
           const urls = previewUrls.get(fieldName);
@@ -11887,13 +11963,13 @@
 
 
 
-        formEl.addEventListener('submit', (event) => {
+        formEl.addEventListener('submit', async (event) => {
 
           event.preventDefault();
 
           if (statusEl) {
 
-            statusEl.textContent = 'Submitting...';
+            statusEl.textContent = 'Preparing submission...';
 
           }
 
@@ -11902,6 +11978,14 @@
           submitButton.classList.add('is-disabled');
 
           submitButton.disabled = true;
+
+          const resetSubmitState = () => {
+
+            submitButton.disabled = false;
+
+            submitButton.classList.remove('is-disabled');
+
+          };
 
 
 
@@ -11937,15 +12021,13 @@
 
           if (hasInvalidDateTimes) {
 
-            submitButton.classList.remove('is-disabled');
-
-            submitButton.disabled = false;
-
             if (statusEl) {
 
               statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
 
             }
+
+            resetSubmitState();
 
             return;
 
@@ -12003,13 +12085,53 @@
 
 
 
-          const formData = new FormData(formEl);
+          const rawFormData = new FormData(formEl);
 
           dateTimeSnapshots.forEach(({ input, normalized }) => {
 
             input.value = normalized.display;
 
           });
+
+          const hasFileUploads = Array.from(rawFormData.values()).some((value) => value instanceof File);
+
+          if (hasFileUploads && statusEl) {
+
+            statusEl.textContent = 'Compressing photos...';
+
+          }
+
+          let compression = null;
+
+          try {
+
+            compression = await compressFormImages(rawFormData);
+
+          } catch (err) {
+
+            recordDebug('image-compress-error', {
+
+              message: err && err.message ? err.message : String(err),
+
+            });
+
+            compression = {
+
+              formData: rawFormData,
+
+              originalBytes: 0,
+
+              compressedBytes: 0,
+
+              compressedCount: 0,
+
+              totalFiles: 0,
+
+            };
+
+          }
+
+          const formData = compression && compression.formData ? compression.formData : rawFormData;
 
           if (debugState.enabled) {
 
@@ -12018,6 +12140,32 @@
           } else {
 
             formData.delete('debug_mode');
+
+          }
+
+          if (compression && compression.totalFiles) {
+
+            const savedBytes = Math.max(0, compression.originalBytes - compression.compressedBytes);
+
+            recordDebug('image-compress', {
+
+              totalFiles: compression.totalFiles,
+
+              compressedCount: compression.compressedCount,
+
+              originalBytes: compression.originalBytes,
+
+              compressedBytes: compression.compressedBytes,
+
+              savedBytes,
+
+            });
+
+          }
+
+          if (statusEl) {
+
+            statusEl.textContent = 'Submitting...';
 
           }
 
@@ -12152,16 +12300,6 @@
               });
 
             }
-
-          };
-
-
-
-          const resetSubmitState = () => {
-
-            submitButton.disabled = false;
-
-            submitButton.classList.remove('is-disabled');
 
           };
 

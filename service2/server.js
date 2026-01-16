@@ -1967,8 +1967,6 @@ const DAILY_REPORT_FIELDS = {
 
   reportText: 'daily_report_text',
 
-  signature: 'daily_signature',
-
   photos: 'daily_photos',
 
 };
@@ -5103,7 +5101,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-async function drawDailyReportPage(pdfDoc, font, reportData, signatureImages, options = {}) {
+async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
   const fallbackSize = { width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT };
 
@@ -5422,130 +5420,6 @@ async function drawDailyReportPage(pdfDoc, font, reportData, signatureImages, op
     lineHeightMultiplier: 1.25,
 
   });
-
-  cursorY = textRect.y - 24;
-
-  drawSectionTitle('Signature');
-
-  const signatureHeight = 120;
-
-  const signatureWidth = Math.min(260, page.getWidth() - margin * 2);
-
-  const signatureRect = {
-
-    x: margin,
-
-    y: cursorY - signatureHeight,
-
-    width: signatureWidth,
-
-    height: signatureHeight,
-
-  };
-
-  page.drawRectangle({
-
-    x: signatureRect.x,
-
-    y: signatureRect.y,
-
-    width: signatureRect.width,
-
-    height: signatureRect.height,
-
-    borderWidth: TABLE_BORDER_WIDTH,
-
-    borderColor: TABLE_BORDER_COLOR,
-
-    color: rgb(1, 1, 1),
-
-  });
-
-  const nameLabel = submitterName ? `Signed by: ${submitterName}` : 'Signed by:';
-
-  page.drawText(nameLabel, {
-
-    x: signatureRect.x,
-
-    y: signatureRect.y - 12,
-
-    size: 9,
-
-    font,
-
-    color: textColor,
-
-  });
-
-  const signatureEntry = (signatureImages || []).find(
-
-    (entry) => entry && entry.acroName === DAILY_REPORT_FIELDS.signature,
-
-  );
-
-  if (signatureEntry) {
-
-    try {
-
-      const decoded = decodeImageDataUrl(signatureEntry.data);
-
-      if (decoded) {
-
-        const image =
-
-          decoded.mimeType === 'image/png'
-
-            ? await pdfDoc.embedPng(decoded.buffer)
-
-            : await pdfDoc.embedJpg(decoded.buffer);
-
-        const availableWidth = signatureRect.width - 12;
-
-        const availableHeight = signatureRect.height - 12;
-
-        const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
-
-        const drawWidth = image.width * scale;
-
-        const drawHeight = image.height * scale;
-
-        const offsetX = signatureRect.x + 6 + (availableWidth - drawWidth) / 2;
-
-        const offsetY = signatureRect.y + 6 + (availableHeight - drawHeight) / 2;
-
-        page.drawImage(image, {
-
-          x: offsetX,
-
-          y: offsetY,
-
-          width: drawWidth,
-
-          height: drawHeight,
-
-        });
-
-        signaturePlacements.push({
-
-          acroName: signatureEntry.acroName,
-
-          page: pdfDoc.getPageCount(),
-
-          width: Number(drawWidth.toFixed(2)),
-
-          height: Number(drawHeight.toFixed(2)),
-
-        });
-
-      }
-
-    } catch (err) {
-
-      console.warn(`[server] Unable to draw signature for daily report: ${err.message}`);
-
-    }
-
-  }
 
   return signaturePlacements;
 
@@ -7563,8 +7437,6 @@ function generateIndexHtml() {
 
     ['customer_signature', ''],
 
-    ['daily_signature', ''],
-
   ]);
 
   demoValues.set('control_notes_3', '');
@@ -7942,40 +7814,6 @@ ${rows.join('\n')}
           </div>
 
           <input type="hidden" name="${escapeHtml(descriptor.requestName)}" value="" />
-
-        </div>`;
-
-  };
-
-  const renderCustomSignaturePad = (requestName, label) => {
-
-    const safeName = escapeHtml(requestName);
-
-    const sample = signatureSamples.get(requestName) || '';
-
-    return `        <div class="signature-pad" data-field="${safeName}" data-sample="${escapeHtml(sample)}">
-
-          <div class="signature-pad__label">
-
-            <span>${escapeHtml(label)}</span>
-
-            <div class="signature-pad__actions">
-
-              <button type="button" class="signature-fullscreen">Fullscreen</button>
-
-              <button type="button" class="signature-clear">Clear</button>
-
-            </div>
-
-          </div>
-
-          <div class="signature-canvas-wrapper">
-
-            <canvas aria-label="${escapeHtml(label)} signature area"></canvas>
-
-          </div>
-
-          <input type="hidden" name="${safeName}" value="" />
 
         </div>`;
 
@@ -10416,18 +10254,6 @@ ${renderTextInput(DAILY_REPORT_FIELDS.reportText, 'Report text', { textarea: tru
             </div>
 
             <small>JPEG/PNG only, up to 20 images.</small>
-
-          </div>
-
-        </section>
-
-        <section class="card" data-form-types="daily_report">
-
-          <h2>Signature</h2>
-
-          <div class="signature-row">
-
-            ${renderCustomSignaturePad(DAILY_REPORT_FIELDS.signature, 'Signature')}
 
           </div>
 
@@ -15718,6 +15544,118 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+        const PHOTO_COMPRESS_MAX_EDGE = 1600;
+        const PHOTO_COMPRESS_QUALITY = 0.78;
+        const PHOTO_COMPRESS_MIN_BYTES = 350 * 1024;
+
+        const loadImageFromFile = (file) =>
+          new Promise((resolve, reject) => {
+            const objectUrl = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+              URL.revokeObjectURL(objectUrl);
+              resolve(img);
+            };
+            img.onerror = (err) => {
+              URL.revokeObjectURL(objectUrl);
+              reject(err || new Error('Image load failed.'));
+            };
+            img.src = objectUrl;
+          });
+
+        const normalizeCompressedName = (name, mimeType) => {
+          const base = String(name || 'upload').replace(/\.[^/.]+$/, '');
+          if (mimeType === 'image/jpeg') {
+            return base + '.jpg';
+          }
+          return base;
+        };
+
+        const compressImageFile = async (file) => {
+          if (!(file instanceof File)) return file;
+          if (!file.type || !file.type.startsWith('image/')) return file;
+          if (file.size && file.size < PHOTO_COMPRESS_MIN_BYTES) return file;
+          let img;
+          try {
+            img = await loadImageFromFile(file);
+          } catch (err) {
+            return file;
+          }
+          const width = img.naturalWidth || img.width || 0;
+          const height = img.naturalHeight || img.height || 0;
+          if (!width || !height) return file;
+          const maxEdge = Math.max(width, height);
+          const scale = maxEdge > PHOTO_COMPRESS_MAX_EDGE ? PHOTO_COMPRESS_MAX_EDGE / maxEdge : 1;
+          const targetWidth = Math.max(1, Math.round(width * scale));
+          const targetHeight = Math.max(1, Math.round(height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = targetWidth;
+          canvas.height = targetHeight;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return file;
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, targetWidth, targetHeight);
+          ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+          const blob = await new Promise((resolve) => {
+            canvas.toBlob((value) => resolve(value), 'image/jpeg', PHOTO_COMPRESS_QUALITY);
+          });
+          if (!blob || !blob.size || blob.size >= file.size) return file;
+          return new File([blob], normalizeCompressedName(file.name, blob.type), {
+            type: blob.type,
+            lastModified: file.lastModified,
+          });
+        };
+
+        const compressFormImages = async (rawFormData) => {
+          let originalBytes = 0;
+          let compressedBytes = 0;
+          let compressedCount = 0;
+          let totalFiles = 0;
+          const compressedFormData = new FormData();
+
+          for (const [key, value] of rawFormData.entries()) {
+            if (value instanceof File) {
+              totalFiles += 1;
+              const size = value.size || 0;
+              originalBytes += size;
+              let nextFile = value;
+              try {
+                nextFile = await compressImageFile(value);
+              } catch (err) {
+                nextFile = value;
+              }
+              if (nextFile !== value) {
+                compressedCount += 1;
+                compressedBytes += nextFile.size || 0;
+              } else {
+                compressedBytes += size;
+              }
+              compressedFormData.append(key, nextFile, nextFile.name);
+            } else {
+              compressedFormData.append(key, value);
+            }
+          }
+
+          if (!totalFiles) {
+            return {
+              formData: rawFormData,
+              originalBytes: 0,
+              compressedBytes: 0,
+              compressedCount: 0,
+              totalFiles: 0,
+            };
+          }
+
+          return {
+            formData: compressedFormData,
+            originalBytes,
+            compressedBytes,
+            compressedCount,
+            totalFiles,
+          };
+        };
+
+
         function revokePreviewUrls(fieldName) {
 
           const urls = previewUrls.get(fieldName);
@@ -18788,13 +18726,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-        formEl.addEventListener('submit', (event) => {
+        formEl.addEventListener('submit', async (event) => {
 
           event.preventDefault();
 
           if (statusEl) {
 
-            statusEl.textContent = 'Submitting...';
+            statusEl.textContent = 'Preparing submission...';
 
           }
 
@@ -18803,6 +18741,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           submitButton.classList.add('is-disabled');
 
           submitButton.disabled = true;
+
+          const resetSubmitState = () => {
+
+            submitButton.disabled = false;
+
+            submitButton.classList.remove('is-disabled');
+
+          };
 
 
 
@@ -18838,15 +18784,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           if (hasInvalidDateTimes) {
 
-            submitButton.classList.remove('is-disabled');
-
-            submitButton.disabled = false;
-
             if (statusEl) {
 
               statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
 
             }
+
+            resetSubmitState();
 
             return;
 
@@ -18904,13 +18848,53 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-          const formData = new FormData(formEl);
+          const rawFormData = new FormData(formEl);
 
           dateTimeSnapshots.forEach(({ input, normalized }) => {
 
             input.value = normalized.display;
 
           });
+
+          const hasFileUploads = Array.from(rawFormData.values()).some((value) => value instanceof File);
+
+          if (hasFileUploads && statusEl) {
+
+            statusEl.textContent = 'Compressing photos...';
+
+          }
+
+          let compression = null;
+
+          try {
+
+            compression = await compressFormImages(rawFormData);
+
+          } catch (err) {
+
+            recordDebug('image-compress-error', {
+
+              message: err && err.message ? err.message : String(err),
+
+            });
+
+            compression = {
+
+              formData: rawFormData,
+
+              originalBytes: 0,
+
+              compressedBytes: 0,
+
+              compressedCount: 0,
+
+              totalFiles: 0,
+
+            };
+
+          }
+
+          const formData = compression && compression.formData ? compression.formData : rawFormData;
 
           if (debugState.enabled) {
 
@@ -18919,6 +18903,32 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           } else {
 
             formData.delete('debug_mode');
+
+          }
+
+          if (compression && compression.totalFiles) {
+
+            const savedBytes = Math.max(0, compression.originalBytes - compression.compressedBytes);
+
+            recordDebug('image-compress', {
+
+              totalFiles: compression.totalFiles,
+
+              compressedCount: compression.compressedCount,
+
+              originalBytes: compression.originalBytes,
+
+              compressedBytes: compression.compressedBytes,
+
+              savedBytes,
+
+            });
+
+          }
+
+          if (statusEl) {
+
+            statusEl.textContent = 'Submitting...';
 
           }
 
@@ -19053,16 +19063,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               });
 
             }
-
-          };
-
-
-
-          const resetSubmitState = () => {
-
-            submitButton.disabled = false;
-
-            submitButton.classList.remove('is-disabled');
 
           };
 
@@ -20608,8 +20608,6 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     customer_signature: req.body?.customer_signature,
 
-    daily_signature: req.body?.daily_signature,
-
   };
 
   let overflowPlacements = [];
@@ -20648,8 +20646,6 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     : null;
 
-  const dailySignatureRaw = isDailyReport ? req.body?.[DAILY_REPORT_FIELDS.signature] : null;
-
   if (isDailyReport) {
 
     const missing = [];
@@ -20659,12 +20655,6 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
     if (!dailyReportData.reportDate) missing.push('report date');
 
     if (!dailyReportData.submitterName) missing.push('filled by');
-
-    const signatureOk =
-
-      typeof dailySignatureRaw === 'string' && dailySignatureRaw.trim().startsWith('data:image/');
-
-    if (!signatureOk) missing.push('signature');
 
     if (missing.length) {
 
@@ -21158,8 +21148,6 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
         helveticaFont,
 
         dailyReportData,
-
-        signatureImages,
 
         { pageSize: templatePageSize, overflowTextEntries },
 
