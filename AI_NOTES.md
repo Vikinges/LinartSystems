@@ -10,5 +10,6 @@
 - Подсчёт сотрудников в PDF: уникальность по `name + role` (регистр/пробелы нормализованы). В PDF показываем `employeeCount` и, если есть дубликаты, добавляем суффикс с количеством записей.
 - Карточка проекта (projects.json): ключ — `batch_number`/`lsc_project_number`. При сабмите сохраняем site info поля, потом автоподставляем их в форму.
 - Daily report: signature removed; photos are compressed client-side before upload (JPEG, max edge 1600px).
+- Daily report: project number suggestions come from projects.json; submitter uses employee name suggestions.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

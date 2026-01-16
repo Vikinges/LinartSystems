@@ -7383,6 +7383,26 @@ function generateIndexHtml() {
 
 
 
+  const projectNumberOptions = (() => {
+    const projectsStore = loadProjectsStore();
+    const values = new Set();
+    const addValue = (value) => {
+      const normalized = String(value || '').trim();
+      if (normalized) values.add(normalized);
+    };
+    if (projectsStore && typeof projectsStore === 'object') {
+      Object.entries(projectsStore).forEach(([key, card]) => {
+        addValue(key);
+        if (card && typeof card === 'object') {
+          addValue(card.batch_number);
+          addValue(card.lsc_project_number);
+        }
+      });
+    }
+    return Array.from(values).sort((a, b) => a.localeCompare(b));
+  })();
+
+
   const demoValues = new Map([
 
     ['end_customer_name', ''],
@@ -7469,7 +7489,17 @@ function generateIndexHtml() {
 
     label,
 
-    { type = 'text', textarea = false, placeholder = '', allowUnknown = false, required = false, id: idOverride = null } = {},
+    {
+      type = 'text',
+      textarea = false,
+      placeholder = '',
+      allowUnknown = false,
+      required = false,
+      id: idOverride = null,
+      suggestField = null,
+      listId = null,
+      listOptions = null,
+    } = {},
 
   ) => {
 
@@ -7507,21 +7537,42 @@ function generateIndexHtml() {
 
     const valueAttr = initial ? ` value="${escapeHtml(initial)}"` : '';
 
-    const enableSuggestions = descriptor && SUGGESTION_FIELDS.has(descriptor.requestName);
+    const suggestionField =
+      suggestField || (descriptor && SUGGESTION_FIELDS.has(descriptor.requestName) ? descriptor.requestName : null);
 
     let suggestionAttrs = '';
 
     let datalistMarkup = '';
 
-    if (enableSuggestions) {
+    if (suggestionField) {
 
-      const listId = `suggest-${id}`;
+      const resolvedListId = listId || `suggest-${id}`;
 
       suggestionAttrs =
 
-        ` data-suggest-field="${escapeHtml(descriptor.requestName)}" list="${escapeHtml(listId)}" autocomplete="off"`;
+        ` data-suggest-field="${escapeHtml(suggestionField)}" list="${escapeHtml(resolvedListId)}" autocomplete="off"`;
 
-      datalistMarkup = `\n          <datalist id="${escapeHtml(listId)}" data-suggest-list="${escapeHtml(descriptor.requestName)}"></datalist>`;
+      datalistMarkup = `\n          <datalist id="${escapeHtml(resolvedListId)}" data-suggest-list="${escapeHtml(suggestionField)}"></datalist>`;
+
+    } else if (listId) {
+
+      const resolvedListId = listId;
+
+      suggestionAttrs = ` list="${escapeHtml(resolvedListId)}"`;
+
+      if (Array.isArray(listOptions) && listOptions.length) {
+
+        const optionMarkup = listOptions
+          .map((value) => `            <option value="${escapeHtml(String(value))}"></option>`)
+          .join('\n');
+
+        datalistMarkup = `\n          <datalist id="${escapeHtml(resolvedListId)}">\n${optionMarkup}\n          </datalist>`;
+
+      } else {
+
+        datalistMarkup = `\n          <datalist id="${escapeHtml(resolvedListId)}"></datalist>`;
+
+      }
 
     }
 
@@ -10217,11 +10268,11 @@ ${rows.join('\n')}
 
           <div class="grid two-col">
 
-${renderTextInput(DAILY_REPORT_FIELDS.projectNumber, 'Project number', { allowUnknown: true, required: true })}
+${renderTextInput(DAILY_REPORT_FIELDS.projectNumber, 'Project number', { allowUnknown: true, required: true, listId: 'daily-project-number-list', listOptions: projectNumberOptions })}
 
 ${renderTextInput(DAILY_REPORT_FIELDS.reportDate, 'Report date', { type: 'date', allowUnknown: true, required: true })}
 
-${renderTextInput(DAILY_REPORT_FIELDS.submitterName, 'Filled by', { allowUnknown: true, required: true })}
+${renderTextInput(DAILY_REPORT_FIELDS.submitterName, 'Filled by', { allowUnknown: true, required: true, suggestField: 'employee_name' })}
 
           </div>
 
@@ -10814,7 +10865,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-        <section class="card">
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
 
           <h2>Signatures</h2>
 

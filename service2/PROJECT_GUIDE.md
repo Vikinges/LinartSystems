@@ -55,6 +55,7 @@ docker compose up --build -d
 - Parts table renders 15 rows; only the first is visible, additional rows can be toggled via + Add another part / – Remove last row (handled by setupPartsTable() in the generated script).
 - Signature pads use <canvas> elements; drawings are captured as base64 PNG strings and submitted with the form.
 - Daily report form adds project/date/submitter inputs, a report text area, and daily photo upload.
+- Daily report project number suggestions come from saved project cards; submitter uses employee name suggestions.
 - Debug toggle (in UI) can be added later; currently no debug flag is exposed on the form.
 
 ## 6. PDF Generation Flow

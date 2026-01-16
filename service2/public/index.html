@@ -2392,7 +2392,15 @@
 
           <span>Project number</span>
 
-          <input type="text" id="daily-project-number" name="daily_project_number" placeholder="Project number" required />
+          <input type="text" id="daily-project-number" name="daily_project_number" placeholder="Project number" list="daily-project-number-list" required />
+          <datalist id="daily-project-number-list">
+            <option value="19-3163"></option>
+            <option value="193163"></option>
+            <option value="25-0000"></option>
+            <option value="BATCH-001"></option>
+            <option value="DBG-001"></option>
+            <option value="TEST-001"></option>
+          </datalist>
 
         </label>
 
@@ -2408,7 +2416,8 @@
 
           <span>Filled by</span>
 
-          <input type="text" id="submitter-name" name="submitter_name" placeholder="Filled by" required />
+          <input type="text" id="submitter-name" name="submitter_name" placeholder="Filled by" data-suggest-field="employee_name" list="suggest-submitter-name" autocomplete="off" required />
+          <datalist id="suggest-submitter-name" data-suggest-list="employee_name"></datalist>
 
         </label>
 
@@ -3966,7 +3975,7 @@
 
 
 
-        <section class="card">
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
 
           <h2>Signatures</h2>
 
