@@ -30,6 +30,10 @@ if (!HUB_ADMIN_PASSWORD) {
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 const ADMIN_AUTH_COOKIE = 'hub_admin_auth';
 const ADMIN_AUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const USER_ROLE_ADMIN = 'admin';
+const USER_ROLE_MANAGER = 'manager';
+const USER_ROLE_BLOCKED = 'blocked';
+const USER_ROLE_SET = new Set([USER_ROLE_ADMIN, USER_ROLE_MANAGER, USER_ROLE_BLOCKED]);
 
 // Trust reverse proxy (Traefik) so secure cookies work behind TLS
 app.set('trust proxy', 1);
@@ -285,7 +289,24 @@ function loadAdminCredentials() {
   try {
     const data = JSON.parse(fs.readFileSync(ADMIN_STORE_FILE, 'utf8'));
     if (data && (data.passwordHash || Array.isArray(data.users))) {
-      const normalized = { users: Array.isArray(data.users) ? data.users : [] };
+      const normalized = {
+        users: Array.isArray(data.users)
+          ? data.users
+              .map((user) => {
+                if (!user || typeof user !== 'object') return null;
+                const username = typeof user.username === 'string' ? user.username.trim() : '';
+                const passwordHash = typeof user.passwordHash === 'string' ? user.passwordHash : '';
+                if (!username || !passwordHash) return null;
+                return {
+                  username,
+                  passwordHash,
+                  allowedServices: normalizeAllowedServices(user.allowedServices),
+                  role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
+                };
+              })
+              .filter(Boolean)
+          : [],
+      };
       if (data.passwordHash) {
         normalized.superadmin = { username: DEFAULT_ADMIN_USERNAME, passwordHash: data.passwordHash };
       } else if (data.superadmin && data.superadmin.passwordHash) {
@@ -347,6 +368,25 @@ function normalizeAllowedServices(input) {
   return [];
 }
 
+function normalizeUserRole(value, fallback = USER_ROLE_MANAGER) {
+  const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (USER_ROLE_SET.has(raw)) return raw;
+  return USER_ROLE_SET.has(fallback) ? fallback : USER_ROLE_MANAGER;
+}
+
+function normalizeSessionUser(user) {
+  if (!user || typeof user !== 'object') return null;
+  const username = typeof user.username === 'string' ? user.username.trim() : '';
+  if (!username) return null;
+  const isSuperadmin = Boolean(user.isSuperadmin);
+  const allowedServices = Array.isArray(user.allowedServices) ? user.allowedServices : [];
+  const role = normalizeUserRole(
+    user.role,
+    isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER
+  );
+  return { username, isSuperadmin, allowedServices, role };
+}
+
 function getNextPort() {
   const services = loadServices();
   let maxPort = 3000;
@@ -394,7 +434,13 @@ if (FORCE_ADMIN_PASSWORD) {
 }
 
 function getSessionUser(req) {
-  if (req.session && req.session.user) return req.session.user;
+  if (req.session && req.session.user) {
+    const normalized = normalizeSessionUser(req.session.user);
+    if (normalized && (!req.session.user.role || req.session.user.role !== normalized.role)) {
+      req.session.user = normalized;
+    }
+    return normalized;
+  }
   const token = req.cookies ? req.cookies[ADMIN_AUTH_COOKIE] : null;
   if (!token) return null;
   const user = parseAdminAuthToken(token);
@@ -407,7 +453,7 @@ function getSessionUser(req) {
 
 function setSessionUser(req, user) {
   if (req.session) {
-    req.session.user = user;
+    req.session.user = normalizeSessionUser(user);
   }
 }
 
@@ -438,11 +484,13 @@ function signAdminPayload(payload) {
 }
 
 function buildAdminAuthToken(user) {
-  if (!user || !user.username) return '';
+  const normalized = normalizeSessionUser(user);
+  if (!normalized) return '';
   const payload = JSON.stringify({
-    u: user.username,
-    a: user.isSuperadmin ? 1 : 0,
-    s: Array.isArray(user.allowedServices) ? user.allowedServices : [],
+    u: normalized.username,
+    a: normalized.isSuperadmin ? 1 : 0,
+    r: normalized.role,
+    s: Array.isArray(normalized.allowedServices) ? normalized.allowedServices : [],
     t: Date.now(),
   });
   const encoded = base64UrlEncode(payload);
@@ -470,11 +518,14 @@ function parseAdminAuthToken(token) {
   }
   if (!data || !data.u || !data.t) return null;
   if (Date.now() - Number(data.t) > ADMIN_AUTH_TTL_MS) return null;
-  return {
+  const isSuperadmin = data.a === 1;
+  const role = normalizeUserRole(data.r, isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
+  return normalizeSessionUser({
     username: String(data.u),
-    isSuperadmin: data.a === 1,
+    isSuperadmin,
+    role,
     allowedServices: Array.isArray(data.s) ? data.s : [],
-  };
+  });
 }
 
 function adminCookieOptions() {
@@ -496,19 +547,22 @@ function setNoCache(res) {
 function getAllowedServiceSet(req) {
   const user = getSessionUser(req);
   if (!user) return null;
-  if (user.isSuperadmin) return null;
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return null;
+  if (user.role === USER_ROLE_BLOCKED) return new Set();
   if (!Array.isArray(user.allowedServices) || user.allowedServices.length === 0) return null;
   return new Set(user.allowedServices.map((s) => String(s).trim().toLowerCase()).filter(Boolean));
 }
 
 function isServiceAllowed(service, allowedSet, user) {
+  if (user && user.role === USER_ROLE_BLOCKED) return false;
+
   // Public services are always visible
   if (service.allowPublic) return true;
 
   // Unauthenticated users can only see public services
   if (!user) return false;
 
-  // Superadmin or user with no restrictions
+  // Superadmin/admin or user with no restrictions
   if (!allowedSet) return true;
 
   const id = (service.id || service.name || '').toLowerCase();
@@ -952,7 +1006,14 @@ app.get('/api/status', async (req, res) => {
       welcomeImage: config.welcomeImage,
       socialLinks: config.socialLinks,
       filtered: Boolean(allowed) || !user,
-      user: user ? { username: user.username, isSuperadmin: user.isSuperadmin, allowedServices: user.allowedServices || [] } : null,
+      user: user
+        ? {
+            username: user.username,
+            isSuperadmin: user.isSuperadmin,
+            role: user.role,
+            allowedServices: user.allowedServices || [],
+          }
+        : null,
     },
   });
 });
@@ -982,7 +1043,12 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
       await bcrypt.compare(pass, superadmin.passwordHash) &&
       normalizedUsername === (superadmin.username || DEFAULT_ADMIN_USERNAME)
     ) {
-      matchedUser = { username: superadmin.username || DEFAULT_ADMIN_USERNAME, isSuperadmin: true, allowedServices: [] };
+      matchedUser = {
+        username: superadmin.username || DEFAULT_ADMIN_USERNAME,
+        isSuperadmin: true,
+        role: USER_ROLE_ADMIN,
+        allowedServices: [],
+      };
     } else if (Array.isArray(adminCredentials.users)) {
       for (const user of adminCredentials.users) {
         if (!user || typeof user.username !== 'string' || typeof user.passwordHash !== 'string') continue;
@@ -992,6 +1058,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
           matchedUser = {
             username: user.username.trim(),
             isSuperadmin: false,
+            role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
             allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
           };
           break;
@@ -1000,7 +1067,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     }
     if (!matchedUser && normalizedUsername === (superadmin && superadmin.username ? superadmin.username : DEFAULT_ADMIN_USERNAME)) {
       if (pass === HUB_ADMIN_PASSWORD) {
-        matchedUser = { username: normalizedUsername, isSuperadmin: true, allowedServices: [] };
+        matchedUser = { username: normalizedUsername, isSuperadmin: true, role: USER_ROLE_ADMIN, allowedServices: [] };
         try {
           const next = buildSuperadminCredentials(adminCredentials, HUB_ADMIN_PASSWORD);
           saveAdminCredentials(next);
@@ -1013,12 +1080,23 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
 
     if (matchedUser) {
       req.session.authenticated = true;
-      setSessionUser(req, matchedUser);
-      res.cookie(ADMIN_AUTH_COOKIE, buildAdminAuthToken(matchedUser), adminCookieOptions());
-      const payload = { ok: true, user: { username: matchedUser.username, isSuperadmin: matchedUser.isSuperadmin, allowedServices: matchedUser.allowedServices } };
+      const normalized = normalizeSessionUser(matchedUser);
+      setSessionUser(req, normalized);
+      res.cookie(ADMIN_AUTH_COOKIE, buildAdminAuthToken(normalized), adminCookieOptions());
+      const payload = {
+        ok: true,
+        user: {
+          username: normalized.username,
+          isSuperadmin: normalized.isSuperadmin,
+          role: normalized.role,
+          allowedServices: normalized.allowedServices,
+        },
+      };
       const accept = req.headers.accept || '';
       if (accept.includes('text/html')) {
-        return res.redirect(matchedUser.isSuperadmin ? '/admin' : '/');
+        return res.redirect(
+          normalized.isSuperadmin || normalized.role === USER_ROLE_ADMIN ? '/admin' : '/'
+        );
       }
       return res.json(payload);
     }
@@ -1045,7 +1123,7 @@ function requireAuth(req, res, next){
 
 function requireSuperadmin(req, res, next) {
   const user = getSessionUser(req);
-  if (user && user.isSuperadmin) return next();
+  if (user && (user.isSuperadmin || user.role === USER_ROLE_ADMIN)) return next();
   return res.status(403).json({ ok: false, error: 'forbidden' });
 }
 
@@ -1530,9 +1608,26 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
     ? adminCredentials.users.map((u) => ({
         username: u.username,
         allowedServices: normalizeAllowedServices(u.allowedServices),
+        role: normalizeUserRole(u.role, USER_ROLE_MANAGER),
       }))
     : [];
   res.json({ ok: true, users });
+});
+
+app.get('/admin/me', requireSuperadmin, (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  res.json({
+    ok: true,
+    user: {
+      username: user.username,
+      isSuperadmin: user.isSuperadmin,
+      role: user.role,
+      allowedServices: user.allowedServices || [],
+    },
+  });
 });
 
 app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) => {
@@ -1540,6 +1635,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const username = typeof body.username === 'string' ? body.username.trim() : '';
   const password = typeof body.password === 'string' ? body.password : '';
   const allowedServices = normalizeAllowedServices(body.allowedServices);
+  const role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -1553,7 +1649,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  adminCredentials.users.push({ username, passwordHash, allowedServices });
+  adminCredentials.users.push({ username, passwordHash, allowedServices, role });
   saveAdminCredentials(adminCredentials);
   res.json({ ok: true });
 });
@@ -1574,6 +1670,9 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   const user = { ...adminCredentials.users[idx] };
   if (Object.prototype.hasOwnProperty.call(body, 'allowedServices')) {
     user.allowedServices = normalizeAllowedServices(body.allowedServices);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'role')) {
+    user.role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
   }
   if (typeof body.password === 'string' && body.password.length >= 4) {
     user.passwordHash = await bcrypt.hash(body.password, 10);

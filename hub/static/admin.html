@@ -78,6 +78,8 @@
     .pill-danger { background: #fee2e2; color: #991b1b; }
     .meta.status-success { color: #166534; }
     .meta.status-error { color: #b91c1c; }
+    .role-options { display: flex; gap: 10px; flex-wrap: wrap; }
+    .role-options label.inline { flex-direction: row; align-items: center; gap: 6px; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -91,7 +93,10 @@
 <body>
   <div class="layout">
     <header>
-      <h1>Admin panel</h1>
+      <div>
+        <h1>Admin panel</h1>
+        <div id="currentUserMeta" class="meta"></div>
+      </div>
       <a class="link-back" href="/">&larr; Back to hub</a>
     </header>
 
@@ -277,6 +282,10 @@
           Password
           <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
         </label>
+        <div>
+          <div class="hint" style="margin-bottom:6px;">Role</div>
+          <div id="newUserRoles" class="role-options"></div>
+        </div>
         <label class="inline" style="gap:8px;">
           <input type="checkbox" id="newUserAllowAll" checked>
           Allow all services
@@ -414,6 +423,84 @@
       users: []
     };
 
+    const ROLE_OPTIONS = [
+      { value: 'admin', label: 'Admin' },
+      { value: 'manager', label: 'Manager' },
+      { value: 'blocked', label: 'No access' },
+    ];
+    const ROLE_SET = new Set(ROLE_OPTIONS.map((role) => role.value));
+
+    function normalizeRole(value) {
+      const raw = typeof value === 'string' ? value.trim().toLowerCase() : '';
+      return ROLE_SET.has(raw) ? raw : 'manager';
+    }
+
+    function formatRoleLabel(value) {
+      const role = normalizeRole(value);
+      return ROLE_OPTIONS.find((option) => option.value === role)?.label || 'Manager';
+    }
+
+    function isServiceRoleRestricted(role) {
+      return role === 'admin' || role === 'blocked';
+    }
+
+    function syncServiceControls(allowAllInput, servicesBox, role) {
+      const disableServices = isServiceRoleRestricted(role);
+      if (allowAllInput) {
+        allowAllInput.disabled = disableServices;
+        if (disableServices) {
+          allowAllInput.checked = true;
+        }
+      }
+      const disableCheckboxes = disableServices || (allowAllInput && allowAllInput.checked);
+      if (servicesBox) {
+        servicesBox.querySelectorAll('input[type=\"checkbox\"][data-service-id]').forEach((cb) => {
+          cb.disabled = disableCheckboxes;
+        });
+      }
+    }
+
+    function renderRoleOptions(container, selectedRole, onChange) {
+      if (!container) return () => normalizeRole(selectedRole);
+      container.innerHTML = '';
+      const inputs = new Map();
+      const setRole = (role) => {
+        const next = normalizeRole(role);
+        inputs.forEach((input, key) => {
+          input.checked = key === next;
+        });
+        if (onChange) onChange(next);
+      };
+      ROLE_OPTIONS.forEach((option) => {
+        const label = document.createElement('label');
+        label.className = 'inline';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.dataset.role = option.value;
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(` ${option.label}`));
+        container.appendChild(label);
+        inputs.set(option.value, input);
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            setRole(option.value);
+            return;
+          }
+          const anyChecked = Array.from(inputs.values()).some((cb) => cb.checked);
+          if (!anyChecked) {
+            setRole(option.value);
+          }
+        });
+      });
+      setRole(selectedRole);
+      return () => {
+        for (const [role, input] of inputs.entries()) {
+          if (input.checked) return role;
+        }
+        return 'manager';
+      };
+    }
+
     function handleError(error) {
       console.error(error);
       alert(error.message || 'Unexpected error');
@@ -465,6 +552,7 @@
     const addUserForm = document.getElementById('addUser');
     const newUserNameInput = document.getElementById('newUserName');
     const newUserPasswordInput = document.getElementById('newUserPassword');
+    const newUserRoles = document.getElementById('newUserRoles');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
@@ -485,12 +573,19 @@
     const newSocialUrlInput = document.getElementById('newSocialUrl');
     const addSocialIconFile = document.getElementById('addSocialIconFile');
     const passwordStatus = document.getElementById('passwordStatus');
+    const currentUserMeta = document.getElementById('currentUserMeta');
+    let getNewUserRole = () => 'manager';
 
     pageBackgroundOpacityInput.value = 100;
     pageBackgroundOpacityValue.textContent = '100%';
     heroBlurInput.value = 8;
     heroBlurValue.textContent = '8';
     surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
+    if (newUserRoles) {
+      getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (role) => {
+        syncServiceControls(newUserAllowAll, newUserServices, role);
+      });
+    }
 
     function renderBranding() {
       siteLogoPreview.src = state.config.siteLogo || '/static/logo1.svg';
@@ -793,9 +888,17 @@
         const title = document.createElement('strong');
         title.textContent = user.username;
         info.appendChild(title);
-        const allowed = Array.isArray(user.allowedServices) && user.allowedServices.length
-          ? user.allowedServices.join(', ')
-          : 'All services';
+        const roleValue = normalizeRole(user.role);
+        const roleLabel = formatRoleLabel(roleValue);
+        const roleMeta = document.createElement('div');
+        roleMeta.className = 'meta';
+        roleMeta.textContent = 'Role: ' + roleLabel;
+        info.appendChild(roleMeta);
+        const allowed = roleValue === 'blocked'
+          ? 'No access'
+          : (Array.isArray(user.allowedServices) && user.allowedServices.length
+            ? user.allowedServices.join(', ')
+            : 'All services');
         const meta = document.createElement('div');
         meta.className = 'meta';
         meta.textContent = 'Allowed: ' + allowed;
@@ -818,12 +921,19 @@
         servicesBox.className = 'service-checkboxes';
         renderServiceCheckboxes(servicesBox, new Set(user.allowedServices || []), allowAllInput.checked);
         allowAllInput.addEventListener('change', () => {
-          const disable = allowAllInput.checked;
-          servicesBox.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => {
-            cb.disabled = disable;
-          });
+          syncServiceControls(allowAllInput, servicesBox, currentRole);
         });
         actions.appendChild(servicesBox);
+
+        const roleBox = document.createElement('div');
+        roleBox.className = 'role-options';
+        let currentRole = roleValue;
+        const getRole = renderRoleOptions(roleBox, currentRole, (nextRole) => {
+          currentRole = nextRole;
+          syncServiceControls(allowAllInput, servicesBox, currentRole);
+        });
+        actions.insertBefore(roleBox, allowAllWrap);
+        syncServiceControls(allowAllInput, servicesBox, currentRole);
 
         const passwordInput = document.createElement('input');
         passwordInput.type = 'password';
@@ -837,6 +947,7 @@
         saveBtn.addEventListener('click', async () => {
           try {
             const payload = {};
+            payload.role = getRole();
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {
@@ -884,14 +995,11 @@
     function renderNewUserServices() {
       if (!newUserServices) return;
       const selected = new Set();
-      const disable = newUserAllowAll ? newUserAllowAll.checked : false;
-      renderServiceCheckboxes(newUserServices, selected, disable);
+      renderServiceCheckboxes(newUserServices, selected, false);
+      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole());
       if (newUserAllowAll) {
         newUserAllowAll.addEventListener('change', () => {
-          const shouldDisable = newUserAllowAll.checked;
-          newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => {
-            cb.disabled = shouldDisable;
-          });
+          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole());
         });
       }
     }
@@ -1047,6 +1155,23 @@
       }
     }
 
+    async function loadCurrentUser() {
+      if (!currentUserMeta) return;
+      try {
+        const data = await fetchJson('/admin/me');
+        const user = data && data.user ? data.user : null;
+        if (!user) {
+          currentUserMeta.textContent = '';
+          return;
+        }
+        const roleLabel = formatRoleLabel(user.role || (user.isSuperadmin ? 'admin' : 'manager'));
+        currentUserMeta.textContent = `Logged in as ${user.username} (${roleLabel})`;
+      } catch (error) {
+        console.warn(error);
+        currentUserMeta.textContent = '';
+      }
+    }
+
     async function loadAll() {
       try {
         const [services, config, usersResp] = await Promise.all([
@@ -1063,6 +1188,7 @@
         renderNewUserServices();
         renderUsers();
         renderSocialLinks();
+        await loadCurrentUser();
         try {
           await loadLogs();
         } catch (logError) {
@@ -1082,7 +1208,8 @@
         if (!newUserNameInput || !newUserPasswordInput) return;
         const username = newUserNameInput.value.trim();
         const password = newUserPasswordInput.value;
-        const allowAll = newUserAllowAll && newUserAllowAll.checked;
+        const role = getNewUserRole();
+        const allowAll = isServiceRoleRestricted(role) || (newUserAllowAll && newUserAllowAll.checked);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -1096,13 +1223,18 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, allowedServices: selectedServices })
           });
           newUserPasswordInput.value = '';
           if (newUserServices) {
             newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => (cb.checked = false));
           }
           if (newUserAllowAll) newUserAllowAll.checked = true;
+          if (newUserRoles) {
+            getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
+              syncServiceControls(newUserAllowAll, newUserServices, nextRole);
+            });
+          }
           await loadAll();
         } catch (error) {
           handleError(error);

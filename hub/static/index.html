@@ -411,9 +411,15 @@
       }
 
       const user = (data.hub && data.hub.user) || null;
+      const role = user
+        ? (user.role || (user.isSuperadmin ? 'admin' : 'manager'))
+        : '';
+      const roleLabel = role === 'blocked' ? 'no access' : role;
+      const isAdminRole = user && (user.isSuperadmin || role === 'admin');
+      const isBlocked = user && role === 'blocked';
       if (currentUserBadge) {
         if (user) {
-          currentUserBadge.textContent = user.username + (user.isSuperadmin ? ' (admin)' : '');
+          currentUserBadge.textContent = `${user.username} (${roleLabel})`;
           currentUserBadge.style.display = 'inline-flex';
         } else {
           currentUserBadge.style.display = 'none';
@@ -421,7 +427,7 @@
       }
       if (loginButton) loginButton.style.display = user ? 'none' : 'inline-flex';
       if (logoutButton) logoutButton.style.display = user ? 'inline-flex' : 'none';
-      if (adminLink) adminLink.style.display = user && user.isSuperadmin ? 'inline-flex' : 'none';
+      if (adminLink) adminLink.style.display = isAdminRole ? 'inline-flex' : 'none';
 
       servicesContainer.innerHTML = '';
       const filtered = data.hub && data.hub.filtered;
@@ -429,11 +435,15 @@
         const empty = document.createElement('div');
         empty.className = 'service-empty';
         const title = document.createElement('strong');
-        title.textContent = filtered ? 'Sign in to view your available services' : 'No services registered yet';
+        title.textContent = isBlocked
+          ? 'Access blocked'
+          : (filtered ? 'Sign in to view your available services' : 'No services registered yet');
         const subtitle = document.createElement('p');
-        subtitle.textContent = filtered
-          ? 'After signing in, you will see the services assigned to your account.'
-          : 'Add services in the admin panel to get started.';
+        subtitle.textContent = isBlocked
+          ? 'Your account is not allowed to view services.'
+          : (filtered
+            ? 'After signing in, you will see the services assigned to your account.'
+            : 'Add services in the admin panel to get started.');
         empty.appendChild(title);
         empty.appendChild(subtitle);
         // Single login entry point (header button)
