@@ -302,6 +302,7 @@ function loadAdminCredentials() {
                   passwordHash,
                   allowedServices: normalizeAllowedServices(user.allowedServices),
                   role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
+                  canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
                 };
               })
               .filter(Boolean)
@@ -374,6 +375,23 @@ function normalizeUserRole(value, fallback = USER_ROLE_MANAGER) {
   return USER_ROLE_SET.has(fallback) ? fallback : USER_ROLE_MANAGER;
 }
 
+function normalizeFilesAccess(value, fallback = false) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+    if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  }
+  return fallback;
+}
+
+function resolveFilesAccess(role, isSuperadmin, canViewFiles) {
+  if (isSuperadmin || role === USER_ROLE_ADMIN) return true;
+  if (role === USER_ROLE_BLOCKED) return false;
+  return Boolean(canViewFiles);
+}
+
 function normalizeSessionUser(user) {
   if (!user || typeof user !== 'object') return null;
   const username = typeof user.username === 'string' ? user.username.trim() : '';
@@ -384,7 +402,12 @@ function normalizeSessionUser(user) {
     user.role,
     isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER
   );
-  return { username, isSuperadmin, allowedServices, role };
+  const canViewFiles = resolveFilesAccess(
+    role,
+    isSuperadmin,
+    normalizeFilesAccess(user.canViewFiles, false)
+  );
+  return { username, isSuperadmin, allowedServices, role, canViewFiles };
 }
 
 function getNextPort() {
@@ -490,6 +513,7 @@ function buildAdminAuthToken(user) {
     u: normalized.username,
     a: normalized.isSuperadmin ? 1 : 0,
     r: normalized.role,
+    f: normalized.canViewFiles ? 1 : 0,
     s: Array.isArray(normalized.allowedServices) ? normalized.allowedServices : [],
     t: Date.now(),
   });
@@ -520,10 +544,12 @@ function parseAdminAuthToken(token) {
   if (Date.now() - Number(data.t) > ADMIN_AUTH_TTL_MS) return null;
   const isSuperadmin = data.a === 1;
   const role = normalizeUserRole(data.r, isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
+  const canViewFiles = normalizeFilesAccess(data.f, false);
   return normalizeSessionUser({
     username: String(data.u),
     isSuperadmin,
     role,
+    canViewFiles,
     allowedServices: Array.isArray(data.s) ? data.s : [],
   });
 }
@@ -568,6 +594,23 @@ function isServiceAllowed(service, allowedSet, user) {
   const id = (service.id || service.name || '').toLowerCase();
   const name = (service.name || '').toLowerCase();
   return allowedSet.has(id) || allowedSet.has(name);
+}
+
+function canUserViewFiles(user) {
+  if (!user) return false;
+  if (user.role === USER_ROLE_BLOCKED) return false;
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
+  return Boolean(user.canViewFiles);
+}
+
+function requireFilesAccess(req, res, next) {
+  const user = getSessionUser(req);
+  if (canUserViewFiles(user)) return next();
+  const accept = req.headers.accept || '';
+  if (accept.includes('text/html')) {
+    return res.redirect('/');
+  }
+  return res.status(403).send('Forbidden');
 }
 
 function resolveServiceAccess(serviceId, prefix) {
@@ -1011,6 +1054,7 @@ app.get('/api/status', async (req, res) => {
             username: user.username,
             isSuperadmin: user.isSuperadmin,
             role: user.role,
+            canViewFiles: user.canViewFiles,
             allowedServices: user.allowedServices || [],
           }
         : null,
@@ -1059,6 +1103,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
             username: user.username.trim(),
             isSuperadmin: false,
             role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
+            canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
             allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
           };
           break;
@@ -1089,6 +1134,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
           username: normalized.username,
           isSuperadmin: normalized.isSuperadmin,
           role: normalized.role,
+          canViewFiles: normalized.canViewFiles,
           allowedServices: normalized.allowedServices,
         },
       };
@@ -1609,6 +1655,7 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         username: u.username,
         allowedServices: normalizeAllowedServices(u.allowedServices),
         role: normalizeUserRole(u.role, USER_ROLE_MANAGER),
+        canViewFiles: normalizeFilesAccess(u.canViewFiles, false),
       }))
     : [];
   res.json({ ok: true, users });
@@ -1625,6 +1672,7 @@ app.get('/admin/me', requireSuperadmin, (req, res) => {
       username: user.username,
       isSuperadmin: user.isSuperadmin,
       role: user.role,
+      canViewFiles: user.canViewFiles,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -1636,6 +1684,8 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const password = typeof body.password === 'string' ? body.password : '';
   const allowedServices = normalizeAllowedServices(body.allowedServices);
   const role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
+  const rawFilesAccess = normalizeFilesAccess(body.canViewFiles, false);
+  const canViewFiles = resolveFilesAccess(role, false, rawFilesAccess);
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -1649,7 +1699,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  adminCredentials.users.push({ username, passwordHash, allowedServices, role });
+  adminCredentials.users.push({ username, passwordHash, allowedServices, role, canViewFiles });
   saveAdminCredentials(adminCredentials);
   res.json({ ok: true });
 });
@@ -1674,6 +1724,14 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   if (Object.prototype.hasOwnProperty.call(body, 'role')) {
     user.role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'canViewFiles')) {
+    user.canViewFiles = normalizeFilesAccess(body.canViewFiles, false);
+  }
+  user.canViewFiles = resolveFilesAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    normalizeFilesAccess(user.canViewFiles, false)
+  );
   if (typeof body.password === 'string' && body.password.length >= 4) {
     user.passwordHash = await bcrypt.hash(body.password, 10);
   }
@@ -1721,6 +1779,21 @@ app.get('/admin/logs', requireSuperadmin, (_req, res) => {
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
 const requireService2Access = requireServiceAccess('service2', '/service2');
 app.get('/service2', requireService2Access, (req, res) => res.redirect(301, '/service2/'));
+
+// File archive requires explicit permission.
+app.use('/service2/files', requireFilesAccess, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+app.use('/service2/api/files', requireFilesAccess, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+
 app.use('/service2', requireService2Access, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
@@ -1729,14 +1802,14 @@ app.use('/service2', requireService2Access, createProxyMiddleware({
 }));
 
 // Convenience redirect so /files (from service2 redirects) lands under /service2/files.
-app.get('/files', requireService2Access, (req, res) => {
+app.get('/files', requireFilesAccess, (req, res) => {
   const queryIndex = req.originalUrl.indexOf('?');
   const suffix = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
   res.redirect(`/service2/files${suffix}`);
 });
 
 // Allow direct PDF download links without /service2 prefix (auth required)
-app.use('/download', requireService2Access, createProxyMiddleware({
+app.use('/download', requireFilesAccess, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   logLevel: 'warn'

@@ -287,6 +287,10 @@
           <div id="newUserRoles" class="role-options"></div>
         </div>
         <label class="inline" style="gap:8px;">
+          <input type="checkbox" id="newUserFilesAccess">
+          Files access
+        </label>
+        <label class="inline" style="gap:8px;">
           <input type="checkbox" id="newUserAllowAll" checked>
           Allow all services
         </label>
@@ -444,7 +448,7 @@
       return role === 'admin' || role === 'blocked';
     }
 
-    function syncServiceControls(allowAllInput, servicesBox, role) {
+    function syncServiceControls(allowAllInput, servicesBox, role, filesAccessInput) {
       const disableServices = isServiceRoleRestricted(role);
       if (allowAllInput) {
         allowAllInput.disabled = disableServices;
@@ -457,6 +461,16 @@
         servicesBox.querySelectorAll('input[type=\"checkbox\"][data-service-id]').forEach((cb) => {
           cb.disabled = disableCheckboxes;
         });
+      }
+      if (filesAccessInput) {
+        const disableFiles = role === 'admin' || role === 'blocked';
+        filesAccessInput.disabled = disableFiles;
+        if (role === 'admin') {
+          filesAccessInput.checked = true;
+        }
+        if (role === 'blocked') {
+          filesAccessInput.checked = false;
+        }
       }
     }
 
@@ -553,6 +567,7 @@
     const newUserNameInput = document.getElementById('newUserName');
     const newUserPasswordInput = document.getElementById('newUserPassword');
     const newUserRoles = document.getElementById('newUserRoles');
+    const newUserFilesAccess = document.getElementById('newUserFilesAccess');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
@@ -583,7 +598,7 @@
     surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
     if (newUserRoles) {
       getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (role) => {
-        syncServiceControls(newUserAllowAll, newUserServices, role);
+        syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess);
       });
     }
 
@@ -894,6 +909,10 @@
         roleMeta.className = 'meta';
         roleMeta.textContent = 'Role: ' + roleLabel;
         info.appendChild(roleMeta);
+        const filesMeta = document.createElement('div');
+        filesMeta.className = 'meta';
+        filesMeta.textContent = 'Files access: ' + (user.canViewFiles ? 'Yes' : 'No');
+        info.appendChild(filesMeta);
         const allowed = roleValue === 'blocked'
           ? 'No access'
           : (Array.isArray(user.allowedServices) && user.allowedServices.length
@@ -908,6 +927,15 @@
         const actions = document.createElement('div');
         actions.className = 'actions';
 
+        const filesAccessWrap = document.createElement('label');
+        filesAccessWrap.className = 'inline';
+        const filesAccessInput = document.createElement('input');
+        filesAccessInput.type = 'checkbox';
+        filesAccessInput.checked = Boolean(user.canViewFiles);
+        filesAccessWrap.appendChild(filesAccessInput);
+        filesAccessWrap.appendChild(document.createTextNode(' Files access'));
+        actions.appendChild(filesAccessWrap);
+
         const allowAllWrap = document.createElement('label');
         allowAllWrap.className = 'inline';
         const allowAllInput = document.createElement('input');
@@ -921,7 +949,7 @@
         servicesBox.className = 'service-checkboxes';
         renderServiceCheckboxes(servicesBox, new Set(user.allowedServices || []), allowAllInput.checked);
         allowAllInput.addEventListener('change', () => {
-          syncServiceControls(allowAllInput, servicesBox, currentRole);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
         });
         actions.appendChild(servicesBox);
 
@@ -930,10 +958,10 @@
         let currentRole = roleValue;
         const getRole = renderRoleOptions(roleBox, currentRole, (nextRole) => {
           currentRole = nextRole;
-          syncServiceControls(allowAllInput, servicesBox, currentRole);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
         });
         actions.insertBefore(roleBox, allowAllWrap);
-        syncServiceControls(allowAllInput, servicesBox, currentRole);
+        syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
 
         const passwordInput = document.createElement('input');
         passwordInput.type = 'password';
@@ -948,6 +976,7 @@
           try {
             const payload = {};
             payload.role = getRole();
+            payload.canViewFiles = filesAccessInput.checked;
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {
@@ -996,10 +1025,10 @@
       if (!newUserServices) return;
       const selected = new Set();
       renderServiceCheckboxes(newUserServices, selected, false);
-      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole());
+      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess);
       if (newUserAllowAll) {
         newUserAllowAll.addEventListener('change', () => {
-          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole());
+          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess);
         });
       }
     }
@@ -1210,6 +1239,11 @@
         const password = newUserPasswordInput.value;
         const role = getNewUserRole();
         const allowAll = isServiceRoleRestricted(role) || (newUserAllowAll && newUserAllowAll.checked);
+        const canViewFiles = role === 'admin'
+          ? true
+          : role === 'blocked'
+            ? false
+            : (newUserFilesAccess && newUserFilesAccess.checked);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -1223,16 +1257,17 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, canViewFiles, allowedServices: selectedServices })
           });
           newUserPasswordInput.value = '';
           if (newUserServices) {
             newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => (cb.checked = false));
           }
           if (newUserAllowAll) newUserAllowAll.checked = true;
+          if (newUserFilesAccess) newUserFilesAccess.checked = false;
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
-              syncServiceControls(newUserAllowAll, newUserServices, nextRole);
+              syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess);
             });
           }
           await loadAll();

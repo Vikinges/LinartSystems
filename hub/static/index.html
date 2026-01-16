@@ -25,6 +25,7 @@
             <button id="loginButton" class="link-button secondary" type="button">Log in</button>
             <button id="logoutButton" class="link-button secondary" type="button" style="display:none;">Log out</button>
             <a id="adminLink" class="link-button secondary" href="/admin" style="display:none;">Admin</a>
+            <a id="filesLink" class="link-button secondary" href="/files" style="display:none;">Files</a>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
@@ -91,6 +92,7 @@
   const logoutButton = document.getElementById('logoutButton');
   const currentUserBadge = document.getElementById('currentUserBadge');
   const adminLink = document.getElementById('adminLink');
+  const filesLink = document.getElementById('filesLink');
   const adminModalEl = document.getElementById('adminModal');
   const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
@@ -417,6 +419,7 @@
       const roleLabel = role === 'blocked' ? 'no access' : role;
       const isAdminRole = user && (user.isSuperadmin || role === 'admin');
       const isBlocked = user && role === 'blocked';
+      const canViewFiles = user && (user.isSuperadmin || role === 'admin' || user.canViewFiles === true);
       if (currentUserBadge) {
         if (user) {
           currentUserBadge.textContent = `${user.username} (${roleLabel})`;
@@ -428,6 +431,7 @@
       if (loginButton) loginButton.style.display = user ? 'none' : 'inline-flex';
       if (logoutButton) logoutButton.style.display = user ? 'inline-flex' : 'none';
       if (adminLink) adminLink.style.display = isAdminRole ? 'inline-flex' : 'none';
+      if (filesLink) filesLink.style.display = canViewFiles ? 'inline-flex' : 'none';
 
       servicesContainer.innerHTML = '';
       const filtered = data.hub && data.hub.filtered;

@@ -19,5 +19,6 @@
 - Service2: added file archive UI at /files; /download/<type> redirects to /files?type=..., and /api/files lists generated PDFs from out/<type>/meta with filters.
 - Hub: /files redirects to /service2/files (preserves query) to support archive access behind the proxy.
 - Hub: users now have roles (admin/manager/blocked). Header shows logged role; admin UI lets you set role via checkboxes.
+- Hub: added per-user files access flag; Files button appears only when allowed, and /files + /download are restricted.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.
