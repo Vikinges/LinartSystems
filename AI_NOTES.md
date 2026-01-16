@@ -12,5 +12,6 @@
 - Daily report: signature removed; photos are compressed client-side before upload (JPEG, max edge 1600px).
 - Daily report: project number suggestions come from projects.json; submitter uses employee name suggestions.
 - Daily report: PDF uses template header (bodyTopOffset) and draws content below the boundary.
+- Hub: /service2 and /download now require login; users need allowedServices including service2.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

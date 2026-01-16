@@ -431,6 +431,39 @@ function isServiceAllowed(service, allowedSet, user) {
   return allowedSet.has(id) || allowedSet.has(name);
 }
 
+function resolveServiceAccess(serviceId, prefix) {
+  const services = loadServices();
+  const normalizedId = serviceId ? String(serviceId).trim().toLowerCase() : '';
+  const byId =
+    normalizedId
+      ? services.find((s) => {
+          const id = (s && (s.id || s.name) ? String(s.id || s.name) : '').trim().toLowerCase();
+          return id && id === normalizedId;
+        })
+      : null;
+  if (byId) return byId;
+  const byPrefix =
+    prefix && services.find((s) => s && typeof s.prefix === 'string' && s.prefix === prefix);
+  if (byPrefix) return byPrefix;
+  return { id: serviceId || prefix || 'service', name: serviceId || prefix || 'service', allowPublic: false };
+}
+
+function requireServiceAccess(serviceId, prefix) {
+  return (req, res, next) => {
+    const user = getSessionUser(req);
+    const allowedSet = getAllowedServiceSet(req);
+    const service = resolveServiceAccess(serviceId, prefix);
+    if (isServiceAllowed(service, allowedSet, user)) {
+      return next();
+    }
+    const accept = req.headers.accept || '';
+    if (accept.includes('text/html')) {
+      return res.redirect('/admin');
+    }
+    return res.status(403).send('Forbidden');
+  };
+}
+
 function sanitizeId(value, fallback) {
   if (!value) return fallback;
   const cleaned = String(value)
@@ -1483,17 +1516,18 @@ app.get('/admin/logs', requireSuperadmin, (_req, res) => {
   res.json({ ok: true, logs: HUB_LOG });
 });
 
-// Reverse-proxy route: expose service2 under /service2/
-app.get('/service2', (req, res) => res.redirect(301, '/service2/'));
-app.use('/service2', createProxyMiddleware({
+// Reverse-proxy route: expose service2 under /service2/ (auth required)
+const requireService2Access = requireServiceAccess('service2', '/service2');
+app.get('/service2', requireService2Access, (req, res) => res.redirect(301, '/service2/'));
+app.use('/service2', requireService2Access, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
 }));
 
-// Allow direct PDF download links without /service2 prefix
-app.use('/download', createProxyMiddleware({
+// Allow direct PDF download links without /service2 prefix (auth required)
+app.use('/download', requireService2Access, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   logLevel: 'warn'
