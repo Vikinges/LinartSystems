@@ -613,6 +613,18 @@ function requireFilesAccess(req, res, next) {
   return res.status(403).send('Forbidden');
 }
 
+function requireFilesAdminAccess(req, res, next) {
+  const user = getSessionUser(req);
+  if (user && canUserViewFiles(user) && (user.isSuperadmin || user.role === USER_ROLE_ADMIN)) {
+    return next();
+  }
+  const accept = req.headers.accept || '';
+  if (accept.includes('text/html')) {
+    return res.redirect('/');
+  }
+  return res.status(403).send('Forbidden');
+}
+
 function resolveServiceAccess(serviceId, prefix) {
   const services = loadServices();
   const normalizedId = serviceId ? String(serviceId).trim().toLowerCase() : '';
@@ -1786,6 +1798,32 @@ app.use('/service2/files', requireFilesAccess, createProxyMiddleware({
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
+}));
+app.use('/service2/api/files/delete', requireFilesAdminAccess, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn',
+  onProxyReq: (proxyReq, req) => {
+    const user = getSessionUser(req);
+    if (user) {
+      proxyReq.setHeader('x-hub-role', user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER));
+      proxyReq.setHeader('x-hub-user', user.username);
+    }
+  },
+}));
+app.use('/service2/api/files/zip', requireFilesAdminAccess, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn',
+  onProxyReq: (proxyReq, req) => {
+    const user = getSessionUser(req);
+    if (user) {
+      proxyReq.setHeader('x-hub-role', user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER));
+      proxyReq.setHeader('x-hub-user', user.username);
+    }
+  },
 }));
 app.use('/service2/api/files', requireFilesAccess, createProxyMiddleware({
   target: 'http://service2:3001',

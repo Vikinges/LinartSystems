@@ -20,5 +20,6 @@
 - Hub: /files redirects to /service2/files (preserves query) to support archive access behind the proxy.
 - Hub: users now have roles (admin/manager/blocked). Header shows logged role; admin UI lets you set role via checkboxes.
 - Hub: added per-user files access flag; Files button appears only when allowed, and /files + /download are restricted.
+- Service2: admin-only file actions (delete + download zip) via /api/files/delete and /api/files/zip; files page shows logged role.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

@@ -13,6 +13,7 @@ const fs = require('fs');
 const fsExtra = require('fs-extra');
 
 const crypto = require('crypto');
+const archiver = require('archiver');
 
 const express = require('express');
 
@@ -272,6 +273,57 @@ async function listFileEntries(filters) {
   };
 }
 
+const FILE_ZIP_MAX = 1000;
+
+function safeResolvePath(baseDir, targetPath) {
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(targetPath);
+  if (resolvedTarget === resolvedBase) return resolvedTarget;
+  if (!resolvedTarget.startsWith(resolvedBase + path.sep)) return null;
+  return resolvedTarget;
+}
+
+function buildPdfPath(type, filename) {
+  const safeType = sanitizeFilename(type);
+  const safeFile = sanitizeFilename(filename);
+  if (!safeType || !safeFile) return null;
+  const baseDir = path.join(OUTPUT_DIR, safeType, 'pdf');
+  const candidate = path.join(baseDir, safeFile);
+  return safeResolvePath(baseDir, candidate);
+}
+
+function buildMetaPath(type, filename) {
+  const safeType = sanitizeFilename(type);
+  const safeFile = sanitizeFilename(filename);
+  if (!safeType || !safeFile) return null;
+  const metaDir = path.join(OUTPUT_DIR, safeType, 'meta');
+  const baseName = safeFile.replace(/\.pdf$/i, '');
+  const candidate = path.join(metaDir, `${baseName}.json`);
+  return safeResolvePath(metaDir, candidate);
+}
+
+function normalizeFileSelection(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const templateType = sanitizeFilename(entry.templateType || entry.type || '');
+  const filename = sanitizeFilename(entry.filename || entry.file || '');
+  if (!templateType || !filename) return null;
+  return { templateType, filename };
+}
+
+function collectFileSelections(body) {
+  const list = Array.isArray(body && body.files) ? body.files : [];
+  const results = [];
+  const seen = new Set();
+  list.forEach((item) => {
+    const normalized = normalizeFileSelection(item);
+    if (!normalized) return;
+    const key = `${normalized.templateType}/${normalized.filename}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push(normalized);
+  });
+  return results;
+}
 
 
 const PORT = parseInt(process.env.SERVICE2_PORT || process.env.PORT, 10) || 3001;
@@ -19807,6 +19859,14 @@ function requireAdmin(req, res, next) {
 
 }
 
+function requireHubAdmin(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin') {
+    return next();
+  }
+  return res.status(403).json({ ok: false, error: 'Forbidden' });
+}
+
 
 
 if (verifyAdminPassword(ADMIN_DEFAULT_PASSWORD)) {
@@ -20794,7 +20854,108 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   }
 });
 
+app.post(['/api/files/delete', '/service2/api/files/delete'], requireHubAdmin, async (req, res) => {
+  const selections = collectFileSelections(req.body || {});
+  if (!selections.length) {
+    return res.status(400).json({ ok: false, error: 'no_files_selected' });
+  }
 
+  const deleted = [];
+  const missing = [];
+  const errors = [];
+
+  for (const entry of selections) {
+    const key = `${entry.templateType}/${entry.filename}`;
+    try {
+      const pdfPath = buildPdfPath(entry.templateType, entry.filename);
+      const metaPath = buildMetaPath(entry.templateType, entry.filename);
+      let meta = null;
+      if (metaPath && fs.existsSync(metaPath)) {
+        try {
+          const raw = await fs.promises.readFile(metaPath, 'utf8');
+          meta = JSON.parse(raw);
+        } catch (err) {
+          // ignore metadata parsing failures
+        }
+      }
+
+      let found = false;
+      if (pdfPath && fs.existsSync(pdfPath)) {
+        await fs.promises.unlink(pdfPath);
+        found = true;
+      }
+      if (metaPath && fs.existsSync(metaPath)) {
+        await fs.promises.unlink(metaPath);
+        found = true;
+      }
+
+      if (meta && meta.dailyReportPath) {
+        const dailyPath = safeResolvePath(OUTPUT_DIR, meta.dailyReportPath);
+        if (dailyPath && fs.existsSync(dailyPath)) {
+          await fs.promises.unlink(dailyPath);
+          found = true;
+        }
+      }
+
+      if (found) {
+        deleted.push(key);
+      } else {
+        missing.push(key);
+      }
+    } catch (err) {
+      console.error('[server] Failed to delete file', key, err);
+      errors.push({ file: key, error: err.message || String(err) });
+    }
+  }
+
+  return res.json({ ok: true, deleted, missing, errors });
+});
+
+app.post(['/api/files/zip', '/service2/api/files/zip'], requireHubAdmin, async (req, res) => {
+  const selections = collectFileSelections(req.body || {});
+  if (!selections.length) {
+    return res.status(400).json({ ok: false, error: 'no_files_selected' });
+  }
+  if (selections.length > FILE_ZIP_MAX) {
+    return res.status(413).json({ ok: false, error: 'too_many_files' });
+  }
+
+  const filesToZip = [];
+  selections.forEach((entry) => {
+    const pdfPath = buildPdfPath(entry.templateType, entry.filename);
+    if (pdfPath && fs.existsSync(pdfPath)) {
+      filesToZip.push({
+        path: pdfPath,
+        name: `${entry.templateType}/${entry.filename}`,
+      });
+    }
+  });
+
+  if (!filesToZip.length) {
+    return res.status(404).json({ ok: false, error: 'files_not_found' });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `reports-${timestamp}.zip`;
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => {
+    console.error('[server] Zip failed', err);
+    if (!res.headersSent) {
+      res.status(500).end();
+    } else {
+      res.end();
+    }
+  });
+
+  archive.pipe(res);
+  filesToZip.forEach((file) => {
+    archive.file(file.path, { name: file.name });
+  });
+  archive.finalize();
+});
 
 app.post('/submit', rateLimitSubmit, (req, res, next) => {
 

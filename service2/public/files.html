@@ -61,6 +61,11 @@
         gap: 0.5rem;
         flex-wrap: wrap;
       }
+      .header-meta {
+        margin-top: 0.4rem;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
       .card {
         background: var(--surface);
         padding: 1.5rem;
@@ -132,6 +137,22 @@
         gap: 0.75rem;
         flex-wrap: wrap;
       }
+      .admin-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+      }
+      .admin-actions[hidden] {
+        display: none;
+      }
+      .admin-actions-group {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+      }
       .table-wrap {
         width: 100%;
         overflow-x: auto;
@@ -142,6 +163,9 @@
         width: 100%;
         border-collapse: collapse;
         min-width: 720px;
+      }
+      .files-table:not(.is-admin) .col-select {
+        display: none;
       }
       thead {
         background: var(--surface-muted);
@@ -204,6 +228,7 @@
           <div>
             <h1>PDF files archive</h1>
             <p>Browse generated reports. Daily reports show project number, date, and submitter.</p>
+            <div class="header-meta" id="user-meta"></div>
           </div>
           <div class="header-actions">
             <a class="button secondary" href="./">Open form</a>
@@ -261,11 +286,25 @@
           <h2>Files</h2>
           <div class="badge" id="results-count">0 files</div>
         </div>
+        <div id="admin-actions" class="admin-actions" hidden>
+          <div class="admin-actions-group">
+            <span class="badge" id="selected-count">0 selected</span>
+            <button class="button secondary" type="button" id="select-all">Select all</button>
+            <button class="button ghost" type="button" id="clear-selection">Clear</button>
+          </div>
+          <div class="admin-actions-group">
+            <button class="button secondary" type="button" id="download-zip" disabled>Download zip</button>
+            <button class="button" type="button" id="delete-files" disabled>Delete</button>
+          </div>
+        </div>
         <div class="status" id="status" aria-live="polite"></div>
         <div class="table-wrap">
-          <table>
+          <table id="files-table" class="files-table">
             <thead>
               <tr>
+                <th class="col-select">
+                  <input type="checkbox" id="select-all-checkbox" />
+                </th>
                 <th>Type</th>
                 <th>Project</th>
                 <th>Report date</th>
@@ -276,7 +315,7 @@
               </tr>
             </thead>
             <tbody id="files-body">
-              <tr><td colspan="7" class="empty">Loading...</td></tr>
+              <tr><td colspan="8" class="empty">Loading...</td></tr>
             </tbody>
           </table>
         </div>
@@ -303,6 +342,19 @@
         const statusEl = document.getElementById('status');
         const resultsCountEl = document.getElementById('results-count');
         const tbody = document.getElementById('files-body');
+        const userMetaEl = document.getElementById('user-meta');
+        const adminActionsEl = document.getElementById('admin-actions');
+        const selectedCountEl = document.getElementById('selected-count');
+        const selectAllBtn = document.getElementById('select-all');
+        const clearSelectionBtn = document.getElementById('clear-selection');
+        const downloadZipBtn = document.getElementById('download-zip');
+        const deleteFilesBtn = document.getElementById('delete-files');
+        const selectAllCheckbox = document.getElementById('select-all-checkbox');
+        const filesTable = document.getElementById('files-table');
+
+        let isAdmin = false;
+        let currentFiles = [];
+        let selectedKeys = new Set();
 
         const params = new URLSearchParams(window.location.search);
         if (params.has('type')) typeSelect.value = params.get('type');
@@ -345,21 +397,66 @@
           limit: limitSelect.value.trim(),
         });
 
+        const fileKey = (file) => `${file.templateType}::${file.filename}`;
+
+        const updateSelectionUI = () => {
+          const count = selectedKeys.size;
+          if (selectedCountEl) {
+            selectedCountEl.textContent = `${count} selected`;
+          }
+          const hasSelection = count > 0;
+          if (downloadZipBtn) downloadZipBtn.disabled = !hasSelection;
+          if (deleteFilesBtn) deleteFilesBtn.disabled = !hasSelection;
+          if (clearSelectionBtn) clearSelectionBtn.disabled = !hasSelection;
+          if (selectAllCheckbox) {
+            selectAllCheckbox.checked = Boolean(currentFiles.length) && count === currentFiles.length;
+          }
+        };
+
         const renderRows = (files) => {
+          currentFiles = Array.isArray(files) ? files : [];
+          const keysInView = new Set(currentFiles.map(fileKey));
+          selectedKeys.forEach((key) => {
+            if (!keysInView.has(key)) {
+              selectedKeys.delete(key);
+            }
+          });
+          updateSelectionUI();
+
           tbody.innerHTML = '';
-          if (!files.length) {
+          if (!currentFiles.length) {
             const row = document.createElement('tr');
             const cell = document.createElement('td');
-            cell.colSpan = 7;
+            cell.colSpan = 8;
             cell.className = 'empty';
             cell.textContent = 'No files found.';
             row.appendChild(cell);
             tbody.appendChild(row);
             return;
           }
-          files.forEach((file) => {
+
+          currentFiles.forEach((file) => {
             const row = document.createElement('tr');
             const daily = file.dailyReport || {};
+            const key = fileKey(file);
+
+            const selectCell = document.createElement('td');
+            selectCell.className = 'col-select';
+            if (isAdmin) {
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.checked = selectedKeys.has(key);
+              checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                  selectedKeys.add(key);
+                } else {
+                  selectedKeys.delete(key);
+                }
+                updateSelectionUI();
+              });
+              selectCell.appendChild(checkbox);
+            }
+            row.appendChild(selectCell);
 
             const cells = [
               file.templateType || '-',
@@ -401,7 +498,53 @@
           typeSelect.value = currentValue;
         };
 
+        const updateAdminState = (user) => {
+          const role = user ? (user.role || (user.isSuperadmin ? 'admin' : 'manager')) : '';
+          isAdmin = Boolean(user && (user.isSuperadmin || role === 'admin'));
+          if (adminActionsEl) {
+            adminActionsEl.hidden = !isAdmin;
+          }
+          if (filesTable) {
+            filesTable.classList.toggle('is-admin', isAdmin);
+          }
+          if (!isAdmin) {
+            selectedKeys = new Set();
+          }
+        };
+
+        const loadUser = async () => {
+          try {
+            const response = await fetch('/api/status', { credentials: 'same-origin' });
+            if (!response.ok) {
+              throw new Error('Unable to load user');
+            }
+            const payload = await response.json();
+            const user = payload && payload.hub ? payload.hub.user : null;
+            updateAdminState(user);
+            if (userMetaEl) {
+              if (user) {
+                const role = user.role || (user.isSuperadmin ? 'admin' : 'manager');
+                const label = role === 'blocked' ? 'no access' : role;
+                userMetaEl.textContent = `Logged in as ${user.username} (${label})`;
+              } else {
+                userMetaEl.textContent = '';
+              }
+            }
+          } catch (err) {
+            updateAdminState(null);
+            if (userMetaEl) userMetaEl.textContent = '';
+          }
+        };
+
+        const getSelectedFiles = () => currentFiles.filter((file) => selectedKeys.has(fileKey(file)));
+
+        const applySelection = (keys) => {
+          selectedKeys = new Set(keys);
+          renderRows(currentFiles);
+        };
+
         const loadFiles = async () => {
+          await loadUser();
           const filters = readFilters();
           updateQuery(filters);
           setStatus('Loading files...');
@@ -436,6 +579,96 @@
             setStatus(err && err.message ? err.message : 'Unable to load files.', true);
           }
         };
+
+        if (selectAllBtn) {
+          selectAllBtn.addEventListener('click', () => {
+            if (!isAdmin) return;
+            applySelection(currentFiles.map(fileKey));
+          });
+        }
+        if (clearSelectionBtn) {
+          clearSelectionBtn.addEventListener('click', () => {
+            if (!isAdmin) return;
+            applySelection([]);
+          });
+        }
+        if (selectAllCheckbox) {
+          selectAllCheckbox.addEventListener('change', () => {
+            if (!isAdmin) return;
+            if (selectAllCheckbox.checked) {
+              applySelection(currentFiles.map(fileKey));
+            } else {
+              applySelection([]);
+            }
+          });
+        }
+        if (downloadZipBtn) {
+          downloadZipBtn.addEventListener('click', async () => {
+            if (!isAdmin) return;
+            const selected = getSelectedFiles();
+            if (!selected.length) return;
+            setStatus('Preparing zip...');
+            try {
+              const response = await fetch(buildAppUrl('api/files/zip'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: selected.map((file) => ({
+                  templateType: file.templateType,
+                  filename: file.filename
+                })) }),
+                credentials: 'same-origin'
+              });
+              if (!response.ok) {
+                throw new Error(`Zip failed (${response.status})`);
+              }
+              const blob = await response.blob();
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              const ts = new Date().toISOString().replace(/[:.]/g, '-');
+              link.href = url;
+              link.download = `reports-${ts}.zip`;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              URL.revokeObjectURL(url);
+              setStatus('Zip ready.');
+            } catch (err) {
+              setStatus(err && err.message ? err.message : 'Unable to download zip.', true);
+            }
+          });
+        }
+        if (deleteFilesBtn) {
+          deleteFilesBtn.addEventListener('click', async () => {
+            if (!isAdmin) return;
+            const selected = getSelectedFiles();
+            if (!selected.length) return;
+            if (!confirm(`Delete ${selected.length} file(s)?`)) return;
+            setStatus('Deleting files...');
+            try {
+              const response = await fetch(buildAppUrl('api/files/delete'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: selected.map((file) => ({
+                  templateType: file.templateType,
+                  filename: file.filename
+                })) }),
+                credentials: 'same-origin'
+              });
+              if (!response.ok) {
+                throw new Error(`Delete failed (${response.status})`);
+              }
+              const payload = await response.json();
+              if (!payload.ok) {
+                throw new Error('Delete failed.');
+              }
+              applySelection([]);
+              await loadFiles();
+              setStatus('Deleted.');
+            } catch (err) {
+              setStatus(err && err.message ? err.message : 'Unable to delete files.', true);
+            }
+          });
+        }
 
         filtersForm.addEventListener('submit', (event) => {
           event.preventDefault();
