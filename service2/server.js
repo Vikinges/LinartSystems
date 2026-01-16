@@ -5117,9 +5117,16 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
       : fallbackSize;
 
-  let page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+  const pagesList = pdfDoc.getPages();
+
+  const targetPage =
+    options.targetPage && pagesList.includes(options.targetPage) ? options.targetPage : null;
+
+  let page = targetPage || pdfDoc.addPage([pageSize.width, pageSize.height]);
 
   const margin = 36;
+
+  const marginTop = 12;
 
   const headingColor = rgb(0.08, 0.2, 0.4);
 
@@ -5137,7 +5144,47 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
   const reportText = reportData && reportData.reportText ? String(reportData.reportText) : '';
 
-  let cursorY = page.getHeight() - margin;
+  const pageHeight = page.getHeight();
+
+  const bodyTopOffset = Number.isFinite(options.bodyTopOffset)
+
+    ? options.bodyTopOffset
+
+    : targetPage
+
+      ? defaultBodyTopOffset(pageHeight)
+
+      : null;
+
+  const startY =
+
+    bodyTopOffset !== null ? Math.max(marginTop + 8, pageHeight - bodyTopOffset - 6) : null;
+
+  if (startY !== null && options.clearBelowHeader !== false) {
+
+    page.drawRectangle({
+
+      x: 0,
+
+      y: 0,
+
+      width: page.getWidth(),
+
+      height: startY,
+
+      color: rgb(1, 1, 1),
+
+      borderWidth: 0,
+
+    });
+
+  }
+
+  const PAGE_TOP_PADDING = 32;
+
+  const pageStartY = (baseY) => Math.max(margin + PAGE_TOP_PADDING, baseY - PAGE_TOP_PADDING);
+
+  let cursorY = startY !== null ? pageStartY(startY) : pageHeight - margin;
 
   const headingSize = 18;
 
@@ -20901,6 +20948,10 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     let helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+    let dailyReportHeaderPage = null;
+
+    const templatePdfDoc = pdfDoc;
+
     if (isDailyReport) {
 
       pdfDoc = await PDFDocument.create();
@@ -20908,6 +20959,32 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
       helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
       form = null;
+
+      if (
+
+        templatePdfDoc &&
+
+        typeof templatePdfDoc.getPageCount === 'function' &&
+
+        templatePdfDoc.getPageCount() > 0
+
+      ) {
+
+        try {
+
+          const [copiedPage] = await pdfDoc.copyPages(templatePdfDoc, [0]);
+
+          dailyReportHeaderPage = copiedPage;
+
+          pdfDoc.addPage(copiedPage);
+
+        } catch (err) {
+
+          console.warn(`[server] Unable to reuse template header for daily report: ${err.message}`);
+
+        }
+
+      }
 
     }
 
@@ -21200,7 +21277,23 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
         dailyReportData,
 
-        { pageSize: templatePageSize, overflowTextEntries },
+        {
+
+          pageSize: templatePageSize,
+
+          overflowTextEntries,
+
+          targetPage: dailyReportHeaderPage,
+
+          bodyTopOffset:
+
+            submissionTemplateEntry && Number.isFinite(submissionTemplateEntry.bodyTopOffset)
+
+              ? submissionTemplateEntry.bodyTopOffset
+
+              : null,
+
+        },
 
       );
 

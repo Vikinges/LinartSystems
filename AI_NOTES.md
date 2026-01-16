@@ -11,5 +11,6 @@
 - Карточка проекта (projects.json): ключ — `batch_number`/`lsc_project_number`. При сабмите сохраняем site info поля, потом автоподставляем их в форму.
 - Daily report: signature removed; photos are compressed client-side before upload (JPEG, max edge 1600px).
 - Daily report: project number suggestions come from projects.json; submitter uses employee name suggestions.
+- Daily report: PDF uses template header (bodyTopOffset) and draws content below the boundary.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.
