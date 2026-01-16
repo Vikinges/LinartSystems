@@ -8066,7 +8066,7 @@ ${rows.join('\n')}
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v0.35 Lin</title>
+    <title>PDF forms generator - v0.36 Lin</title>
 
     <link
 
@@ -10346,7 +10346,7 @@ ${rows.join('\n')}
 
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
 
-        <h1>PDF forms generator - v0.35 Lin</h1>
+        <h1>PDF forms generator - v0.36 Lin</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
