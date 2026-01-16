@@ -2328,6 +2328,8 @@
 
                 <option value="maintenance">Maintenance</option>
 
+                <option value="daily_report">Daily report</option>
+
                 <option value="installation_report">Installation report</option>
 
                 <option value="calibration" disabled>Calibration (coming soon)</option>
@@ -2375,6 +2377,114 @@
               <a href="#" class="link-button" data-template-preview target="_blank" rel="noopener" hidden>Preview template</a>
 
             </div>
+
+          </div>
+
+        </section>
+
+        <section class="card" data-form-types="daily_report">
+
+          <h2>Daily report</h2>
+
+          <div class="grid two-col">
+
+        <label class="field" for="daily-project-number">
+
+          <span>Project number</span>
+
+          <input type="text" id="daily-project-number" name="daily_project_number" placeholder="Project number" required />
+
+        </label>
+
+        <label class="field" for="daily-report-date">
+
+          <span>Report date</span>
+
+          <input type="date" id="daily-report-date" name="daily_report_date" placeholder="Report date" required />
+
+        </label>
+
+        <label class="field" for="submitter-name">
+
+          <span>Filled by</span>
+
+          <input type="text" id="submitter-name" name="submitter_name" placeholder="Filled by" required />
+
+        </label>
+
+          </div>
+
+        <label class="field" for="daily-report-text">
+
+          <span>Report text</span>
+
+          <textarea id="daily-report-text" name="daily_report_text" rows="8" placeholder="Describe progress, issues, and next steps" data-auto-resize></textarea>
+
+        </label>
+
+        </section>
+
+        <section class="card photos-card" data-form-types="daily_report">
+
+          <h2>Daily report photos</h2>
+
+          <div class="photo-slot" data-photo-slot="daily_photos">
+
+            <span>Photo attachments</span>
+
+            <p>Upload photos related to the daily report.</p>
+
+            <label class="upload-button">
+
+              <input type="file" name="daily_photos" accept="image/*" multiple data-photo-input="daily_photos" />
+
+              Upload photos
+
+            </label>
+
+            <div class="photo-preview" data-photo-preview="daily_photos" data-photo-mode="multi" data-photo-label="Daily report photo" data-state="empty">
+
+              <span>No files selected yet.</span>
+
+            </div>
+
+            <small>JPEG/PNG only, up to 20 images.</small>
+
+          </div>
+
+        </section>
+
+        <section class="card" data-form-types="daily_report">
+
+          <h2>Signature</h2>
+
+          <div class="signature-row">
+
+                    <div class="signature-pad" data-field="daily_signature" data-sample="">
+
+          <div class="signature-pad__label">
+
+            <span>Signature</span>
+
+            <div class="signature-pad__actions">
+
+              <button type="button" class="signature-fullscreen">Fullscreen</button>
+
+              <button type="button" class="signature-clear">Clear</button>
+
+            </div>
+
+          </div>
+
+          <div class="signature-canvas-wrapper">
+
+            <canvas aria-label="Signature signature area"></canvas>
+
+          </div>
+
+          <input type="hidden" name="daily_signature" value="" />
+
+        </div>
 
           </div>
 
@@ -3469,7 +3579,7 @@
         </table>
       </section>
 
-        <section class="card">
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
 
           <div data-form-types="service_report">
 
@@ -5237,7 +5347,7 @@
 
 
 
-        
+
         const disableBarcodeOcr = true;
 
         const handlePartsOcrFile = async (file) => {
@@ -8311,7 +8421,19 @@
 
           const todayIso = new Date().toISOString().slice(0, 10);
 
+          if (formType === 'daily_report') {
 
+            setIfEmpty('[name="daily_project_number"]', 'DR-001');
+
+            setIfEmpty('[name="daily_report_date"]', todayIso);
+
+            setIfEmpty('[name="submitter_name"]', 'Debug Reporter');
+
+            setIfEmpty('[name="daily_report_text"]', 'Daily report summary (debug).');
+
+            return;
+
+          }
 
           if (isInstallation) {
 

@@ -127,6 +127,8 @@ This exposes the service on `http://localhost:3000`, mounts the generated PDFs f
 
 Generated files live under `out/`:
 
+- Daily report copies live under `out/daily_report/<project>/<date>/<project>_<date>_<submitter>.pdf` (sanitized).
+
 - `filled-<timestamp>.pdf` â€” flattened, photo-embedded checklist
 - `filled-<timestamp>.json` â€” metadata (form data, files processed, placement summary)
 

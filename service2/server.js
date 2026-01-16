@@ -1957,7 +1957,21 @@ const TABLE_BORDER_WIDTH = 0.8;
 
 const TEXT_FIELD_INNER_PADDING = 2;
 
+const DAILY_REPORT_FIELDS = {
 
+  projectNumber: 'daily_project_number',
+
+  reportDate: 'daily_report_date',
+
+  submitterName: 'submitter_name',
+
+  reportText: 'daily_report_text',
+
+  signature: 'daily_signature',
+
+  photos: 'daily_photos',
+
+};
 
 const SIGN_OFF_REQUEST_FIELDS = new Set([
 
@@ -5089,6 +5103,454 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
+async function drawDailyReportPage(pdfDoc, font, reportData, signatureImages, options = {}) {
+
+  const fallbackSize = { width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT };
+
+  const pageSize =
+
+    options.pageSize &&
+
+    Number.isFinite(options.pageSize.width) &&
+
+    Number.isFinite(options.pageSize.height)
+
+      ? options.pageSize
+
+      : fallbackSize;
+
+  let page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+
+  const margin = 36;
+
+  const headingColor = rgb(0.08, 0.2, 0.4);
+
+  const textColor = rgb(0.1, 0.1, 0.16);
+
+  const headingTitle = 'Daily report';
+
+  const signaturePlacements = [];
+
+  const projectNumber = reportData && reportData.projectNumber ? String(reportData.projectNumber) : '';
+
+  const reportDate = reportData && reportData.reportDate ? String(reportData.reportDate) : '';
+
+  const submitterName = reportData && reportData.submitterName ? String(reportData.submitterName) : '';
+
+  const reportText = reportData && reportData.reportText ? String(reportData.reportText) : '';
+
+  let cursorY = page.getHeight() - margin;
+
+  const headingSize = 18;
+
+  const headingWidth = font.widthOfTextAtSize(headingTitle, headingSize);
+
+  page.drawText(headingTitle, {
+
+    x: (page.getWidth() - headingWidth) / 2,
+
+    y: cursorY,
+
+    size: headingSize,
+
+    font,
+
+    color: headingColor,
+
+  });
+
+  cursorY -= 28;
+
+  const drawSectionTitle = (label) => {
+
+    page.drawText(label, {
+
+      x: margin,
+
+      y: cursorY,
+
+      size: 12,
+
+      font,
+
+      color: headingColor,
+
+    });
+
+    cursorY -= 18;
+
+  };
+
+  const drawInfoRow = (fields, { fullWidth = false } = {}) => {
+
+    const normalized = (fields || [])
+
+      .filter((field) => field && field.label)
+
+      .map((field) => ({ label: field.label, value: field.value || '' }));
+
+    if (!normalized.length) return;
+
+    const columns = fullWidth || normalized.length === 1 ? 1 : 2;
+
+    const colGap = columns === 1 ? 0 : 12;
+
+    const columnWidth =
+
+      columns === 1 ? page.getWidth() - margin * 2 : (page.getWidth() - margin * 2 - colGap) / 2;
+
+    const labelHeight = 14;
+
+    const valueHeight = 30;
+
+    const rowHeight = labelHeight + valueHeight;
+
+    if (cursorY - rowHeight < margin) {
+
+      page = pdfDoc.addPage([pageSize.width, pageSize.height]);
+
+      cursorY = page.getHeight() - margin;
+
+    }
+
+    normalized.forEach((field, index) => {
+
+      const x = margin + index * (columnWidth + colGap);
+
+      const labelY = cursorY - labelHeight;
+
+      const valueY = labelY - valueHeight;
+
+      page.drawRectangle({
+
+        x,
+
+        y: labelY,
+
+        width: columnWidth,
+
+        height: labelHeight,
+
+        borderWidth: TABLE_BORDER_WIDTH,
+
+        borderColor: TABLE_BORDER_COLOR,
+
+        color: rgb(0.92, 0.95, 0.99),
+
+      });
+
+      page.drawText(field.label, {
+
+        x: x + 6,
+
+        y: labelY + 3,
+
+        size: 9,
+
+        font,
+
+        color: headingColor,
+
+      });
+
+      page.drawRectangle({
+
+        x,
+
+        y: valueY,
+
+        width: columnWidth,
+
+        height: valueHeight,
+
+        borderWidth: TABLE_BORDER_WIDTH,
+
+        borderColor: TABLE_BORDER_COLOR,
+
+        color: rgb(1, 1, 1),
+
+      });
+
+      drawCenteredTextBlock(
+
+        page,
+
+        String(field.value || ''),
+
+        font,
+
+        { x, y: valueY, width: columnWidth, height: valueHeight },
+
+        {
+
+          align: 'left',
+
+          verticalAlign: 'middle',
+
+          paddingX: 8,
+
+          paddingY: 6,
+
+          color: textColor,
+
+          fontSize: 10,
+
+          minFontSize: 9,
+
+        },
+
+      );
+
+    });
+
+    cursorY -= rowHeight + 12;
+
+  };
+
+  drawSectionTitle('Report details');
+
+  drawInfoRow(
+
+    [
+
+      { label: 'Project number', value: projectNumber },
+
+      { label: 'Report date', value: reportDate },
+
+    ],
+
+    { fullWidth: false },
+
+  );
+
+  drawInfoRow([{ label: 'Filled by', value: submitterName }], { fullWidth: true });
+
+  drawSectionTitle('Report text');
+
+  const availableTextHeight = cursorY - margin - 180;
+
+  const textBoxHeight = clampNumber(availableTextHeight, 140, 280);
+
+  const textRect = {
+
+    x: margin,
+
+    y: cursorY - textBoxHeight,
+
+    width: page.getWidth() - margin * 2,
+
+    height: textBoxHeight,
+
+  };
+
+  page.drawRectangle({
+
+    x: textRect.x,
+
+    y: textRect.y,
+
+    width: textRect.width,
+
+    height: textRect.height,
+
+    borderWidth: TABLE_BORDER_WIDTH,
+
+    borderColor: TABLE_BORDER_COLOR,
+
+    color: rgb(1, 1, 1),
+
+  });
+
+  const textLayout = layoutMultilineText(reportText, font, textRect.width - 16, {
+
+    fontSize: 10,
+
+    minFontSize: 9,
+
+    lineHeightMultiplier: 1.25,
+
+  });
+
+  const lineHeight = textLayout.entries && textLayout.entries.length ? textLayout.entries[0].lineHeight : 12;
+
+  const maxLines = Math.max(1, Math.floor((textRect.height - 16) / Math.max(lineHeight, 1)));
+
+  let visibleText = reportText;
+
+  if (textLayout.entries.length > maxLines) {
+
+    visibleText = textLayout.entries.slice(0, maxLines).map((entry) => entry.text).join('\n');
+
+    const overflowText = textLayout.entries.slice(maxLines).map((entry) => entry.text).join('\n').trim();
+
+    if (overflowText && Array.isArray(options.overflowTextEntries)) {
+
+      options.overflowTextEntries.push({
+
+        acroName: DAILY_REPORT_FIELDS.reportText,
+
+        requestName: DAILY_REPORT_FIELDS.reportText,
+
+        label: 'Daily report text',
+
+        text: overflowText,
+
+        fontSize: 10,
+
+      });
+
+    }
+
+  }
+
+  drawCenteredTextBlock(page, visibleText, font, textRect, {
+
+    align: 'left',
+
+    verticalAlign: 'top',
+
+    paddingX: 8,
+
+    paddingY: 8,
+
+    color: textColor,
+
+    fontSize: 10,
+
+    minFontSize: 9,
+
+    lineHeightMultiplier: 1.25,
+
+  });
+
+  cursorY = textRect.y - 24;
+
+  drawSectionTitle('Signature');
+
+  const signatureHeight = 120;
+
+  const signatureWidth = Math.min(260, page.getWidth() - margin * 2);
+
+  const signatureRect = {
+
+    x: margin,
+
+    y: cursorY - signatureHeight,
+
+    width: signatureWidth,
+
+    height: signatureHeight,
+
+  };
+
+  page.drawRectangle({
+
+    x: signatureRect.x,
+
+    y: signatureRect.y,
+
+    width: signatureRect.width,
+
+    height: signatureRect.height,
+
+    borderWidth: TABLE_BORDER_WIDTH,
+
+    borderColor: TABLE_BORDER_COLOR,
+
+    color: rgb(1, 1, 1),
+
+  });
+
+  const nameLabel = submitterName ? `Signed by: ${submitterName}` : 'Signed by:';
+
+  page.drawText(nameLabel, {
+
+    x: signatureRect.x,
+
+    y: signatureRect.y - 12,
+
+    size: 9,
+
+    font,
+
+    color: textColor,
+
+  });
+
+  const signatureEntry = (signatureImages || []).find(
+
+    (entry) => entry && entry.acroName === DAILY_REPORT_FIELDS.signature,
+
+  );
+
+  if (signatureEntry) {
+
+    try {
+
+      const decoded = decodeImageDataUrl(signatureEntry.data);
+
+      if (decoded) {
+
+        const image =
+
+          decoded.mimeType === 'image/png'
+
+            ? await pdfDoc.embedPng(decoded.buffer)
+
+            : await pdfDoc.embedJpg(decoded.buffer);
+
+        const availableWidth = signatureRect.width - 12;
+
+        const availableHeight = signatureRect.height - 12;
+
+        const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
+
+        const drawWidth = image.width * scale;
+
+        const drawHeight = image.height * scale;
+
+        const offsetX = signatureRect.x + 6 + (availableWidth - drawWidth) / 2;
+
+        const offsetY = signatureRect.y + 6 + (availableHeight - drawHeight) / 2;
+
+        page.drawImage(image, {
+
+          x: offsetX,
+
+          y: offsetY,
+
+          width: drawWidth,
+
+          height: drawHeight,
+
+        });
+
+        signaturePlacements.push({
+
+          acroName: signatureEntry.acroName,
+
+          page: pdfDoc.getPageCount(),
+
+          width: Number(drawWidth.toFixed(2)),
+
+          height: Number(drawHeight.toFixed(2)),
+
+        });
+
+      }
+
+    } catch (err) {
+
+      console.warn(`[server] Unable to draw signature for daily report: ${err.message}`);
+
+    }
+
+  }
+
+  return signaturePlacements;
+
+}
+
 async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, options = {}) {
 
   const pagesList = pdfDoc.getPages();
@@ -7101,6 +7563,8 @@ function generateIndexHtml() {
 
     ['customer_signature', ''],
 
+    ['daily_signature', ''],
+
   ]);
 
   demoValues.set('control_notes_3', '');
@@ -7133,7 +7597,7 @@ function generateIndexHtml() {
 
     label,
 
-    { type = 'text', textarea = false, placeholder = '', allowUnknown = false, id: idOverride = null } = {},
+    { type = 'text', textarea = false, placeholder = '', allowUnknown = false, required = false, id: idOverride = null } = {},
 
   ) => {
 
@@ -7151,6 +7615,8 @@ function generateIndexHtml() {
 
     const initial = demoValues.get(name);
 
+    const requiredAttr = required ? ' required' : '';
+
     if (textarea) {
 
       const rows = type === 'textarea-lg' ? 8 : 4;
@@ -7161,7 +7627,7 @@ function generateIndexHtml() {
 
           <span>${escapeHtml(label)}</span>
 
-          <textarea id="${id}" name="${escapeHtml(requestName)}" rows="${rows}" placeholder="${escapeHtml(placeholder || label)}" data-auto-resize>${content}</textarea>
+          <textarea id="${id}" name="${escapeHtml(requestName)}" rows="${rows}" placeholder="${escapeHtml(placeholder || label)}" data-auto-resize${requiredAttr}>${content}</textarea>
 
         </label>`;
 
@@ -7219,7 +7685,7 @@ function generateIndexHtml() {
 
           <span>${escapeHtml(label)}</span>
 
-          <input type="${escapeHtml(actualType)}" id="${id}" name="${escapeHtml(requestName)}"${valueAttr} placeholder="${escapeHtml(resolvedPlaceholder)}"${suggestionAttrs}${extraAttrs} />${datalistMarkup}
+          <input type="${escapeHtml(actualType)}" id="${id}" name="${escapeHtml(requestName)}"${valueAttr} placeholder="${escapeHtml(resolvedPlaceholder)}"${suggestionAttrs}${extraAttrs}${requiredAttr} />${datalistMarkup}
 
         </label>`;
 
@@ -7481,7 +7947,39 @@ ${rows.join('\n')}
 
   };
 
+  const renderCustomSignaturePad = (requestName, label) => {
 
+    const safeName = escapeHtml(requestName);
+
+    const sample = signatureSamples.get(requestName) || '';
+
+    return `        <div class="signature-pad" data-field="${safeName}" data-sample="${escapeHtml(sample)}">
+
+          <div class="signature-pad__label">
+
+            <span>${escapeHtml(label)}</span>
+
+            <div class="signature-pad__actions">
+
+              <button type="button" class="signature-fullscreen">Fullscreen</button>
+
+              <button type="button" class="signature-clear">Clear</button>
+
+            </div>
+
+          </div>
+
+          <div class="signature-canvas-wrapper">
+
+            <canvas aria-label="${escapeHtml(label)} signature area"></canvas>
+
+          </div>
+
+          <input type="hidden" name="${safeName}" value="" />
+
+        </div>`;
+
+  };
 
   const engineerSignatureMarkup = renderSignaturePad('engineer_signature', "Engineer signature");
 
@@ -9821,6 +10319,8 @@ ${rows.join('\n')}
 
                 <option value="maintenance">Maintenance</option>
 
+                <option value="daily_report">Daily report</option>
+
                 <option value="installation_report">Installation report</option>
 
                 <option value="calibration" disabled>Calibration (coming soon)</option>
@@ -9868,6 +10368,66 @@ ${rows.join('\n')}
               <a href="#" class="link-button" data-template-preview target="_blank" rel="noopener" hidden>Preview template</a>
 
             </div>
+
+          </div>
+
+        </section>
+
+        <section class="card" data-form-types="daily_report">
+
+          <h2>Daily report</h2>
+
+          <div class="grid two-col">
+
+${renderTextInput(DAILY_REPORT_FIELDS.projectNumber, 'Project number', { allowUnknown: true, required: true })}
+
+${renderTextInput(DAILY_REPORT_FIELDS.reportDate, 'Report date', { type: 'date', allowUnknown: true, required: true })}
+
+${renderTextInput(DAILY_REPORT_FIELDS.submitterName, 'Filled by', { allowUnknown: true, required: true })}
+
+          </div>
+
+${renderTextInput(DAILY_REPORT_FIELDS.reportText, 'Report text', { textarea: true, type: 'textarea-lg', allowUnknown: true, placeholder: 'Describe progress, issues, and next steps' })}
+
+        </section>
+
+        <section class="card photos-card" data-form-types="daily_report">
+
+          <h2>Daily report photos</h2>
+
+          <div class="photo-slot" data-photo-slot="daily_photos">
+
+            <span>Photo attachments</span>
+
+            <p>Upload photos related to the daily report.</p>
+
+            <label class="upload-button">
+
+              <input type="file" name="daily_photos" accept="image/*" multiple data-photo-input="daily_photos" />
+
+              Upload photos
+
+            </label>
+
+            <div class="photo-preview" data-photo-preview="daily_photos" data-photo-mode="multi" data-photo-label="Daily report photo" data-state="empty">
+
+              <span>No files selected yet.</span>
+
+            </div>
+
+            <small>JPEG/PNG only, up to 20 images.</small>
+
+          </div>
+
+        </section>
+
+        <section class="card" data-form-types="daily_report">
+
+          <h2>Signature</h2>
+
+          <div class="signature-row">
+
+            ${renderCustomSignaturePad(DAILY_REPORT_FIELDS.signature, 'Signature')}
 
           </div>
 
@@ -10270,7 +10830,7 @@ ${renderChecklistSection('Equipment condition check', SERVICE_EQUIPMENT_ROWS, { 
 
 ${CHECKLIST_SECTIONS.map((section) => renderChecklistSection(section.title, section.rows, { dataFormTypes: 'maintenance' })).join('\n')}
 
-        <section class="card">
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
 
           <div data-form-types="service_report">
 
@@ -14762,7 +15322,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const todayIso = new Date().toISOString().slice(0, 10);
 
+          if (formType === 'daily_report') {
 
+            setIfEmpty('[name="daily_project_number"]', 'DR-001');
+
+            setIfEmpty('[name="daily_report_date"]', todayIso);
+
+            setIfEmpty('[name="submitter_name"]', 'Debug Reporter');
+
+            setIfEmpty('[name="daily_report_text"]', 'Daily report summary (debug).');
+
+            return;
+
+          }
 
           if (isInstallation) {
 
@@ -18886,6 +19458,8 @@ const uploadFields = upload.fields([
 
   { name: 'photos[]', maxCount: 20 },
 
+  { name: 'daily_photos', maxCount: 20 },
+
   { name: 'photo_defects', maxCount: 20 },
 
   { name: 'photo_installation', maxCount: 20 },
@@ -18917,6 +19491,8 @@ function collectPhotoFiles(files) {
   append(files.photos);
 
   append(files['photos[]']);
+
+  append(files.daily_photos);
 
   append(files.photo_defects);
 
@@ -19137,6 +19713,8 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
     photos: 'Supporting photo',
 
     'photos[]': 'Supporting photo',
+
+    daily_photos: 'Daily report photo',
 
     photo_defects: 'Defect photo',
 
@@ -20030,6 +20608,8 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     customer_signature: req.body?.customer_signature,
 
+    daily_signature: req.body?.daily_signature,
+
   };
 
   let overflowPlacements = [];
@@ -20050,7 +20630,55 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
   const templateType = toSingleValue(req.body?.template_type) || 'service_report';
 
+  const isDailyReport = templateType === 'daily_report';
 
+  const dailyReportData = isDailyReport
+
+    ? {
+
+        projectNumber: String(toSingleValue(req.body?.[DAILY_REPORT_FIELDS.projectNumber]) || '').trim(),
+
+        reportDate: String(toSingleValue(req.body?.[DAILY_REPORT_FIELDS.reportDate]) || '').trim(),
+
+        submitterName: String(toSingleValue(req.body?.[DAILY_REPORT_FIELDS.submitterName]) || '').trim(),
+
+        reportText: String(toSingleValue(req.body?.[DAILY_REPORT_FIELDS.reportText]) || '').trim(),
+
+      }
+
+    : null;
+
+  const dailySignatureRaw = isDailyReport ? req.body?.[DAILY_REPORT_FIELDS.signature] : null;
+
+  if (isDailyReport) {
+
+    const missing = [];
+
+    if (!dailyReportData.projectNumber) missing.push('project number');
+
+    if (!dailyReportData.reportDate) missing.push('report date');
+
+    if (!dailyReportData.submitterName) missing.push('filled by');
+
+    const signatureOk =
+
+      typeof dailySignatureRaw === 'string' && dailySignatureRaw.trim().startsWith('data:image/');
+
+    if (!signatureOk) missing.push('signature');
+
+    if (missing.length) {
+
+      return res.status(400).json({
+
+        ok: false,
+
+        error: `Daily report requires: ${missing.join(', ')}.`,
+
+      });
+
+    }
+
+  }
 
   if (req.body && typeof req.body === 'object') {
 
@@ -20224,7 +20852,23 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     }
 
-    const helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const templatePageSize = pdfDoc.getPageCount()
+
+      ? pdfDoc.getPages()[0].getSize()
+
+      : { width: DEFAULT_PAGE_WIDTH, height: DEFAULT_PAGE_HEIGHT };
+
+    let helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    if (isDailyReport) {
+
+      pdfDoc = await PDFDocument.create();
+
+      helveticaFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+      form = null;
+
+    }
 
 
 
@@ -20501,67 +21145,91 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
 
 
-    const imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles);
+    let imagePlacements = [];
 
+    let signaturePlacements = [];
 
+    if (isDailyReport) {
 
-    if (form) {
+      signaturePlacements = await drawDailyReportPage(
 
-      form.flatten();
+        pdfDoc,
+
+        helveticaFont,
+
+        dailyReportData,
+
+        signatureImages,
+
+        { pageSize: templatePageSize, overflowTextEntries },
+
+      );
+
+      imagePlacements = await embedUploadedImages(pdfDoc, null, photoFiles);
+
+      if (overflowTextEntries.length) {
+
+        overflowPlacements = appendOverflowPages(pdfDoc, helveticaFont, overflowTextEntries);
+
+      }
+
+    } else {
+
+      imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles);
+
+      if (form) {
+
+        form.flatten();
+
+      }
+
+      if (overflowTextEntries.length) {
+
+        overflowPlacements = appendOverflowPages(pdfDoc, helveticaFont, overflowTextEntries);
+
+      }
+
+      hiddenPartRows = partsRowUsage.filter((row) => !row.hasData).map((row) => row.number);
+
+      partsRowsRendered = partsRowUsage.filter((row) => row.hasData).map((row) => row.number);
+
+      const clearedSignoff = clearOriginalSignoffSection(pdfDoc, {
+
+        bodyTopOffset:
+
+          submissionTemplateEntry && Number.isFinite(submissionTemplateEntry.bodyTopOffset)
+
+            ? submissionTemplateEntry.bodyTopOffset
+
+            : null,
+
+      });
+
+      signaturePlacements = await drawSignOffPage(
+
+        pdfDoc,
+
+        helveticaFont,
+
+        sanitizedBody,
+
+        signatureImages,
+
+        partsRowUsage,
+
+        {
+
+          targetPage: clearedSignoff ? clearedSignoff.page : undefined,
+
+          startY: clearedSignoff && Number.isFinite(clearedSignoff.startY) ? clearedSignoff.startY : undefined,
+
+          employees: employeeSummary,
+
+        },
+
+      );
 
     }
-
-
-
-    if (overflowTextEntries.length) {
-
-      overflowPlacements = appendOverflowPages(pdfDoc, helveticaFont, overflowTextEntries);
-
-    }
-
-
-
-    hiddenPartRows = partsRowUsage.filter((row) => !row.hasData).map((row) => row.number);
-
-    partsRowsRendered = partsRowUsage.filter((row) => row.hasData).map((row) => row.number);
-
-
-
-    const clearedSignoff = clearOriginalSignoffSection(pdfDoc, {
-
-      bodyTopOffset:
-
-        submissionTemplateEntry && Number.isFinite(submissionTemplateEntry.bodyTopOffset)
-
-          ? submissionTemplateEntry.bodyTopOffset
-
-          : null,
-
-    });
-
-    const signaturePlacements = await drawSignOffPage(
-
-      pdfDoc,
-
-      helveticaFont,
-
-      sanitizedBody,
-
-      signatureImages,
-
-      partsRowUsage,
-
-      {
-
-        targetPage: clearedSignoff ? clearedSignoff.page : undefined,
-
-        startY: clearedSignoff && Number.isFinite(clearedSignoff.startY) ? clearedSignoff.startY : undefined,
-
-        employees: employeeSummary,
-
-      },
-
-    );
 
 
 
@@ -20637,29 +21305,79 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     fsExtra.ensureDirSync(outputMetaDir);
 
+    const dailyReportParts = isDailyReport && dailyReportData
+
+      ? {
+
+          project: cleanForFilename(dailyReportData.projectNumber) || 'project',
+
+          date: cleanForFilename(dailyReportData.reportDate) || 'date',
+
+          submitter: cleanForFilename(dailyReportData.submitterName) || 'name',
+
+        }
+
+      : null;
+
+    const dailyStorageDir = dailyReportParts
+
+      ? path.join(outputBaseDir, dailyReportParts.project, dailyReportParts.date)
+
+      : null;
+
+    if (dailyStorageDir) {
+
+      fsExtra.ensureDirSync(dailyStorageDir);
+
+    }
+
 
 
     const customerPart = customerName ? `${cleanForFilename(customerName)}-` : '';
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
-    const baseFilename = `filled-${customerPart}${timestamp}`;
+    const dailyBaseFilename = dailyReportParts
 
-    let filename = `${baseFilename}.pdf`;
+      ? [dailyReportParts.project, dailyReportParts.date, dailyReportParts.submitter].filter(Boolean).join('_')
 
-    let counter = 1;
+      : '';
 
-    while (fs.existsSync(path.join(outputPdfDir, filename))) {
+    const baseFilename = dailyBaseFilename || `filled-${customerPart}${timestamp}`;
 
-      filename = `${baseFilename}-${counter}.pdf`;
+    const pickUniqueFilename = (base, ext, dirs) => {
 
-      counter += 1;
+      let candidate = `${base}${ext}`;
 
-    }
+      let counter = 1;
+
+      while (dirs.some((dir) => fs.existsSync(path.join(dir, candidate)))) {
+
+        candidate = `${base}-${counter}${ext}`;
+
+        counter += 1;
+
+      }
+
+      return candidate;
+
+    };
+
+    const outputDirs = dailyStorageDir ? [outputPdfDir, dailyStorageDir] : [outputPdfDir];
+
+    const filename = pickUniqueFilename(baseFilename, '.pdf', outputDirs);
 
     const outputPath = path.join(outputPdfDir, filename);
 
     await fs.promises.writeFile(outputPath, pdfOutput);
+
+    const dailyStoragePath = dailyStorageDir ? path.join(dailyStorageDir, filename) : null;
+
+    if (dailyStoragePath && dailyStoragePath !== outputPath) {
+
+      await fs.promises.writeFile(dailyStoragePath, pdfOutput);
+
+    }
 
 
 
@@ -20771,7 +21489,19 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     };
 
+    if (dailyStoragePath) {
 
+      metadata.dailyReportPath = dailyStoragePath;
+
+      metadata.dailyReportDir = dailyStorageDir;
+
+    }
+
+    if (dailyReportData) {
+
+      metadata.dailyReport = dailyReportData;
+
+    }
 
     const metadataFilename = filename.replace(/\.pdf$/i, '.json');
 
