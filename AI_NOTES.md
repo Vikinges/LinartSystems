@@ -17,5 +17,6 @@
 - Hub: admin login accepts HUB_ADMIN_PASSWORD and refreshes stored hash if mismatched.
 - Hub: admin session also sets signed hub_admin_auth cookie; /admin and /api/status are no-cache to avoid stale auth.
 - Service2: added file archive UI at /files; /download/<type> redirects to /files?type=..., and /api/files lists generated PDFs from out/<type>/meta with filters.
+- Hub: /files redirects to /service2/files (preserves query) to support archive access behind the proxy.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

@@ -1629,6 +1629,13 @@ app.use('/service2', requireService2Access, createProxyMiddleware({
   logLevel: 'warn'
 }));
 
+// Convenience redirect so /files (from service2 redirects) lands under /service2/files.
+app.get('/files', requireService2Access, (req, res) => {
+  const queryIndex = req.originalUrl.indexOf('?');
+  const suffix = queryIndex >= 0 ? req.originalUrl.slice(queryIndex) : '';
+  res.redirect(`/service2/files${suffix}`);
+});
+
 // Allow direct PDF download links without /service2 prefix (auth required)
 app.use('/download', requireService2Access, createProxyMiddleware({
   target: 'http://service2:3001',
