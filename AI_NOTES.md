@@ -15,5 +15,6 @@
 - Hub: /service2 and /download now require login; users need allowedServices including service2.
 - Hub: to force reset admin password, set HUB_ADMIN_PASSWORD_FORCE=1 and redeploy (must be in container env).
 - Hub: admin login accepts HUB_ADMIN_PASSWORD and refreshes stored hash if mismatched.
+- Hub: admin session also sets signed hub_admin_auth cookie; /admin and /api/status are no-cache to avoid stale auth.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.

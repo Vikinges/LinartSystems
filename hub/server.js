@@ -28,6 +28,8 @@ if (!HUB_ADMIN_PASSWORD) {
 }
 
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
+const ADMIN_AUTH_COOKIE = 'hub_admin_auth';
+const ADMIN_AUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Trust reverse proxy (Traefik) so secure cookies work behind TLS
 app.set('trust proxy', 1);
@@ -392,7 +394,15 @@ if (FORCE_ADMIN_PASSWORD) {
 }
 
 function getSessionUser(req) {
-  return req.session && req.session.user ? req.session.user : null;
+  if (req.session && req.session.user) return req.session.user;
+  const token = req.cookies ? req.cookies[ADMIN_AUTH_COOKIE] : null;
+  if (!token) return null;
+  const user = parseAdminAuthToken(token);
+  if (user) {
+    setSessionUser(req, user);
+    return user;
+  }
+  return null;
 }
 
 function setSessionUser(req, user) {
@@ -406,6 +416,81 @@ function clearSessionUser(req) {
     req.session.user = null;
     req.session.authenticated = false;
   }
+}
+
+function base64UrlEncode(input) {
+  return Buffer.from(input)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function base64UrlDecode(input) {
+  if (!input) return '';
+  const normalized = String(input).replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized + '==='.slice((normalized.length + 3) % 4);
+  return Buffer.from(padded, 'base64').toString('utf8');
+}
+
+function signAdminPayload(payload) {
+  return base64UrlEncode(crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest());
+}
+
+function buildAdminAuthToken(user) {
+  if (!user || !user.username) return '';
+  const payload = JSON.stringify({
+    u: user.username,
+    a: user.isSuperadmin ? 1 : 0,
+    s: Array.isArray(user.allowedServices) ? user.allowedServices : [],
+    t: Date.now(),
+  });
+  const encoded = base64UrlEncode(payload);
+  const sig = signAdminPayload(payload);
+  return `${encoded}.${sig}`;
+}
+
+function parseAdminAuthToken(token) {
+  if (!token || typeof token !== 'string') return null;
+  const parts = token.split('.');
+  if (parts.length !== 2) return null;
+  const [encoded, sig] = parts;
+  const payload = base64UrlDecode(encoded);
+  if (!payload) return null;
+  const expectedSig = signAdminPayload(payload);
+  const sigBuffer = Buffer.from(sig);
+  const expectedBuffer = Buffer.from(expectedSig);
+  if (sigBuffer.length !== expectedBuffer.length) return null;
+  if (!crypto.timingSafeEqual(sigBuffer, expectedBuffer)) return null;
+  let data;
+  try {
+    data = JSON.parse(payload);
+  } catch (err) {
+    return null;
+  }
+  if (!data || !data.u || !data.t) return null;
+  if (Date.now() - Number(data.t) > ADMIN_AUTH_TTL_MS) return null;
+  return {
+    username: String(data.u),
+    isSuperadmin: data.a === 1,
+    allowedServices: Array.isArray(data.s) ? data.s : [],
+  };
+}
+
+function adminCookieOptions() {
+  return {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: IS_PROD,
+    maxAge: ADMIN_AUTH_TTL_MS,
+    path: '/',
+  };
+}
+
+function setNoCache(res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
 }
 
 function getAllowedServiceSet(req) {
@@ -807,6 +892,7 @@ app.get('/status', (req, res) => {
 // Simple pages
 // Aggregated status API that queries each service health endpoint
 app.get('/api/status', async (req, res) => {
+  setNoCache(res);
   const config = loadConfig();
   const services = loadServices();
   const user = getSessionUser(req);
@@ -873,12 +959,14 @@ app.get('/api/status', async (req, res) => {
 
 // Admin: login page
 app.get('/admin', (req, res) => {
+  setNoCache(res);
   const user = getSessionUser(req);
   if (user && user.isSuperadmin) return res.sendFile(path.join(__dirname, 'static', 'admin.html'));
   return res.sendFile(path.join(__dirname, 'static', 'admin-login.html'));
 });
 
 app.post('/admin/login', rateLimitLogin, async (req, res) => {
+  setNoCache(res);
   const username = (req.body && typeof req.body.username === 'string' && req.body.username.trim()) || DEFAULT_ADMIN_USERNAME;
   const pass = req.body && req.body.password;
   if (typeof pass !== 'string' || !pass.length) {
@@ -926,6 +1014,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     if (matchedUser) {
       req.session.authenticated = true;
       setSessionUser(req, matchedUser);
+      res.cookie(ADMIN_AUTH_COOKIE, buildAdminAuthToken(matchedUser), adminCookieOptions());
       const payload = { ok: true, user: { username: matchedUser.username, isSuperadmin: matchedUser.isSuperadmin, allowedServices: matchedUser.allowedServices } };
       const accept = req.headers.accept || '';
       if (accept.includes('text/html')) {
@@ -945,6 +1034,7 @@ app.post('/api/logout', (req, res) => {
   if (req.session) {
     req.session.destroy(() => {});
   }
+  res.clearCookie(ADMIN_AUTH_COOKIE, adminCookieOptions());
   res.json({ ok: true });
 });
 
