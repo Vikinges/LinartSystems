@@ -625,6 +625,15 @@ function requireFilesAdminAccess(req, res, next) {
   return res.status(403).send('Forbidden');
 }
 
+function attachHubProxyHeaders(req, _res, next) {
+  const user = getSessionUser(req);
+  if (user) {
+    req.headers['x-hub-role'] = user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
+    req.headers['x-hub-user'] = user.username;
+  }
+  next();
+}
+
 function resolveServiceAccess(serviceId, prefix) {
   const services = loadServices();
   const normalizedId = serviceId ? String(serviceId).trim().toLowerCase() : '';
@@ -1799,31 +1808,17 @@ app.use('/service2/files', requireFilesAccess, createProxyMiddleware({
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
 }));
-app.use('/service2/api/files/delete', requireFilesAdminAccess, createProxyMiddleware({
+app.use('/service2/api/files/delete', requireFilesAdminAccess, attachHubProxyHeaders, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },
-  logLevel: 'warn',
-  onProxyReq: (proxyReq, req) => {
-    const user = getSessionUser(req);
-    if (user) {
-      proxyReq.setHeader('x-hub-role', user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER));
-      proxyReq.setHeader('x-hub-user', user.username);
-    }
-  },
+  logLevel: 'warn'
 }));
-app.use('/service2/api/files/zip', requireFilesAdminAccess, createProxyMiddleware({
+app.use('/service2/api/files/zip', requireFilesAdminAccess, attachHubProxyHeaders, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },
-  logLevel: 'warn',
-  onProxyReq: (proxyReq, req) => {
-    const user = getSessionUser(req);
-    if (user) {
-      proxyReq.setHeader('x-hub-role', user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER));
-      proxyReq.setHeader('x-hub-user', user.username);
-    }
-  },
+  logLevel: 'warn'
 }));
 app.use('/service2/api/files', requireFilesAccess, createProxyMiddleware({
   target: 'http://service2:3001',
