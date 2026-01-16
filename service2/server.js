@@ -82,6 +82,8 @@ const DEFAULT_PAGE_HEIGHT = 841.89;
 
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 const PADDLE_OCR_URL = process.env.PADDLE_OCR_URL || '';
+const FILE_LIST_DEFAULT_LIMIT = 200;
+const FILE_LIST_MAX_LIMIT = 1000;
 
 
 
@@ -139,6 +141,135 @@ function clampNumber(value, min, max) {
 
   return value;
 
+}
+
+function normalizeQueryText(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeQueryLower(value) {
+  return normalizeQueryText(value).toLowerCase();
+}
+
+function matchesFilter(value, filter) {
+  if (!filter) return true;
+  if (value === null || value === undefined) return false;
+  return String(value).toLowerCase().includes(filter);
+}
+
+function buildFileListEntry(meta, type, fallbackFilename) {
+  if (!meta || typeof meta !== 'object') return null;
+  const templateType = normalizeQueryText(meta.templateType) || normalizeQueryText(type);
+  const filename = normalizeQueryText(meta.filename) || fallbackFilename || '';
+  if (!templateType || !filename) return null;
+  const createdAt = normalizeQueryText(meta.createdAt);
+  const dailyReport =
+    meta.dailyReport && typeof meta.dailyReport === 'object'
+      ? {
+          projectNumber: normalizeQueryText(meta.dailyReport.projectNumber),
+          reportDate: normalizeQueryText(meta.dailyReport.reportDate),
+          submitterName: normalizeQueryText(meta.dailyReport.submitterName),
+        }
+      : null;
+
+  return {
+    templateType,
+    templateLabel: normalizeQueryText(meta.templateLabel),
+    filename,
+    createdAt,
+    createdAtMs: createdAt ? Date.parse(createdAt) : 0,
+    downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
+    dailyReport,
+  };
+}
+
+async function listOutputTypes() {
+  try {
+    const entries = await fs.promises.readdir(OUTPUT_DIR, { withFileTypes: true });
+    return entries
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b));
+  } catch (err) {
+    return [];
+  }
+}
+
+function entryMatchesFilters(entry, filters) {
+  if (!entry) return false;
+  if (filters.type && entry.templateType.toLowerCase() !== filters.type) return false;
+
+  const daily = entry.dailyReport || {};
+  if (!matchesFilter(daily.projectNumber, filters.project)) return false;
+  if (!matchesFilter(daily.reportDate, filters.reportDate)) return false;
+  if (!matchesFilter(daily.submitterName, filters.submitter)) return false;
+
+  if (filters.query) {
+    const haystack = [
+      entry.filename,
+      entry.templateLabel,
+      entry.templateType,
+      daily.projectNumber,
+      daily.reportDate,
+      daily.submitterName,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    if (!haystack.includes(filters.query)) return false;
+  }
+  return true;
+}
+
+async function listFileEntries(filters) {
+  const types = await listOutputTypes();
+  const normalizedTypes = types.map((type) => type.toLowerCase());
+  const typeIndex = filters.type ? normalizedTypes.indexOf(filters.type) : -1;
+  const selectedType = typeIndex >= 0 ? types[typeIndex] : '';
+  const scanTypes = selectedType ? [selectedType] : types;
+
+  const entries = [];
+  for (const type of scanTypes) {
+    const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+    if (!fs.existsSync(metaDir)) {
+      continue;
+    }
+    let files = [];
+    try {
+      files = await fs.promises.readdir(metaDir);
+    } catch (err) {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.json')) continue;
+      const metaPath = path.join(metaDir, file);
+      let meta;
+      try {
+        const raw = await fs.promises.readFile(metaPath, 'utf8');
+        meta = JSON.parse(raw);
+      } catch (err) {
+        continue;
+      }
+      const fallbackFilename = file.replace(/\.json$/i, '.pdf');
+      const entry = buildFileListEntry(meta, type, fallbackFilename);
+      if (!entry) continue;
+      if (!entryMatchesFilters(entry, filters)) continue;
+      entries.push(entry);
+    }
+  }
+
+  entries.sort((a, b) => {
+    const diff = (b.createdAtMs || 0) - (a.createdAtMs || 0);
+    if (diff !== 0) return diff;
+    return a.filename.localeCompare(b.filename);
+  });
+
+  const limit = filters.limit || FILE_LIST_DEFAULT_LIMIT;
+  return {
+    types,
+    entries: entries.slice(0, limit),
+    total: entries.length,
+  };
 }
 
 
@@ -20036,6 +20167,10 @@ app.get('/', (req, res) => {
 
 });
 
+app.get(['/files', '/service2/files'], (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'files.html'));
+});
+
 
 
 const suggestRoutes = ['/suggest', '/service2/suggest'];
@@ -20624,6 +20759,39 @@ app.get('/api/templates', (req, res) => {
 
   return res.json(buildPublicTemplatesResponse());
 
+});
+
+app.get(['/api/files', '/service2/api/files'], async (req, res) => {
+  const type = normalizeQueryLower(req.query.type);
+  const project = normalizeQueryLower(req.query.project);
+  const reportDate = normalizeQueryLower(req.query.date || req.query.reportDate);
+  const submitter = normalizeQueryLower(req.query.submitter || req.query.filledBy);
+  const query = normalizeQueryLower(req.query.q || req.query.query || req.query.search);
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit)
+    ? clampNumber(Math.floor(rawLimit), 1, FILE_LIST_MAX_LIMIT)
+    : FILE_LIST_DEFAULT_LIMIT;
+
+  try {
+    const result = await listFileEntries({
+      type,
+      project,
+      reportDate,
+      submitter,
+      query,
+      limit,
+    });
+    return res.json({
+      ok: true,
+      files: result.entries,
+      total: result.total,
+      types: result.types,
+      filters: { type, project, reportDate, submitter, query, limit },
+    });
+  } catch (err) {
+    console.error('[server] Failed to list files', err);
+    return res.status(500).json({ ok: false, error: 'files_list_failed' });
+  }
 });
 
 
@@ -21790,6 +21958,20 @@ app.get('/download/:type/:file', async (req, res) => {
 });
 
 
+
+app.get('/download/:type', (req, res, next) => {
+  const requestedType = normalizeQueryText(req.params.type);
+  if (!requestedType) return next();
+  const typeDir = path.join(OUTPUT_DIR, requestedType);
+  try {
+    if (!fs.existsSync(typeDir)) return next();
+    const stats = fs.statSync(typeDir);
+    if (!stats.isDirectory()) return next();
+  } catch (err) {
+    return next();
+  }
+  return res.redirect(`/files?type=${encodeURIComponent(requestedType)}`);
+});
 
 app.get('/download/:file', async (req, res) => {
 
