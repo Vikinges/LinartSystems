@@ -32,6 +32,7 @@ services:
     environment:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
       - HUB_ADMIN_PASSWORD=${HUB_ADMIN_PASSWORD:?HUB_ADMIN_PASSWORD is required}
+      - HUB_ADMIN_PASSWORD_FORCE=${HUB_ADMIN_PASSWORD_FORCE:-}
       - HUB_DATA_DIR=/app/data
     volumes:
       - hub-data:/app/data
