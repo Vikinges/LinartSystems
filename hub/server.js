@@ -940,7 +940,7 @@ registerProxies(app);
 // Safer Referer-based proxy: only proxy when we can match a service by the Referer path.
 // This avoids defaulting to an incorrect target (previously 'http://localhost') which
 // caused ECONNREFUSED and 502 responses.
-app.use(['/submit', '/suggest', '/api/suggest', '/upload', '/files'], (req, res, next) => {
+app.use(['/submit', '/suggest', '/api/suggest', '/upload'], (req, res, next) => {
   const allowed = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'];
   if (!allowed.includes(req.method)) return next();
 
