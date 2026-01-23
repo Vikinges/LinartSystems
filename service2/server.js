@@ -10825,6 +10825,8 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
 
                       <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
 
+                      <button type="button" class="time-shortcut" data-action="employee-add-day" title="Add another work day">+ Day</button>
+
                     </div>
 
                   </div>
@@ -16571,6 +16573,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           };
 
+          const addDaysToIso = (iso, days) => {
+
+            const base = parseLocalDateTime(iso);
+
+            if (!base) return '';
+
+            const delta = Number(days || 0);
+
+            if (Number.isNaN(delta)) return iso;
+
+            base.setDate(base.getDate() + delta);
+
+            return formatIsoFromDate(base);
+
+          };
+
 
 
           const formatEmployeeDuration = (minutes) => {
@@ -17332,6 +17350,65 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             });
 
 
+            const addDayBtn = row.querySelector('[data-action="employee-add-day"]');
+
+            if (addDayBtn) {
+
+              addDayBtn.addEventListener('click', (event) => {
+
+                event.preventDefault();
+
+                const currentState =
+
+                  rowStates.get(row) ||
+
+                  updateRowState(row, 'add-day', { preserveSyncFlag: true, logDebug: false });
+
+                const name = currentState && currentState.name ? currentState.name : '';
+
+                const role = currentState && currentState.role ? currentState.role : '';
+
+                const baseArrival = (currentState && currentState.arrival) || formSessionStartIso;
+
+                const baseDeparture =
+
+                  (currentState && currentState.departure) ||
+
+                  (baseArrival ? addMinutesToIso(baseArrival, DEFAULT_SHIFT_MINUTES) : '');
+
+                const nextArrival = addDaysToIso(baseArrival, 1) || baseArrival;
+
+                const nextDeparture =
+
+                  baseDeparture ? addDaysToIso(baseDeparture, 1) || baseDeparture : '';
+
+                const clonedRow = addRow(
+
+                  { name, role, arrival: nextArrival, departure: nextDeparture },
+
+                  { summaryTrigger: 'add-day', insertAfter: row, markSynced: false },
+
+                );
+
+                if (clonedRow) {
+
+                  recordDebug('employee-add-day', {
+
+                    index: clonedRow.dataset.index,
+
+                    sourceIndex: row.dataset.index,
+
+                    arrival: nextArrival,
+
+                    departure: nextDeparture,
+
+                  });
+
+                }
+
+              });
+
+            }
 
             const removeBtn = row.querySelector('[data-action="employee-remove"]');
 
@@ -17541,7 +17618,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const row = fragment.querySelector('[data-employee-row]');
 
-            listEl.appendChild(fragment);
+            const insertAfter = options.insertAfter;
+
+            if (insertAfter && insertAfter.parentNode === listEl) {
+
+              const nextSibling = insertAfter.nextSibling;
+
+              if (nextSibling) {
+
+                listEl.insertBefore(fragment, nextSibling);
+
+              } else {
+
+                listEl.appendChild(fragment);
+
+              }
+
+            } else {
+
+              listEl.appendChild(fragment);
+
+            }
 
             renumberRows();
 
@@ -17613,6 +17710,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+            const markSynced =
+
+              options.markSynced !== undefined ? options.markSynced : !isPrimary;
+
+            const skipPropagation =
+
+              options.skipPropagation !== undefined
+
+                ? options.skipPropagation
+
+                : !isPrimary && Boolean(primaryState);
+
+
             const state = updateRowState(
 
               row,
@@ -17621,9 +17731,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               {
 
-                markSynced: !isPrimary,
+                markSynced,
 
-                skipPropagation: !isPrimary && Boolean(primaryState),
+                skipPropagation,
 
                 logDebug: !options.silent,
 
@@ -17651,7 +17761,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                 seeded: Boolean(options.summaryTrigger === 'seed'),
 
-                syncedWithPrimary: !isPrimary,
+                syncedWithPrimary: markSynced,
 
               });
 
