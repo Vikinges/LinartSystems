@@ -10825,8 +10825,6 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
 
                       <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
 
-                      <button type="button" class="time-shortcut" data-action="employee-add-day" title="Add another work day">+ Day</button>
-
                     </div>
 
                   </div>
@@ -10872,6 +10870,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
                       <button type="button" class="time-shortcut" data-action="time-adjust" data-step="-30" title="Subtract 30 minutes">-30m</button>
 
                       <button type="button" class="time-shortcut" data-action="time-adjust" data-step="30" title="Add 30 minutes">+30m</button>
+                      <button type="button" class="time-shortcut" data-action="employee-add-day" title="Add another work day">+ Day</button>
 
                     </div>
 
