@@ -2922,8 +2922,12 @@ function collectEmployeeEntries(body) {
 
     breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
     uniqueCount: 0,
+    breaksEnabled: false,
 
   };
+
+  const breaksEnabled = normalizeCheckboxValue(body?.breaks_enabled);
+  summary.breaksEnabled = breaksEnabled;
 
   if (!body || typeof body !== 'object') {
 
@@ -3078,7 +3082,9 @@ function collectEmployeeEntries(body) {
 
 
 
-      const breakInfo = determineBreakRequirement(durationMinutes);
+      const breakInfo = breaksEnabled
+        ? determineBreakRequirement(durationMinutes)
+        : { code: 'DISABLED', minutes: 0, label: 'Breaks disabled' };
 
       entries.push({
 
@@ -3114,15 +3120,19 @@ function collectEmployeeEntries(body) {
 
       summary.totalMinutes += durationMinutes;
 
-      summary.totalBreakMinutes += breakInfo.minutes || 0;
+      if (breaksEnabled) {
 
-      if (summary.breakStats[breakInfo.code] === undefined) {
+        summary.totalBreakMinutes += breakInfo.minutes || 0;
 
-        summary.breakStats.UNKNOWN += 1;
+        if (summary.breakStats[breakInfo.code] === undefined) {
 
-      } else {
+          summary.breakStats.UNKNOWN += 1;
 
-        summary.breakStats[breakInfo.code] += 1;
+        } else {
+
+          summary.breakStats[breakInfo.code] += 1;
+
+        }
 
       }
 
@@ -3407,8 +3417,12 @@ function collectEmployeeEntries(body) {
 
     breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
     uniqueCount: 0,
+    breaksEnabled: false,
 
   };
+
+  const breaksEnabled = normalizeCheckboxValue(body?.breaks_enabled);
+  summary.breaksEnabled = breaksEnabled;
 
   if (!body || typeof body !== 'object') {
 
@@ -3571,7 +3585,9 @@ function collectEmployeeEntries(body) {
 
       const normalized = ensureFutureDeparture(arrivalIso, departureIso);
 
-      const breakInfo = determineBreakRequirement(normalized.minutes);
+      const breakInfo = breaksEnabled
+        ? determineBreakRequirement(normalized.minutes)
+        : { code: 'DISABLED', minutes: 0, label: 'Breaks disabled' };
 
       entries.push({
 
@@ -3605,15 +3621,19 @@ function collectEmployeeEntries(body) {
 
       summary.totalMinutes += normalized.minutes;
 
-      summary.totalBreakMinutes += breakInfo.minutes || 0;
+      if (breaksEnabled) {
 
-      if (summary.breakStats[breakInfo.code] === undefined) {
+        summary.totalBreakMinutes += breakInfo.minutes || 0;
 
-        summary.breakStats.UNKNOWN += 1;
+        if (summary.breakStats[breakInfo.code] === undefined) {
 
-      } else {
+          summary.breakStats.UNKNOWN += 1;
 
-        summary.breakStats[breakInfo.code] += 1;
+        } else {
+
+          summary.breakStats[breakInfo.code] += 1;
+
+        }
 
       }
 
@@ -5913,6 +5933,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const employeeUniqueCount = Number(employeesData.uniqueCount || 0);
   const employeeCount =
     employeeUniqueCount > 0 ? employeeUniqueCount : employeeEntries.length;
+  const breaksEnabled = employeesData.breaksEnabled !== false;
 
 
 
@@ -6204,35 +6225,43 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const breakMinutesLabel =
 
-      employeeEntries.length === 0
+      !breaksEnabled
 
-        ? 'pending'
+        ? 'disabled'
 
-        : knownBreakCount > 0
+        : employeeEntries.length === 0
 
-          ? employeeTotalBreakMinutes
+          ? 'pending'
 
-            ? formatEmployeeDuration(employeeTotalBreakMinutes)
+          : knownBreakCount > 0
 
-            : '0m'
+            ? employeeTotalBreakMinutes
 
-          : employeeBreakStats.UNKNOWN > 0
+              ? formatEmployeeDuration(employeeTotalBreakMinutes)
 
-            ? 'pending'
+              : '0m'
 
-            : '0m';
+            : employeeBreakStats.UNKNOWN > 0
+
+              ? 'pending'
+
+              : '0m';
 
     const breakDetails =
 
-      knownBreakCount > 0
+      !breaksEnabled
 
-        ? formatBreakStatsSummary(employeeBreakStats)
+        ? ''
 
-        : employeeBreakStats.UNKNOWN > 0
+        : knownBreakCount > 0
 
-          ? `${employeeBreakStats.UNKNOWN} pending`
+          ? formatBreakStatsSummary(employeeBreakStats)
 
-          : '';
+          : employeeBreakStats.UNKNOWN > 0
+
+            ? `${employeeBreakStats.UNKNOWN} pending`
+
+            : '';
 
     page.drawText(
 
@@ -10743,6 +10772,11 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
             <button type="button" class="button" data-action="employee-add">+ Add employee</button>
 
             <small>Defaults use the moment you opened this form; fine-tune via manual input or +/-30m shortcuts.</small>
+
+            <label class="checkbox">
+              <input type="checkbox" name="breaks_enabled" data-breaks-toggle />
+              <span>Calculate mandatory breaks</span>
+            </label>
 
           </div>
 
@@ -16479,6 +16513,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const template = section.querySelector('#employee-row-template');
 
           const addButton = section.querySelector('[data-action="employee-add"]');
+          const breaksToggleEl = section.querySelector('[data-breaks-toggle]');
 
           const summaryEl = section.querySelector('[data-employee-summary]');
 
@@ -16521,6 +16556,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             datetime: { manual: false, syncedValue: '' },
 
           };
+          const breaksEnabled = () => Boolean(breaksToggleEl && breaksToggleEl.checked);
 
 
 
@@ -17029,133 +17065,140 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
           function updateSummary(reason) {
-
+          
             const summary = {
-
+          
               count: 0,
-
+          
               uniqueCount: 0,
-
+          
               totalMinutes: 0,
-
+          
               totalBreakMinutes: 0,
-
+          
               breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
-
+          
             };
-
+          
+            const breaksActive = breaksEnabled();
+          
             const uniqueKeys = new Set();
-
+          
             rowElements().forEach((row) => {
-
+          
               const state = rowStates.get(row);
-
+          
               if (!state || !state.hasData) return;
-
+          
               summary.count += 1;
-
+          
               const key = buildEmployeeKey(state, row);
-
+          
               if (key) {
-
+          
                 uniqueKeys.add(key);
-
+          
               }
-
+          
               summary.totalMinutes += state.durationMinutes;
-
-              summary.totalBreakMinutes += state.breakRequiredMinutes;
-
-              if (summary.breakStats[state.breakCode] === undefined) {
-
-                summary.breakStats.UNKNOWN += 1;
-
-              } else {
-
-                summary.breakStats[state.breakCode] += 1;
-
+          
+              if (breaksActive) {
+          
+                summary.totalBreakMinutes += state.breakRequiredMinutes;
+          
+                if (summary.breakStats[state.breakCode] === undefined) {
+          
+                  summary.breakStats.UNKNOWN += 1;
+          
+                } else {
+          
+                  summary.breakStats[state.breakCode] += 1;
+          
+                }
+          
               }
-
+          
             });
-
+          
             summary.uniqueCount = uniqueKeys.size;
-
-
+          
             if (summaryTotalEl) {
-
+          
               if (summary.count === 0) {
-
+          
                 summaryTotalEl.textContent = 'Working time: 0m | Required breaks: pending';
-
+          
               } else {
-
+          
                 summaryTotalEl.textContent =
-
+          
                   'Working time: ' +
-
+          
                   formatEmployeeDuration(summary.totalMinutes) +
-
+          
                   ' | Required breaks: ' +
-
-                  formatEmployeeDuration(summary.totalBreakMinutes);
-
+          
+                  (breaksActive ? formatEmployeeDuration(summary.totalBreakMinutes) : 'disabled');
+          
               }
-
+          
             }
-
-
-
+          
             if (summaryCountEl) {
-
+          
               if (summary.count === 0) {
-
+          
                 summaryCountEl.textContent = 'No employees added yet.';
-
+          
               } else {
-
+          
                 const employeeCount = summary.uniqueCount || summary.count;
-
+          
                 const base =
-
+          
                   employeeCount === 1
-
+          
                     ? '1 employee recorded.'
-
+          
                     : employeeCount + ' employees recorded.';
-
-                const breakSummary = formatBreakStatsSummary(summary.breakStats);
-
+          
+                const breakSummary = breaksActive
+          
+                  ? formatBreakStatsSummary(summary.breakStats)
+          
+                  : '';
+          
                 summaryCountEl.textContent = breakSummary ? base + ' ' + breakSummary : base;
-
+          
               }
-
+          
             }
-
-
-
+          
             if (!suppressSummaryLog) {
-
+          
               recordDebug('employee-summary', {
-
+          
                 reason: reason || 'update',
-
+          
                 totalMinutes: summary.totalMinutes,
-
+          
                 totalBreakMinutes: summary.totalBreakMinutes,
-
+          
                 breakStats: summary.breakStats,
-
+          
                 count: summary.count,
-
+          
                 uniqueCount: summary.uniqueCount,
-
+          
+                breaksEnabled: breaksActive,
+          
               });
-
+          
             }
-
-
-
+          
             return summary;
+          
+          }
 
           }
 
@@ -17277,7 +17320,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-            const breakInfo = determineBreakRequirement(durationMinutes);
+            const breaksActive = breaksEnabled();
+
+            const breakInfo = breaksActive
+              ? determineBreakRequirement(durationMinutes)
+              : { code: 'DISABLED', minutes: 0, label: 'Breaks disabled' };
 
             const hasData = Boolean(name || role || arrivalIso || departureIso);
 
@@ -18160,9 +18207,31 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          if (breaksToggleEl) {
+
+            breaksToggleEl.addEventListener('change', () => {
+
+              rowElements().forEach((row) => {
+
+                updateRowState(row, 'break-toggle', {
+
+                  logDebug: false,
+
+                  preserveSyncFlag: true,
+
+                  skipPropagation: true,
+
+                });
+
+              });
+
+              updateSummary('break-toggle');
+
+            });
+
+          }
+
         }
-
-
 
         function setupPhotoUploads() {
 

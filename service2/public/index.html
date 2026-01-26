@@ -2794,6 +2794,11 @@
 
             <small>Defaults use the moment you opened this form; fine-tune via manual input or +/-30m shortcuts.</small>
 
+            <label class="checkbox">
+              <input type="checkbox" name="breaks_enabled" data-breaks-toggle />
+              <span>Calculate mandatory breaks</span>
+            </label>
+
           </div>
 
           <div class="employee-table-wrapper">
@@ -9399,6 +9404,7 @@
           const template = section.querySelector('#employee-row-template');
 
           const addButton = section.querySelector('[data-action="employee-add"]');
+          const breaksToggleEl = section.querySelector('[data-breaks-toggle]');
 
           const summaryEl = section.querySelector('[data-employee-summary]');
 
@@ -9441,6 +9447,7 @@
             datetime: { manual: false, syncedValue: '' },
 
           };
+          const breaksEnabled = () => Boolean(breaksToggleEl && breaksToggleEl.checked);
 
 
 
@@ -9949,133 +9956,140 @@
 
 
           function updateSummary(reason) {
-
+          
             const summary = {
-
+          
               count: 0,
-
+          
               uniqueCount: 0,
-
+          
               totalMinutes: 0,
-
+          
               totalBreakMinutes: 0,
-
+          
               breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
-
+          
             };
-
+          
+            const breaksActive = breaksEnabled();
+          
             const uniqueKeys = new Set();
-
+          
             rowElements().forEach((row) => {
-
+          
               const state = rowStates.get(row);
-
+          
               if (!state || !state.hasData) return;
-
+          
               summary.count += 1;
-
+          
               const key = buildEmployeeKey(state, row);
-
+          
               if (key) {
-
+          
                 uniqueKeys.add(key);
-
+          
               }
-
+          
               summary.totalMinutes += state.durationMinutes;
-
-              summary.totalBreakMinutes += state.breakRequiredMinutes;
-
-              if (summary.breakStats[state.breakCode] === undefined) {
-
-                summary.breakStats.UNKNOWN += 1;
-
-              } else {
-
-                summary.breakStats[state.breakCode] += 1;
-
+          
+              if (breaksActive) {
+          
+                summary.totalBreakMinutes += state.breakRequiredMinutes;
+          
+                if (summary.breakStats[state.breakCode] === undefined) {
+          
+                  summary.breakStats.UNKNOWN += 1;
+          
+                } else {
+          
+                  summary.breakStats[state.breakCode] += 1;
+          
+                }
+          
               }
-
+          
             });
-
+          
             summary.uniqueCount = uniqueKeys.size;
-
-
+          
             if (summaryTotalEl) {
-
+          
               if (summary.count === 0) {
-
+          
                 summaryTotalEl.textContent = 'Working time: 0m | Required breaks: pending';
-
+          
               } else {
-
+          
                 summaryTotalEl.textContent =
-
+          
                   'Working time: ' +
-
+          
                   formatEmployeeDuration(summary.totalMinutes) +
-
+          
                   ' | Required breaks: ' +
-
-                  formatEmployeeDuration(summary.totalBreakMinutes);
-
+          
+                  (breaksActive ? formatEmployeeDuration(summary.totalBreakMinutes) : 'disabled');
+          
               }
-
+          
             }
-
-
-
+          
             if (summaryCountEl) {
-
+          
               if (summary.count === 0) {
-
+          
                 summaryCountEl.textContent = 'No employees added yet.';
-
+          
               } else {
-
+          
                 const employeeCount = summary.uniqueCount || summary.count;
-
+          
                 const base =
-
+          
                   employeeCount === 1
-
+          
                     ? '1 employee recorded.'
-
+          
                     : employeeCount + ' employees recorded.';
-
-                const breakSummary = formatBreakStatsSummary(summary.breakStats);
-
+          
+                const breakSummary = breaksActive
+          
+                  ? formatBreakStatsSummary(summary.breakStats)
+          
+                  : '';
+          
                 summaryCountEl.textContent = breakSummary ? base + ' ' + breakSummary : base;
-
+          
               }
-
+          
             }
-
-
-
+          
             if (!suppressSummaryLog) {
-
+          
               recordDebug('employee-summary', {
-
+          
                 reason: reason || 'update',
-
+          
                 totalMinutes: summary.totalMinutes,
-
+          
                 totalBreakMinutes: summary.totalBreakMinutes,
-
+          
                 breakStats: summary.breakStats,
-
+          
                 count: summary.count,
-
+          
                 uniqueCount: summary.uniqueCount,
-
+          
+                breaksEnabled: breaksActive,
+          
               });
-
+          
             }
-
-
-
+          
             return summary;
+          
+          }
 
           }
 
@@ -10197,7 +10211,11 @@
 
 
 
-            const breakInfo = determineBreakRequirement(durationMinutes);
+            const breaksActive = breaksEnabled();
+
+            const breakInfo = breaksActive
+              ? determineBreakRequirement(durationMinutes)
+              : { code: 'DISABLED', minutes: 0, label: 'Breaks disabled' };
 
             const hasData = Boolean(name || role || arrivalIso || departureIso);
 
@@ -11080,9 +11098,31 @@
 
 
 
+          if (breaksToggleEl) {
+
+            breaksToggleEl.addEventListener('change', () => {
+
+              rowElements().forEach((row) => {
+
+                updateRowState(row, 'break-toggle', {
+
+                  logDebug: false,
+
+                  preserveSyncFlag: true,
+
+                  skipPropagation: true,
+
+                });
+
+              });
+
+              updateSummary('break-toggle');
+
+            });
+
+          }
+
         }
-
-
 
         function setupPhotoUploads() {
 
