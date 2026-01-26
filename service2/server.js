@@ -2875,6 +2875,38 @@ function formatBreakStatsSummary(breakStats) {
 }
 
 
+function normalizeEmployeeToken(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function buildEmployeeIdentity(entry, fallbackIndex) {
+  if (!entry || typeof entry !== 'object') {
+    return 'row:' + fallbackIndex;
+  }
+  const groupId = normalizeEmployeeToken(entry.groupId || entry.group);
+  if (groupId) return 'group:' + groupId;
+  const nameKey = normalizeEmployeeToken(entry.name);
+  const roleKey = normalizeEmployeeToken(entry.role);
+  if (nameKey || roleKey) {
+    return 'nr:' + nameKey + '|' + roleKey;
+  }
+  return 'row:' + fallbackIndex;
+}
+
+function computeUniqueEmployeeCount(entries) {
+  if (!Array.isArray(entries) || !entries.length) return 0;
+  const seen = new Set();
+  entries.forEach((entry, index) => {
+    const fallbackIndex = Number(entry && entry.index) || index + 1;
+    const key = buildEmployeeIdentity(entry, fallbackIndex);
+    seen.add(key);
+  });
+  return seen.size;
+}
+
 
 function collectEmployeeEntries(body) {
 
@@ -2889,6 +2921,7 @@ function collectEmployeeEntries(body) {
     totalBreakMinutes: 0,
 
     breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+    uniqueCount: 0,
 
   };
 
@@ -2991,6 +3024,7 @@ function collectEmployeeEntries(body) {
         ? String(toSingleValue(record.departure)).trim()
 
         : '';
+      const groupId = toSingleValue(record.group) ? String(toSingleValue(record.group)).trim() : '';
 
       if (!name && !role && !arrival && !departure) {
 
@@ -3054,6 +3088,8 @@ function collectEmployeeEntries(body) {
 
         role,
 
+        groupId,
+
         arrival,
 
         departure,
@@ -3093,6 +3129,7 @@ function collectEmployeeEntries(body) {
     });
 
 
+  summary.uniqueCount = computeUniqueEmployeeCount(entries);
 
   return summary;
 
@@ -3369,6 +3406,7 @@ function collectEmployeeEntries(body) {
     totalBreakMinutes: 0,
 
     breakStats: { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 },
+    uniqueCount: 0,
 
   };
 
@@ -3509,6 +3547,7 @@ function collectEmployeeEntries(body) {
         ? String(toSingleValue(record.departure)).trim()
 
         : '';
+      const groupId = toSingleValue(record.group) ? String(toSingleValue(record.group)).trim() : '';
 
       if (!arrivalIso && (name || role || departureIso)) {
 
@@ -3541,6 +3580,8 @@ function collectEmployeeEntries(body) {
         name,
 
         role,
+
+        groupId,
 
         arrival: normalized.arrivalIso,
 
@@ -3579,6 +3620,7 @@ function collectEmployeeEntries(body) {
     });
 
 
+  summary.uniqueCount = computeUniqueEmployeeCount(entries);
 
   return summary;
 
@@ -5868,6 +5910,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const employeeTotalBreakMinutes = Number(employeesData.totalBreakMinutes || 0);
 
   const employeeBreakStats = employeesData.breakStats || { NONE: 0, MIN30: 0, MIN45: 0, UNKNOWN: 0 };
+  const employeeUniqueCount = Number(employeesData.uniqueCount || 0);
+  const employeeCount =
+    employeeUniqueCount > 0 ? employeeUniqueCount : employeeEntries.length;
 
 
 
@@ -6191,7 +6236,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     page.drawText(
 
-      `Total recorded time: ${durationSummary} across ${employeeEntries.length} ${employeeEntries.length === 1 ? 'employee' : 'employees'
+      `Total recorded time: ${durationSummary} across ${employeeCount} ${employeeCount === 1 ? 'employee' : 'employees'
 
       }.`,
 
@@ -10877,6 +10922,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
                   </div>
 
                   <input type="hidden" data-field="departure" />
+                  <input type="hidden" data-field="group" />
 
                 </div>
 
@@ -16800,6 +16846,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          const syncGroupInput = (row, groupId) => {
+
+            if (!row) return;
+
+            if (groupId) {
+
+              row.dataset.employeeGroup = groupId;
+
+            }
+
+            const input = row.querySelector('input[data-field="group"]');
+
+            if (input) {
+
+              input.value = row.dataset.employeeGroup || groupId || '';
+
+            }
+
+          };
+
+
           function combineDateTimeValue(row, field) {
 
             const pair = getDateTimePair(row, field);
@@ -16903,6 +16970,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               setName('input[data-field="arrival"]', 'arrival');
 
               setName('input[data-field="departure"]', 'departure');
+
+              setName('input[data-field="group"]', 'group');
+
+              syncGroupInput(row, row.dataset.employeeGroup);
 
             });
 
@@ -17369,6 +17440,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                 const groupId = row.dataset.employeeGroup;
 
+                syncGroupInput(row, groupId);
+
                 const currentState =
 
                   rowStates.get(row) ||
@@ -17653,7 +17726,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const resolvedGroupId = options.groupId || createGroupId();
 
-            row.dataset.employeeGroup = resolvedGroupId;
+            syncGroupInput(row, resolvedGroupId);
 
             renumberRows();
 

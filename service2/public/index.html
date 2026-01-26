@@ -2972,6 +2972,7 @@
                   </div>
 
                   <input type="hidden" data-field="departure" />
+                  <input type="hidden" data-field="group" />
 
                 </div>
 
@@ -9765,6 +9766,27 @@
 
 
 
+          const syncGroupInput = (row, groupId) => {
+
+            if (!row) return;
+
+            if (groupId) {
+
+              row.dataset.employeeGroup = groupId;
+
+            }
+
+            const input = row.querySelector('input[data-field="group"]');
+
+            if (input) {
+
+              input.value = row.dataset.employeeGroup || groupId || '';
+
+            }
+
+          };
+
+
           function combineDateTimeValue(row, field) {
 
             const pair = getDateTimePair(row, field);
@@ -9868,6 +9890,10 @@
               setName('input[data-field="arrival"]', 'arrival');
 
               setName('input[data-field="departure"]', 'departure');
+
+              setName('input[data-field="group"]', 'group');
+
+              syncGroupInput(row, row.dataset.employeeGroup);
 
             });
 
@@ -10334,6 +10360,8 @@
 
                 const groupId = row.dataset.employeeGroup;
 
+                syncGroupInput(row, groupId);
+
                 const currentState =
 
                   rowStates.get(row) ||
@@ -10618,7 +10646,7 @@
 
             const resolvedGroupId = options.groupId || createGroupId();
 
-            row.dataset.employeeGroup = resolvedGroupId;
+            syncGroupInput(row, resolvedGroupId);
 
             renumberRows();
 
