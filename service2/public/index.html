@@ -9908,7 +9908,13 @@
 
           }
 
-
+          const requestEmployeeName = () => {
+            if (!window || typeof window.prompt !== 'function') return '';
+            const response = window.prompt('Employee name');
+            if (response === null) return null;
+            const trimmed = response.trim();
+            return trimmed;
+          };
 
           const normalizeEmployeeToken = (value) => {
 
@@ -10970,6 +10976,13 @@
             addButton.addEventListener('click', (event) => {
 
               event.preventDefault();
+              const requestedName = requestEmployeeName();
+              if (!requestedName) {
+                recordDebug('employee-add-cancelled', {
+                  reason: requestedName === null ? 'cancelled' : 'empty-name',
+                });
+                return;
+              }
 
               const rows = rowElements();
 
@@ -11008,7 +11021,7 @@
 
                   const created = addRow(
 
-                    { arrival: baseArrival, departure: baseDeparture },
+                    { name: requestedName, arrival: baseArrival, departure: baseDeparture },
 
                     {
 
@@ -11060,7 +11073,7 @@
 
               const row = addRow(
 
-                {},
+                { name: requestedName },
 
                 {
 

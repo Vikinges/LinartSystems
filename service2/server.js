@@ -17019,6 +17019,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          const requestEmployeeName = () => {
+            if (!window || typeof window.prompt !== 'function') return '';
+            const response = window.prompt('Employee name');
+            if (response === null) return null;
+            const trimmed = response.trim();
+            return trimmed;
+          };
+
           const normalizeEmployeeToken = (value) => {
 
             return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -18079,6 +18087,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             addButton.addEventListener('click', (event) => {
 
               event.preventDefault();
+              const requestedName = requestEmployeeName();
+              if (!requestedName) {
+                recordDebug('employee-add-cancelled', {
+                  reason: requestedName === null ? 'cancelled' : 'empty-name',
+                });
+                return;
+              }
 
               const rows = rowElements();
 
@@ -18117,7 +18132,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                   const created = addRow(
 
-                    { arrival: baseArrival, departure: baseDeparture },
+                    { name: requestedName, arrival: baseArrival, departure: baseDeparture },
 
                     {
 
@@ -18169,7 +18184,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               const row = addRow(
 
-                {},
+                { name: requestedName },
 
                 {
 
