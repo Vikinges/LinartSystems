@@ -6087,7 +6087,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       const durationLabel = entry.durationLabel || formatEmployeeDuration(entry.durationMinutes);
 
-      const breakLabel = entry.breakLabel || '';
+      const breakLabel = breaksEnabled ? entry.breakLabel || '' : '';
 
       const durationCell = breakLabel
 
@@ -6225,11 +6225,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const breakMinutesLabel =
 
-      !breaksEnabled
-
-        ? 'disabled'
-
-        : employeeEntries.length === 0
+      employeeEntries.length === 0
 
           ? 'pending'
 
@@ -6249,11 +6245,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const breakDetails =
 
-      !breaksEnabled
-
-        ? ''
-
-        : knownBreakCount > 0
+      knownBreakCount > 0
 
           ? formatBreakStatsSummary(employeeBreakStats)
 
@@ -6287,27 +6279,31 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     cursorY -= 16;
 
-    page.drawText(
+    if (breaksEnabled) {
+      page.drawText(
 
-      `Mandated breaks: ${breakMinutesLabel}${breakDetails ? ` (${breakDetails})` : ''}.`,
+        `Mandated breaks: ${breakMinutesLabel}${breakDetails ? ` (${breakDetails})` : ''}.`,
 
-      {
+        {
 
-        x: margin,
+          x: margin,
 
-        y: cursorY,
+          y: cursorY,
 
-        size: 10,
+          size: 10,
 
-        font,
+          font,
 
-        color: textColor,
+          color: textColor,
 
-      },
+        },
 
-    );
+      );
 
-    cursorY -= 26;
+      cursorY -= 26;
+    } else {
+      cursorY -= 10;
+    }
 
   };
 
