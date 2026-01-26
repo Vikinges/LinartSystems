@@ -16460,6 +16460,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const rowStates = new Map();
 
+          let groupCounter = 1;
+
+          const createGroupId = () => `emp-${groupCounter++}`;
+
           let suppressSummaryLog = false;
 
 
@@ -17357,6 +17361,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                 event.preventDefault();
 
+                if (!row.dataset.employeeGroup) {
+
+                  row.dataset.employeeGroup = createGroupId();
+
+                }
+
+                const groupId = row.dataset.employeeGroup;
+
                 const currentState =
 
                   rowStates.get(row) ||
@@ -17385,7 +17397,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                   { name, role, arrival: nextArrival, departure: nextDeparture },
 
-                  { summaryTrigger: 'add-day', insertAfter: row, markSynced: false },
+                  { summaryTrigger: 'add-day', insertAfter: row, markSynced: false, groupId },
 
                 );
 
@@ -17639,6 +17651,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             }
 
+            const resolvedGroupId = options.groupId || createGroupId();
+
+            row.dataset.employeeGroup = resolvedGroupId;
+
             renumberRows();
 
             // ensure suggestion handlers are attached for newly added inputs
@@ -17882,7 +17898,90 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               event.preventDefault();
 
-              const primaryState = rowStates.get(rowElements()[0]);
+              const rows = rowElements();
+
+              const primaryRow = rows[0] || null;
+
+              const primaryState = primaryRow ? rowStates.get(primaryRow) : null;
+
+              const primaryGroupId =
+                primaryRow && primaryRow.dataset ? primaryRow.dataset.employeeGroup : '';
+
+              const groupRows = primaryGroupId
+                ? rows.filter((row) => row.dataset.employeeGroup === primaryGroupId)
+                : primaryRow
+                ? [primaryRow]
+                : [];
+
+              if (groupRows.length > 1) {
+
+                const newGroupId = createGroupId();
+
+                let insertAfter = rows[rows.length - 1] || null;
+
+                let firstNewRow = null;
+
+                groupRows.forEach((sourceRow, index) => {
+
+                  const sourceState = rowStates.get(sourceRow) || {};
+
+                  const baseArrival =
+                    sourceState.arrival || (primaryState && primaryState.arrival) || formSessionStartIso;
+
+                  const baseDeparture =
+                    sourceState.departure ||
+                    (primaryState && primaryState.departure) ||
+                    (baseArrival ? addMinutesToIso(baseArrival, DEFAULT_SHIFT_MINUTES) : '');
+
+                  const created = addRow(
+
+                    { arrival: baseArrival, departure: baseDeparture },
+
+                    {
+
+                      summaryTrigger: 'add',
+
+                      insertAfter,
+
+                      markSynced: false,
+
+                      groupId: newGroupId,
+
+                      silent: index > 0,
+
+                    },
+
+                  );
+
+                  if (created) {
+
+                    if (!firstNewRow) firstNewRow = created;
+
+                    insertAfter = created;
+
+                  }
+
+                });
+
+                if (firstNewRow && primaryState && primaryState.arrival) {
+
+                  recordDebug('employee-arrival-prefill', {
+
+                    index: firstNewRow.dataset.index,
+
+                    value: primaryState.arrival,
+
+                    multiDay: true,
+
+                    count: groupRows.length,
+
+                  });
+
+                }
+
+                return;
+
+              }
 
               const baseArrival = (primaryState && primaryState.arrival) || formSessionStartIso;
 
