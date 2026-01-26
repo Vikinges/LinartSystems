@@ -16462,7 +16462,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           let groupCounter = 1;
 
-          const createGroupId = () => `emp-${groupCounter++}`;
+          const createGroupId = () => 'emp-' + groupCounter++;
 
           let suppressSummaryLog = false;
 

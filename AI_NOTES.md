@@ -23,3 +23,7 @@
 - Service2: admin-only file actions (delete + download zip) via /api/files/delete and /api/files/zip; files page shows logged role.
 
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.
+
+## TODO
+- Add "Send for signature" flow with expiring signing links (<=7 days): generate locked PDF, send link to client, signature-only page, save signed final on server and allow client download.
+- Decide public access strategy for signing links (/service2/sign/* vs separate domain) and link delivery method (email/manual).
