@@ -17200,8 +17200,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           
           }
 
-          }
-
 
 
           function syncEngineerSignoff(primaryState) {
