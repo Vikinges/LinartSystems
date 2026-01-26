@@ -20505,6 +20505,18 @@ function requireHubAdmin(req, res, next) {
   return res.status(403).json({ ok: false, error: 'Forbidden' });
 }
 
+function requireFileAdmin(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin') {
+    return next();
+  }
+  const token = extractAdminToken(req);
+  if (token && adminTokens.has(token)) {
+    return next();
+  }
+  return res.status(403).json({ ok: false, error: 'Forbidden' });
+}
+
 
 
 if (verifyAdminPassword(ADMIN_DEFAULT_PASSWORD)) {
@@ -21492,7 +21504,7 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   }
 });
 
-app.post(['/api/files/delete', '/service2/api/files/delete'], requireHubAdmin, async (req, res) => {
+app.post(['/api/files/delete', '/service2/api/files/delete'], requireFileAdmin, async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
     return res.status(400).json({ ok: false, error: 'no_files_selected' });
@@ -21549,7 +21561,7 @@ app.post(['/api/files/delete', '/service2/api/files/delete'], requireHubAdmin, a
   return res.json({ ok: true, deleted, missing, errors });
 });
 
-app.post(['/api/files/zip', '/service2/api/files/zip'], requireHubAdmin, async (req, res) => {
+app.post(['/api/files/zip', '/service2/api/files/zip'], requireFileAdmin, async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
     return res.status(400).json({ ok: false, error: 'no_files_selected' });

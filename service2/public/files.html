@@ -91,6 +91,7 @@
       }
       input[type="text"],
       input[type="search"],
+      input[type="date"],
       select {
         font: inherit;
         font-size: calc(1rem * var(--control-scale, 1));
@@ -253,7 +254,7 @@
             </label>
             <label class="field">
               <span>Report date</span>
-              <input id="filter-date" type="text" placeholder="YYYY-MM-DD or mm/dd/yyyy" />
+              <input id="filter-date" type="date" />
             </label>
             <label class="field">
               <span>Filled by</span>
@@ -328,6 +329,24 @@
         const buildAppUrl = (path) => {
           const normalized = (path || '').replace(/^\/+/, '');
           return new URL(normalized || '.', appBaseUrl).toString();
+        };
+
+        const ADMIN_TOKEN_KEY = 'pm-admin-token';
+        const readAdminToken = () => {
+          try {
+            return window.localStorage.getItem(ADMIN_TOKEN_KEY) || '';
+          } catch (err) {
+            return '';
+          }
+        };
+        const fetchWithAdminToken = (path, options = {}) => {
+          const token = readAdminToken();
+          if (!token) {
+            return fetch(buildAppUrl(path), options);
+          }
+          const headers = new Headers(options.headers || {});
+          headers.set('Authorization', `Bearer ${token}`);
+          return fetch(buildAppUrl(path), { ...options, headers });
         };
 
         const filtersForm = document.getElementById('filters');
@@ -513,22 +532,43 @@
         };
 
         const loadUser = async () => {
+          let hubUser = null;
           try {
             const response = await fetch('/api/status', { credentials: 'same-origin' });
-            if (!response.ok) {
-              throw new Error('Unable to load user');
+            if (response.ok) {
+              const payload = await response.json();
+              hubUser = payload && payload.hub ? payload.hub.user : null;
             }
-            const payload = await response.json();
-            const user = payload && payload.hub ? payload.hub.user : null;
-            updateAdminState(user);
+          } catch (err) {
+            hubUser = null;
+          }
+
+          if (hubUser) {
+            updateAdminState(hubUser);
             if (userMetaEl) {
-              if (user) {
-                const role = user.role || (user.isSuperadmin ? 'admin' : 'manager');
-                const label = role === 'blocked' ? 'no access' : role;
-                userMetaEl.textContent = `Logged in as ${user.username} (${label})`;
-              } else {
-                userMetaEl.textContent = '';
-              }
+              const role = hubUser.role || (hubUser.isSuperadmin ? 'admin' : 'manager');
+              const label = role === 'blocked' ? 'no access' : role;
+              userMetaEl.textContent = `Logged in as ${hubUser.username} (${label})`;
+            }
+            return;
+          }
+
+          const token = readAdminToken();
+          if (!token) {
+            updateAdminState(null);
+            if (userMetaEl) userMetaEl.textContent = '';
+            return;
+          }
+
+          try {
+            const response = await fetchWithAdminToken('admin/profile', { credentials: 'same-origin' });
+            if (!response.ok) throw new Error('admin profile failed');
+            const payload = await response.json();
+            if (!payload || !payload.ok) throw new Error('admin profile failed');
+            const pseudoUser = { username: payload.username || 'admin', role: 'admin', isSuperadmin: true };
+            updateAdminState(pseudoUser);
+            if (userMetaEl) {
+              userMetaEl.textContent = `Logged in as ${pseudoUser.username} (admin)`;
             }
           } catch (err) {
             updateAdminState(null);
@@ -609,7 +649,7 @@
             if (!selected.length) return;
             setStatus('Preparing zip...');
             try {
-              const response = await fetch(buildAppUrl('api/files/zip'), {
+              const response = await fetchWithAdminToken('api/files/zip', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: selected.map((file) => ({
@@ -645,7 +685,7 @@
             if (!confirm(`Delete ${selected.length} file(s)?`)) return;
             setStatus('Deleting files...');
             try {
-              const response = await fetch(buildAppUrl('api/files/delete'), {
+              const response = await fetchWithAdminToken('api/files/delete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ files: selected.map((file) => ({
