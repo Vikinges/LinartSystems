@@ -1252,6 +1252,128 @@
 
       }
 
+      .employee-name-overlay {
+
+        position: fixed;
+
+        inset: 0;
+
+        background: rgba(15, 23, 42, 0.55);
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 1rem;
+
+        z-index: 2100;
+
+      }
+
+      .employee-name-overlay[hidden] {
+
+        display: none;
+
+      }
+
+      .employee-name-dialog {
+
+        width: min(420px, 92vw);
+
+        background: #fff;
+
+        border-radius: 12px;
+
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+        padding: 1rem 1.25rem;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 0.75rem;
+
+      }
+
+      .employee-name-dialog h3 {
+
+        margin: 0;
+
+        font-size: 1.05rem;
+
+        color: #1f2a5b;
+
+      }
+
+      .employee-name-dialog label {
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 0.35rem;
+
+        font-weight: 600;
+
+        color: #1f2a5b;
+
+      }
+
+      .employee-name-dialog input {
+
+        border: 1px solid #cbd5f5;
+
+        border-radius: 8px;
+
+        padding: 0.6rem 0.75rem;
+
+        font-size: 1rem;
+
+      }
+
+      .employee-name-actions {
+
+        display: flex;
+
+        justify-content: flex-end;
+
+        gap: 0.5rem;
+
+      }
+
+      .employee-name-actions button {
+
+        border: none;
+
+        border-radius: 8px;
+
+        padding: 0.5rem 0.9rem;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+      }
+
+      .employee-name-actions .secondary {
+
+        background: #e5e7eb;
+
+        color: #111827;
+
+      }
+
+      .employee-name-actions .primary {
+
+        background: #2563eb;
+
+        color: #fff;
+
+      }
+
       body.mobile-mode {
 
         --control-scale: var(--mobile-scale, 0.7);
@@ -9908,12 +10030,105 @@
 
           }
 
+          const employeeNamePicker = {
+            overlay: null,
+            input: null,
+            resolve: null,
+          };
+
+          const ensureEmployeeNameOverlay = () => {
+            if (employeeNamePicker.overlay) return;
+            if (!document || !document.body) return;
+            const overlay = document.createElement('div');
+            overlay.dataset.employeeNameOverlay = 'true';
+            overlay.className = 'employee-name-overlay';
+            overlay.hidden = true;
+            overlay.innerHTML =
+              '<div class="employee-name-dialog">' +
+              '<h3>Select employee</h3>' +
+              '<label>' +
+              '<span>Employee name</span>' +
+              '<input type="text" data-employee-name-input data-suggest-field="employee_name" list="suggest-employee-name" autocomplete="off" placeholder="Start typing..." />' +
+              '</label>' +
+              '<div class="employee-name-actions">' +
+              '<button type="button" class="secondary" data-employee-name-cancel>Cancel</button>' +
+              '<button type="button" class="primary" data-employee-name-add>Add</button>' +
+              '</div>' +
+              '</div>';
+            document.body.appendChild(overlay);
+            const input = overlay.querySelector('[data-employee-name-input]');
+            const addButton = overlay.querySelector('[data-employee-name-add]');
+            const cancelButton = overlay.querySelector('[data-employee-name-cancel]');
+
+            const closeOverlay = (value) => {
+              overlay.hidden = true;
+              if (input) {
+                input.value = '';
+              }
+              if (employeeNamePicker.resolve) {
+                const resolver = employeeNamePicker.resolve;
+                employeeNamePicker.resolve = null;
+                resolver(value);
+              }
+            };
+
+            const submitValue = () => {
+              const trimmed = input ? input.value.trim() : '';
+              closeOverlay(trimmed);
+            };
+
+            const cancel = () => closeOverlay(null);
+
+            overlay.addEventListener('click', (event) => {
+              if (event.target === overlay) {
+                cancel();
+              }
+            });
+
+            if (addButton) {
+              addButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                submitValue();
+              });
+            }
+
+            if (cancelButton) {
+              cancelButton.addEventListener('click', (event) => {
+                event.preventDefault();
+                cancel();
+              });
+            }
+
+            if (input) {
+              input.addEventListener('keydown', (event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submitValue();
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancel();
+                }
+              });
+            }
+
+            employeeNamePicker.overlay = overlay;
+            employeeNamePicker.input = input;
+            setupAutoSuggestions();
+          };
+
           const requestEmployeeName = () => {
-            if (!window || typeof window.prompt !== 'function') return '';
-            const response = window.prompt('Employee name');
-            if (response === null) return null;
-            const trimmed = response.trim();
-            return trimmed;
+            if (!window || !document || !document.body) return Promise.resolve('');
+            ensureEmployeeNameOverlay();
+            if (!employeeNamePicker.overlay || !employeeNamePicker.input) {
+              return Promise.resolve('');
+            }
+            employeeNamePicker.overlay.hidden = false;
+            employeeNamePicker.input.value = '';
+            employeeNamePicker.input.focus();
+            return new Promise((resolve) => {
+              employeeNamePicker.resolve = resolve;
+            });
           };
 
           const normalizeEmployeeToken = (value) => {
@@ -10973,10 +11188,10 @@
 
           if (addButton) {
 
-            addButton.addEventListener('click', (event) => {
+            addButton.addEventListener('click', async (event) => {
 
               event.preventDefault();
-              const requestedName = requestEmployeeName();
+              const requestedName = await requestEmployeeName();
               if (!requestedName) {
                 recordDebug('employee-add-cancelled', {
                   reason: requestedName === null ? 'cancelled' : 'empty-name',
