@@ -16983,11 +16983,58 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          const normalizeEmployeeToken = (value) => {
+
+            return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+          };
+
+          const buildEmployeeKey = (state, row) => {
+
+            const groupId =
+
+              state && state.groupId
+
+                ? state.groupId
+
+                : row && row.dataset
+
+                  ? row.dataset.employeeGroup
+
+                  : '';
+
+            if (groupId) {
+
+              return 'group:' + groupId;
+
+            }
+
+            const nameKey = normalizeEmployeeToken(state ? state.name : '');
+
+
+            const roleKey = normalizeEmployeeToken(state ? state.role : '');
+
+            if (nameKey || roleKey) {
+
+              return 'nr:' + nameKey + '|' + roleKey;
+
+            }
+
+            const rowIndex = row && row.dataset ? row.dataset.index : '';
+
+
+            return 'row:' + (rowIndex || '');
+
+          };
+
+
           function updateSummary(reason) {
 
             const summary = {
 
               count: 0,
+
+              uniqueCount: 0,
 
               totalMinutes: 0,
 
@@ -16997,6 +17044,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             };
 
+            const uniqueKeys = new Set();
+
             rowElements().forEach((row) => {
 
               const state = rowStates.get(row);
@@ -17004,6 +17053,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               if (!state || !state.hasData) return;
 
               summary.count += 1;
+
+              const key = buildEmployeeKey(state, row);
+
+              if (key) {
+
+                uniqueKeys.add(key);
+
+              }
 
               summary.totalMinutes += state.durationMinutes;
 
@@ -17021,6 +17078,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             });
 
+            summary.uniqueCount = uniqueKeys.size;
 
 
             if (summaryTotalEl) {
@@ -17055,13 +17113,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               } else {
 
+                const employeeCount = summary.uniqueCount || summary.count;
+
                 const base =
 
-                  summary.count === 1
+                  employeeCount === 1
 
                     ? '1 employee recorded.'
 
-                    : summary.count + ' employees recorded.';
+                    : employeeCount + ' employees recorded.';
 
                 const breakSummary = formatBreakStatsSummary(summary.breakStats);
 
@@ -17086,6 +17146,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
                 breakStats: summary.breakStats,
 
                 count: summary.count,
+
+                uniqueCount: summary.uniqueCount,
 
               });
 
@@ -17242,6 +17304,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               name,
 
               role,
+
+              groupId: row.dataset.employeeGroup || '',
 
               arrival: arrivalIso,
 

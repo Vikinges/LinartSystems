@@ -9903,11 +9903,58 @@
 
 
 
+          const normalizeEmployeeToken = (value) => {
+
+            return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+          };
+
+          const buildEmployeeKey = (state, row) => {
+
+            const groupId =
+
+              state && state.groupId
+
+                ? state.groupId
+
+                : row && row.dataset
+
+                  ? row.dataset.employeeGroup
+
+                  : '';
+
+            if (groupId) {
+
+              return 'group:' + groupId;
+
+            }
+
+            const nameKey = normalizeEmployeeToken(state ? state.name : '');
+
+
+            const roleKey = normalizeEmployeeToken(state ? state.role : '');
+
+            if (nameKey || roleKey) {
+
+              return 'nr:' + nameKey + '|' + roleKey;
+
+            }
+
+            const rowIndex = row && row.dataset ? row.dataset.index : '';
+
+
+            return 'row:' + (rowIndex || '');
+
+          };
+
+
           function updateSummary(reason) {
 
             const summary = {
 
               count: 0,
+
+              uniqueCount: 0,
 
               totalMinutes: 0,
 
@@ -9917,6 +9964,8 @@
 
             };
 
+            const uniqueKeys = new Set();
+
             rowElements().forEach((row) => {
 
               const state = rowStates.get(row);
@@ -9924,6 +9973,14 @@
               if (!state || !state.hasData) return;
 
               summary.count += 1;
+
+              const key = buildEmployeeKey(state, row);
+
+              if (key) {
+
+                uniqueKeys.add(key);
+
+              }
 
               summary.totalMinutes += state.durationMinutes;
 
@@ -9941,6 +9998,7 @@
 
             });
 
+            summary.uniqueCount = uniqueKeys.size;
 
 
             if (summaryTotalEl) {
@@ -9975,13 +10033,15 @@
 
               } else {
 
+                const employeeCount = summary.uniqueCount || summary.count;
+
                 const base =
 
-                  summary.count === 1
+                  employeeCount === 1
 
                     ? '1 employee recorded.'
 
-                    : summary.count + ' employees recorded.';
+                    : employeeCount + ' employees recorded.';
 
                 const breakSummary = formatBreakStatsSummary(summary.breakStats);
 
@@ -10006,6 +10066,8 @@
                 breakStats: summary.breakStats,
 
                 count: summary.count,
+
+                uniqueCount: summary.uniqueCount,
 
               });
 
@@ -10162,6 +10224,8 @@
               name,
 
               role,
+
+              groupId: row.dataset.employeeGroup || '',
 
               arrival: arrivalIso,
 

@@ -7,7 +7,7 @@
 - Локальный запуск `service2`: из `service2/` `npm install` (первый раз), затем `npm start` (порт 3001). При старте генерится `public/index.html` на основе шаблона в `server.js`.
 - Тестовое поколение PDF: запустить сервер, затем `node tools/gen-sample.js` (использует `FORM_HOST` или http://localhost:3001). Ответ `/submit` отдаёт JSON с `url`; чтобы скачать PDF, сходить GET на `http://localhost:3001/<url>` (пример в консоли).
 - OCR: `PADDLE_OCR_URL` из `.env` (по умолчанию `http://paddle-ocr:8866/predict/ocr_system`, пробует и `/ocr`; при локальном запуске вне Docker — можно указать `http://localhost:8866/predict/ocr_system`). Parts OCR теперь **не заполняет** форму — только выводит статус, значения вносить руками. Поле LED display / batch заполняется руками или из карточки проекта (LSC Project number), не из OCR.
-- Подсчёт сотрудников в PDF: если есть `employees[n][group]`, считаем уникальность по группе (multi‑day одного сотрудника); иначе fallback на `name + role` (регистр/пробелы нормализованы).
+- Подсчёт сотрудников в PDF и в UI-summary: если есть `employees[n][group]`, считаем уникальность по группе (multi‑day одного сотрудника); иначе fallback на `name + role` (регистр/пробелы нормализованы).
 - Карточка проекта (projects.json): ключ — `batch_number`/`lsc_project_number`. При сабмите сохраняем site info поля, потом автоподставляем их в форму.
 - Daily report: signature removed; photos are compressed client-side before upload (JPEG, max edge 1600px).
 - Daily report: project number suggestions come from projects.json; submitter uses employee name suggestions.
