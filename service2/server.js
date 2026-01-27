@@ -340,7 +340,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '1.01';
+const SERVICE2_VERSION = '0.37';
 
 
 
@@ -8190,7 +8190,7 @@ ${rows.join('\n')}
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v0.36 Lin</title>
+    <title>PDF forms generator - v0.37 Lin</title>
 
     <link
 
@@ -10600,7 +10600,7 @@ ${rows.join('\n')}
 
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
 
-        <h1>PDF forms generator - v0.36 Lin</h1>
+        <h1>PDF forms generator - v0.37 Lin</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
