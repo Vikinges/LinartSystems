@@ -17140,6 +17140,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const employeeNamePicker = {
             overlay: null,
             input: null,
+            roleInput: null,
             resolve: null,
           };
 
@@ -17157,6 +17158,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               '<span>Employee name</span>' +
               '<input type="text" data-employee-name-input data-suggest-field="employee_name" list="suggest-employee-name" autocomplete="off" placeholder="Start typing..." />' +
               '</label>' +
+              '<label>' +
+              '<span>Role / position</span>' +
+              '<input type="text" data-employee-role-input data-suggest-field="employee_role" list="suggest-employee-role" autocomplete="off" placeholder="Role / position" />' +
+              '</label>' +
               '<div class="employee-name-actions">' +
               '<button type="button" class="secondary" data-employee-name-cancel>Cancel</button>' +
               '<button type="button" class="primary" data-employee-name-add>Add</button>' +
@@ -17164,14 +17169,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               '</div>';
             document.body.appendChild(overlay);
             const input = overlay.querySelector('[data-employee-name-input]');
+            const roleInput = overlay.querySelector('[data-employee-role-input]');
             const addButton = overlay.querySelector('[data-employee-name-add]');
             const cancelButton = overlay.querySelector('[data-employee-name-cancel]');
 
             const closeOverlay = (value) => {
               overlay.hidden = true;
-              if (input) {
-                input.value = '';
-              }
+              if (input) input.value = '';
+              if (roleInput) roleInput.value = '';
               if (employeeNamePicker.resolve) {
                 const resolver = employeeNamePicker.resolve;
                 employeeNamePicker.resolve = null;
@@ -17181,7 +17186,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const submitValue = () => {
               const trimmed = input ? input.value.trim() : '';
-              closeOverlay(trimmed);
+              const roleTrimmed = roleInput ? roleInput.value.trim() : '';
+              closeOverlay({ name: trimmed, role: roleTrimmed });
             };
 
             const cancel = () => closeOverlay(null);
@@ -17206,8 +17212,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               });
             }
 
-            if (input) {
-              input.addEventListener('keydown', (event) => {
+            [input, roleInput].forEach((field) => {
+              if (!field) return;
+              field.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                   event.preventDefault();
                   submitValue();
@@ -17217,21 +17224,25 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
                   cancel();
                 }
               });
-            }
+            });
 
             employeeNamePicker.overlay = overlay;
             employeeNamePicker.input = input;
+            employeeNamePicker.roleInput = roleInput;
             setupAutoSuggestions();
           };
 
-          const requestEmployeeName = () => {
-            if (!window || !document || !document.body) return Promise.resolve('');
+          const requestEmployeeDetails = () => {
+            if (!window || !document || !document.body) return Promise.resolve(null);
             ensureEmployeeNameOverlay();
             if (!employeeNamePicker.overlay || !employeeNamePicker.input) {
-              return Promise.resolve('');
+              return Promise.resolve(null);
             }
             employeeNamePicker.overlay.hidden = false;
             employeeNamePicker.input.value = '';
+            if (employeeNamePicker.roleInput) {
+              employeeNamePicker.roleInput.value = '';
+            }
             employeeNamePicker.input.focus();
             return new Promise((resolve) => {
               employeeNamePicker.resolve = resolve;
@@ -18298,10 +18309,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             addButton.addEventListener('click', async (event) => {
 
               event.preventDefault();
-              const requestedName = await requestEmployeeName();
-              if (!requestedName) {
+              const details = await requestEmployeeDetails();
+              if (!details || !details.name) {
                 recordDebug('employee-add-cancelled', {
-                  reason: requestedName === null ? 'cancelled' : 'empty-name',
+                  reason: details === null ? 'cancelled' : 'empty-name',
                 });
                 return;
               }
@@ -18343,7 +18354,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
                   const created = addRow(
 
-                    { name: requestedName, arrival: baseArrival, departure: baseDeparture },
+                    {
+                      name: details.name,
+                      role: details.role,
+                      arrival: baseArrival,
+                      departure: baseDeparture,
+                    },
 
                     {
 
@@ -18395,7 +18411,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               const row = addRow(
 
-                { name: requestedName },
+                { name: details.name, role: details.role },
 
                 {
 
