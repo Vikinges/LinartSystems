@@ -1606,6 +1606,14 @@
 
       }
 
+      .version-label {
+
+        font-size: 0.85rem;
+
+        color: #64748b;
+
+      }
+
       button[type="submit"] {
 
         background: #2563eb;
@@ -4258,6 +4266,8 @@
 
           <pre id="status"></pre>
 
+          <span class="version-label" data-app-version></span>
+
         </div>
 
       </form>
@@ -4421,6 +4431,11 @@
 
 
         const statusEl = document.getElementById('status');
+        const APP_VERSION = '1.01';
+        const versionLabel = document.querySelector('[data-app-version]');
+        if (versionLabel) {
+          versionLabel.textContent = `Version ${APP_VERSION}`;
+        }
 
         const submitButton = formEl.querySelector('button[type="submit"]');
 

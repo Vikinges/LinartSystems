@@ -340,6 +340,8 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
+const SERVICE2_VERSION = '1.01';
+
 
 
 fsExtra.ensureDirSync(PUBLIC_DIR);
@@ -9786,6 +9788,14 @@ ${rows.join('\n')}
 
       }
 
+      .version-label {
+
+        font-size: 0.85rem;
+
+        color: #64748b;
+
+      }
+
       button[type="submit"] {
 
         background: #2563eb;
@@ -11363,6 +11373,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           <pre id="status"></pre>
 
+          <span class="version-label" data-app-version></span>
+
         </div>
 
       </form>
@@ -11526,6 +11538,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
         const statusEl = document.getElementById('status');
+        const APP_VERSION = '${SERVICE2_VERSION}';
+        const versionLabel = document.querySelector('[data-app-version]');
+        if (versionLabel) {
+          versionLabel.textContent = 'Version ' + APP_VERSION;
+        }
 
         const submitButton = formEl.querySelector('button[type="submit"]');
 
@@ -20875,7 +20892,13 @@ app.get('/health', (req, res) => {
 
     const uptime = process.uptime();
 
-    return res.json({ status: 'ok', service: 'service2', uptime: Math.floor(uptime), now: new Date().toISOString() });
+    return res.json({
+      status: 'ok',
+      service: 'service2',
+      version: SERVICE2_VERSION,
+      uptime: Math.floor(uptime),
+      now: new Date().toISOString(),
+    });
 
   } catch (err) {
 

@@ -229,7 +229,8 @@
           <div>
             <h1>PDF files archive</h1>
             <p>Browse generated reports. Daily reports show project number, date, and submitter.</p>
-            <div class="header-meta" id="user-meta"></div>
+          <div class="header-meta" id="user-meta"></div>
+          <div class="header-meta" id="version-meta"></div>
           </div>
           <div class="header-actions">
             <a class="button secondary" href="./">Open form</a>
@@ -349,6 +350,11 @@
           return fetch(buildAppUrl(path), { ...options, headers });
         };
 
+        const APP_VERSION = '1.01';
+        const versionMetaEl = document.getElementById('version-meta');
+        if (versionMetaEl) {
+          versionMetaEl.textContent = `Version ${APP_VERSION}`;
+        }
         const filtersForm = document.getElementById('filters');
         const typeSelect = document.getElementById('filter-type');
         const projectInput = document.getElementById('filter-project');
