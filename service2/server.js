@@ -83,6 +83,10 @@ const DEFAULT_PAGE_HEIGHT = 841.89;
 
 const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 const PADDLE_OCR_URL = process.env.PADDLE_OCR_URL || '';
+const SIGN_SERVICE_URL = process.env.SIGN_SERVICE_URL || '';
+const SIGN_INTERNAL_TOKEN = process.env.SIGN_INTERNAL_TOKEN || '';
+const SIGN_SHARED_DIR = process.env.SIGN_SHARED_DIR || path.join(ROOT_DIR, 'sign');
+const SIGN_INBOX_DIR = path.join(SIGN_SHARED_DIR, 'inbox');
 const FILE_LIST_DEFAULT_LIMIT = 200;
 const FILE_LIST_MAX_LIMIT = 1000;
 
@@ -340,7 +344,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.37';
+const SERVICE2_VERSION = '0.38';
 
 
 
@@ -14748,72 +14752,61 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         const customerRepresentativeInput = document.getElementById('customer-representative');
 
+        const attendeeClientInput = document.getElementById('attendee-client');
+
         const attendeeClientHidden = document.getElementById('attendee-client-hidden');
 
         const signatureCompanySync = { engineerManual: false, customerManual: false };
 
-
-
-        const syncCustomerNameFromSite = () => {
-
-          if (!endCustomerInput || !customerNameInput) return;
-
-          if (customerNameSync.manual) {
-
-            return;
-
-          }
-
-          customerNameInput.value = endCustomerInput.value.trim();
-
+        const resolveCustomerRepresentativeInput = () => {
+          const candidates = [customerRepresentativeInput, attendeeClientInput, attendeeClientHidden];
+          return candidates.find((input) => input && !input.disabled) || null;
         };
 
+        const getCustomerRepresentativeValue = () => {
+          const sourceInput = resolveCustomerRepresentativeInput();
+          return sourceInput ? sourceInput.value.trim() : '';
+        };
 
+        const syncCustomerNameFromRepresentative = () => {
+          if (!customerNameInput) return;
+          if (customerNameSync.manual) {
+            return;
+          }
+          const sourceInput = resolveCustomerRepresentativeInput();
+          if (!sourceInput) return;
+          customerNameInput.value = sourceInput.value.trim();
+        };
 
-        if (endCustomerInput && customerNameInput) {
-
-          syncCustomerNameFromSite();
-
+        const attachCustomerNameSourceListeners = (input) => {
+          if (!input || !customerNameInput) return;
           ['input', 'change'].forEach((eventName) => {
-
-            endCustomerInput.addEventListener(eventName, () => {
-
+            input.addEventListener(eventName, () => {
               if (!customerNameSync.manual || !customerNameInput.value.trim()) {
-
                 if (!customerNameInput.value.trim()) {
-
                   customerNameSync.manual = false;
-
                 }
-
-                syncCustomerNameFromSite();
-
+                syncCustomerNameFromRepresentative();
               }
-
             });
-
           });
+        };
 
+        if (customerNameInput) {
+          syncCustomerNameFromRepresentative();
+          [customerRepresentativeInput, attendeeClientInput, attendeeClientHidden].forEach(
+            attachCustomerNameSourceListeners,
+          );
           customerNameInput.addEventListener('input', () => {
-
             const current = customerNameInput.value.trim();
-
-            const source = endCustomerInput.value.trim();
-
+            const source = getCustomerRepresentativeValue();
             if (!current) {
-
               customerNameSync.manual = false;
-
-              syncCustomerNameFromSite();
-
+              syncCustomerNameFromRepresentative();
               return;
-
             }
-
             customerNameSync.manual = current !== source;
-
           });
-
         }
 
 
@@ -15753,7 +15746,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             setIfEmpty('[name=\"customer_company\"]', clientSeed);
 
-            setIfEmpty('[name=\"customer_name\"]', clientSeed + ' contact');
+            setIfEmpty('[name=\"customer_name\"]', clientSeed + ' representative');
 
             setIfEmpty('[name=\"customer_datetime\"]', nowInput);
 
@@ -15809,7 +15802,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           setIfEmpty('#engineer-name', firstEngineer);
 
-          setIfEmpty('#customer-name', firstCustomer);
+          setIfEmpty('#customer-representative', firstCustomer + ' representative');
 
           setIfEmpty(
 
@@ -20612,6 +20605,42 @@ function sanitizeFilename(name) {
 
 }
 
+function normalizeDownloadPath(value) {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return '';
+  try {
+    const parsed = new URL(trimmed);
+    return parsed.pathname.replace(/^\/+/, '');
+  } catch (err) {
+    return trimmed.replace(/^\/+/, '');
+  }
+}
+
+function resolveOutputFileFromRequest(body) {
+  const downloadPath = normalizeDownloadPath(body && (body.downloadPath || body.url));
+  let templateType = body && typeof body.templateType === 'string' ? body.templateType.trim() : '';
+  let filename = body && typeof body.filename === 'string' ? body.filename.trim() : '';
+
+  if (downloadPath) {
+    const match = /^download\/([^/]+)\/([^/]+)$/i.exec(downloadPath);
+    if (match) {
+      templateType = decodeURIComponent(match[1]);
+      filename = decodeURIComponent(match[2]);
+    }
+  }
+
+  if (!templateType || !filename) return null;
+  const safeType = sanitizeFilename(templateType);
+  const safeFile = sanitizeFilename(filename);
+  if (!safeType || !safeFile) return null;
+
+  const baseDir = path.join(OUTPUT_DIR, safeType, 'pdf');
+  const filePath = path.join(baseDir, safeFile);
+  if (!filePath.startsWith(baseDir)) return null;
+
+  return { templateType: safeType, filename: safeFile, filePath };
+}
+
 
 
 async function embedUploadedImages(pdfDoc, form, photoFiles) {
@@ -21462,6 +21491,69 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
   return res.json(buildTemplatesResponse());
 
+});
+
+app.post(['/admin/sign/create', '/service2/admin/sign/create'], requireFileAdmin, async (req, res) => {
+  if (!SIGN_SERVICE_URL || !SIGN_INTERNAL_TOKEN) {
+    return res.status(500).json({ ok: false, error: 'Signing service is not configured.' });
+  }
+
+  const resolved = resolveOutputFileFromRequest(req.body || {});
+  if (!resolved) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Provide downloadPath (or url) or templateType + filename.',
+    });
+  }
+
+  if (!fs.existsSync(resolved.filePath)) {
+    return res.status(404).json({ ok: false, error: 'PDF file not found.' });
+  }
+
+  const requestedTtl = Number(req.body && req.body.expiresInDays);
+  const expiresInDays = Number.isFinite(requestedTtl)
+    ? clampNumber(requestedTtl, 1, 7)
+    : 7;
+
+  try {
+    fsExtra.ensureDirSync(SIGN_INBOX_DIR);
+    const baseName = resolved.filename.replace(/\.pdf$/i, '');
+    const jobSuffix = crypto.randomBytes(4).toString('hex');
+    const storedFilename = `${Date.now()}-${jobSuffix}-${baseName}.pdf`;
+    const storedAbsPath = path.join(SIGN_INBOX_DIR, storedFilename);
+    await fs.promises.copyFile(resolved.filePath, storedAbsPath);
+
+    const storedRelPath = path.posix.join('inbox', storedFilename);
+    const targetUrl = `${SIGN_SERVICE_URL.replace(/\/$/, '')}/internal/jobs`;
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-token': SIGN_INTERNAL_TOKEN,
+      },
+      body: JSON.stringify({
+        storedPath: storedRelPath,
+        originalName: resolved.filename,
+        expiresInDays,
+      }),
+    });
+
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      const error = payload && payload.error ? payload.error : 'Failed to create signing link.';
+      return res.status(502).json({ ok: false, error });
+    }
+
+    return res.json({
+      ok: true,
+      signUrl: payload.url,
+      expiresAt: payload.expiresAt,
+      jobId: payload.jobId,
+    });
+  } catch (err) {
+    console.error('[server] Failed to create signing job', err);
+    return res.status(500).json({ ok: false, error: 'Unable to create signing job.' });
+  }
 });
 
 

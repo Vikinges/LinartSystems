@@ -12,6 +12,8 @@ fix_dir() {
 fix_dir /app/out
 fix_dir /app/data
 fix_dir /app/public/templates
+fix_dir /app/sign
+fix_dir /app/sign/inbox
 
 # Seed admin credentials from env if provided (overwrites existing admin.json).
 if [ -n "${ADMIN_PASSWORD:-}" ]; then

@@ -46,15 +46,34 @@ services:
     environment:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - PADDLE_OCR_URL=${PADDLE_OCR_URL:-http://paddle-ocr:8866/ocr}
+      - SIGN_SERVICE_URL=${SIGN_SERVICE_URL:-http://service-sign:3002}
+      - SIGN_INTERNAL_TOKEN=${SIGN_INTERNAL_TOKEN:-}
+      - SIGN_SHARED_DIR=/app/sign
     volumes:
       - ./service2/data:/app/data
       - ./service2/public/templates:/app/public/templates
       - ./service2/out:/app/out
+      - sign-data:/app/sign
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://localhost:3001/health || exit 1"]
       interval: 10s
       timeout: 3s
       retries: 3
+
+  service-sign:
+    build: ./service-sign
+    restart: always
+    environment:
+      - SIGN_INTERNAL_TOKEN=${SIGN_INTERNAL_TOKEN:-}
+      - SIGN_SHARED_DIR=/app/sign
+      - PUBLIC_SIGN_BASE_URL=${PUBLIC_SIGN_BASE_URL:-https://sign.linart.club}
+    volumes:
+      - sign-data:/app/sign
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.sign.rule=Host(`sign.linart.club`)
+      - traefik.http.routers.sign.entrypoints=web
+      - traefik.http.services.sign.loadbalancer.server.port=3002
 
   paddle-ocr:
     image: 987846/paddleocr:latest
@@ -67,3 +86,4 @@ services:
 volumes:
   hub-data:
   hub-uploads:
+  sign-data:

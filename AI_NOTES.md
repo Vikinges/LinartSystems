@@ -1,10 +1,13 @@
 ## Краткие инструкции для AI
 
-- Проект: docker-compose в корне (`docker compose up -d --build` или `scripts/dev-up.ps1`). Сервисы: `service2` (Node.js/PDF), `hub`, `reverse-proxy`, `paddle-ocr`.
+- Проект: docker-compose в корне (`docker compose up -d --build` или `scripts/dev-up.ps1`). Сервисы: `service2` (Node.js/PDF), `service-sign` (sign links), `hub`, `reverse-proxy`, `paddle-ocr`.
 - Деплой: после push можно дергать webhook Portainer (обновляет стек): `https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2` (POST).
 - Админка hub: пользователи и права хранятся в `admin.json` (superadmin + users). Для персистентности задайте `HUB_DATA_DIR=/app/data` и смонтируйте volume `hub-data:/app/data` (там будут `admin.json`, `services.json`, `config.json`). Для логотипов/медиа — volume `hub-uploads:/app/static/uploads`.
 - Если пароль admin потерян: установить `HUB_ADMIN_PASSWORD_FORCE=1` и `HUB_ADMIN_PASSWORD=<новый>` — при старте пароль супер‑админа будет переустановлен, список пользователей сохраняется.
 - Локальный запуск `service2`: из `service2/` `npm install` (первый раз), затем `npm start` (порт 3001). При старте генерится `public/index.html` на основе шаблона в `server.js`.
+- Версионирование service2: после каждого успешного деплоя повышаем версию на `+0.01`.
+- Где править версию service2: `service2/server.js` → `SERVICE2_VERSION` (источник для `/api/status` и для HTML); `service2/public/index.html` → `APP_VERSION` (лейбл версии в UI); `service2/public/files.html` → `APP_VERSION` (лейбл версии на странице файлов).
+- Перед отправкой/деплоем всегда запускать тесты: из `service2/` `npm test`. На Windows нужен WSL/Git Bash; если их нет — вручную прогнать `npm run extract-fields` с `TEMPLATE_PATH=service2/public/form-template1.pdf` и проверить `/health` после старта сервера.
 - Тестовое поколение PDF: запустить сервер, затем `node tools/gen-sample.js` (использует `FORM_HOST` или http://localhost:3001). Ответ `/submit` отдаёт JSON с `url`; чтобы скачать PDF, сходить GET на `http://localhost:3001/<url>` (пример в консоли).
 - OCR: `PADDLE_OCR_URL` из `.env` (по умолчанию `http://paddle-ocr:8866/predict/ocr_system`, пробует и `/ocr`; при локальном запуске вне Docker — можно указать `http://localhost:8866/predict/ocr_system`). Parts OCR теперь **не заполняет** форму — только выводит статус, значения вносить руками. Поле LED display / batch заполняется руками или из карточки проекта (LSC Project number), не из OCR.
 - Подсчёт сотрудников в PDF и в UI-summary: если есть `employees[n][group]`, считаем уникальность по группе (multi‑day одного сотрудника); иначе fallback на `name + role` (регистр/пробелы нормализованы).
@@ -27,3 +30,11 @@
 ## TODO
 - Add "Send for signature" flow with expiring signing links (<=7 days): generate locked PDF, send link to client, signature-only page, save signed final on server and allow client download.
 - Decide public access strategy for signing links (/service2/sign/* vs separate domain) and link delivery method (email/manual).
+- Variant A plan (sign service + token links):
+  - Add new sign microservice (e.g. service-sign) on sign.linart.club with only /s/:token and /s/:token/submit public routes.
+  - Create sign job store (SQLite): token_hash, expires_at, status, doc_path, comment (optional), signed_at, audit (ip/ua).
+  - Add internal endpoint in service2 to create sign job + generate locked PDF, return signing link for manual send.
+  - Build signing UI: PDF preview + canvas signature + optional comment; submit to server.
+  - On submit: embed signature into PDF, save final signed PDF, mark job signed, allow immediate download.
+  - Security: random 32+ byte tokens, hash at rest, TTL <= 7 days, rate limit, noindex/no-store, proxy allowlist only for sign routes.
+- Signing links: `service-sign` on sign.linart.club; create link via `POST /admin/sign/create` (admin token). Shared volume `sign-data` mounted at `/app/sign`.

@@ -48,6 +48,7 @@ docker compose up --build -d
 - POST /submit (daily_report) expects daily_project_number, daily_report_date, submitter_name, daily_report_text, and daily_photos.
 - GET /download/:file – Streams the generated PDF.
 - GET /suggest – Returns autocomplete suggestions for supported text fields.
+- POST /admin/sign/create – Admin-only; creates a signing link for an existing generated PDF (uses downloadPath or templateType+filename).
 
 ## 5. Front-end Form Highlights
 - Photos card contains three upload slots (photo_before, photo_after, photos[]).
