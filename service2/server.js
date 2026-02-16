@@ -3163,9 +3163,11 @@ function addPageNumbers(pdfDoc, font, options = {}) {
 
   const color = options.color || rgb(0.25, 0.25, 0.3);
 
-  const size = options.fontSize || 10;
+  const size = options.fontSize || 9;
 
-  const margin = options.margin || 36;
+  const xMargin = options.margin || 18;
+
+  const footerY = options.footerY || 10;
 
   const total = pages.length;
 
@@ -3177,9 +3179,9 @@ function addPageNumbers(pdfDoc, font, options = {}) {
 
     page.drawText(label, {
 
-      x: page.getWidth() - margin - width,
+      x: page.getWidth() - xMargin - width,
 
-      y: margin,
+      y: footerY,
 
       size,
 
@@ -3664,9 +3666,11 @@ function addPageNumbers(pdfDoc, font, options = {}) {
 
   const color = options.color || rgb(0.25, 0.25, 0.3);
 
-  const size = options.fontSize || 10;
+  const size = options.fontSize || 9;
 
-  const margin = options.margin || 36;
+  const xMargin = options.margin || 18;
+
+  const footerY = options.footerY || 10;
 
   const total = pages.length;
 
@@ -3678,9 +3682,9 @@ function addPageNumbers(pdfDoc, font, options = {}) {
 
     page.drawText(label, {
 
-      x: page.getWidth() - margin - width,
+      x: page.getWidth() - xMargin - width,
 
-      y: margin,
+      y: footerY,
 
       size,
 
@@ -3822,39 +3826,35 @@ function renderPartsTable(pdfDoc, rows, options = {}) {
 
     });
 
-    const labelLayout = layoutTextForWidth({
+    drawCenteredTextBlock(
 
-      value: label,
+      page,
+
+      label,
 
       font,
 
-      fontSize: 10,
+      { x: cursorX, y: originY - headerHeight, width, height: headerHeight },
 
-      maxWidth: width - 8,
+      {
 
-    });
+        align: 'center',
 
-    let textY = originY - headerHeight + headerHeight - 6;
+        paddingX: 4,
 
-    labelLayout.lines.forEach((line) => {
-
-      page.drawText(line, {
-
-        x: cursorX + 4,
-
-        y: textY,
-
-        size: labelLayout.fontSize,
-
-        font,
+        paddingY: 2,
 
         color: rgb(0.1, 0.1, 0.3),
 
-      });
+        fontSize: 10,
 
-      textY -= labelLayout.lineHeight;
+        minFontSize: 8,
 
-    });
+        lineHeightMultiplier: 1.2,
+
+      },
+
+    );
 
     cursorX += width;
 
@@ -6009,43 +6009,35 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         });
 
-        const labelLayout = layoutTextForWidth({
+        drawCenteredTextBlock(
 
-          value: label,
+          page,
+
+          label,
 
           font,
 
-          fontSize: 9,
+          { x: headerX, y: cursorY - headerHeight, width, height: headerHeight },
 
-          minFontSize: 8,
+          {
 
-          lineHeightMultiplier: 1.2,
+            align: 'center',
 
-          maxWidth: width - 8,
+            paddingX: 4,
 
-        });
-
-        let textY = cursorY - headerHeight + headerHeight - 6;
-
-        labelLayout.lines.forEach((line) => {
-
-          page.drawText(line, {
-
-            x: headerX + 6,
-
-            y: textY,
-
-            size: labelLayout.fontSize,
-
-            font,
+            paddingY: 2,
 
             color: rgb(0.1, 0.1, 0.3),
 
-          });
+            fontSize: 9,
 
-          textY -= labelLayout.lineHeight;
+            minFontSize: 8,
 
-        });
+            lineHeightMultiplier: 1.2,
+
+          },
+
+        );
 
         headerX += width;
 
@@ -6355,19 +6347,35 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         });
 
-        page.drawText(label, {
+        drawCenteredTextBlock(
 
-          x: headerX + 4,
+          page,
 
-          y: cursorY - headerHeight + headerHeight - 8,
-
-          size: 9,
+          label,
 
           font,
 
-          color: rgb(0.1, 0.1, 0.3),
+          { x: headerX, y: cursorY - headerHeight, width, height: headerHeight },
 
-        });
+          {
+
+            align: 'center',
+
+            paddingX: 4,
+
+            paddingY: 2,
+
+            color: rgb(0.1, 0.1, 0.3),
+
+            fontSize: 9,
+
+            minFontSize: 8,
+
+            lineHeightMultiplier: 1.2,
+
+          },
+
+        );
 
         headerX += width;
 
@@ -6951,19 +6959,35 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       });
 
-      page.drawText(row.label, {
+      drawCenteredTextBlock(
 
-        x: x + 6,
+        page,
 
-        y: headerY + headerHeight - 8.5,
-
-        size: 8.5,
+        row.label,
 
         font,
 
-        color: headingColor,
+        { x, y: headerY, width: columnWidth, height: headerHeight },
 
-      });
+        {
+
+          align: 'center',
+
+          paddingX: 4,
+
+          paddingY: 2,
+
+          color: headingColor,
+
+          fontSize: 8.5,
+
+          minFontSize: 7.5,
+
+          lineHeightMultiplier: 1.2,
+
+        },
+
+      );
 
 
 
@@ -7125,19 +7149,35 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         });
 
-        page.drawText(label, {
+        drawCenteredTextBlock(
 
-          x: headerX + 8,
+          page,
 
-          y: cursorY - headerHeight + headerHeight - 12,
-
-          size: 8.5,
+          label,
 
           font,
 
-          color: rgb(0.1, 0.1, 0.3),
+          { x: headerX, y: cursorY - headerHeight, width, height: headerHeight },
 
-        });
+          {
+
+            align: 'center',
+
+            paddingX: 4,
+
+            paddingY: 2,
+
+            color: rgb(0.1, 0.1, 0.3),
+
+            fontSize: 8.5,
+
+            minFontSize: 7.5,
+
+            lineHeightMultiplier: 1.2,
+
+          },
+
+        );
 
         headerX += width;
 
@@ -20643,7 +20683,7 @@ function resolveOutputFileFromRequest(body) {
 
 
 
-async function embedUploadedImages(pdfDoc, form, photoFiles) {
+async function embedUploadedImages(pdfDoc, form, photoFiles, embedOptions = {}) {
 
   if (!photoFiles.length) return [];
 
@@ -20745,6 +20785,36 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
 
     const pageHeight = page.getHeight();
 
+    const projectNumber = embedOptions.projectNumber || '';
+
+    const headingHeight = projectNumber ? 24 : 0;
+
+    if (projectNumber) {
+
+      const headingText = `Photos \u2014 ${projectNumber}`;
+
+      const headingSize = 13;
+
+      const headingWidth = boldFont.widthOfTextAtSize(headingText, headingSize);
+
+      const headingX = (pageWidth - headingWidth) / 2;
+
+      page.drawText(headingText, {
+
+        x: headingX,
+
+        y: pageHeight - margin - headingSize,
+
+        size: headingSize,
+
+        font: boldFont,
+
+        color: rgb(0.08, 0.2, 0.4),
+
+      });
+
+    }
+
 
 
     const layoutSingle = pair.length === 1;
@@ -20755,7 +20825,7 @@ async function embedUploadedImages(pdfDoc, form, photoFiles) {
 
       : (pageWidth - margin * 2 - gutter) / 2;
 
-    const cellHeight = pageHeight - margin * 2;
+    const cellHeight = pageHeight - margin * 2 - headingHeight;
 
 
 
@@ -22407,7 +22477,11 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
       );
 
-      imagePlacements = await embedUploadedImages(pdfDoc, null, photoFiles);
+      imagePlacements = await embedUploadedImages(pdfDoc, null, photoFiles, {
+
+        projectNumber: toSingleValue(sanitizedBody.batch_number) || '',
+
+      });
 
       if (overflowTextEntries.length) {
 
@@ -22417,7 +22491,11 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     } else {
 
-      imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles);
+      imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles, {
+
+        projectNumber: toSingleValue(sanitizedBody.batch_number) || '',
+
+      });
 
       if (form) {
 
