@@ -8,7 +8,7 @@ services:
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
-      - --certificatesresolvers.letsencrypt.acme.email=vladimir@linart.club
+      - --certificatesresolvers.letsencrypt.acme.email=vladimir@lsc-led.de
       - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
       - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
       - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
@@ -34,8 +34,15 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.linart.rule=Host(`linart.club`)
-      - traefik.http.routers.linart.entrypoints=web
+      - traefik.http.routers.linart.rule=Host(`lsc-led.de`)
+      - traefik.http.routers.linart.entrypoints=websecure
+      - traefik.http.routers.linart.tls=true
+      - traefik.http.routers.linart.tls.certresolver=letsencrypt
+      - traefik.http.routers.linart-http.rule=Host(`lsc-led.de`)
+      - traefik.http.routers.linart-http.entrypoints=web
+      - traefik.http.routers.linart-http.middlewares=https-redirect
+      - traefik.http.middlewares.https-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.https-redirect.redirectscheme.permanent=true
       - traefik.http.services.linart.loadbalancer.server.port=8080
 
   service1:
