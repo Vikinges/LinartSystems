@@ -1,0 +1,17 @@
+{
+  "name": "service-sign",
+  "version": "0.1.0",
+  "private": true,
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.0",
+    "dotenv": "^17.2.3",
+    "express": "^4.19.2",
+    "helmet": "^7.0.0",
+    "pdf-lib": "^1.17.1"
+  }
+}
