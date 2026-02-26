@@ -26,7 +26,7 @@ services:
       retries: 3
     labels:
       - traefik.enable=true
-      - traefik.http.routers.linart.rule=Host(`hub.linart.club`)
+      - traefik.http.routers.linart.rule=Host(`lsc-led.de`)
       - traefik.http.routers.linart.entrypoints=web
       - traefik.http.services.linart.loadbalancer.server.port=8080
     environment:
@@ -66,12 +66,12 @@ services:
     environment:
       - SIGN_INTERNAL_TOKEN=${SIGN_INTERNAL_TOKEN:-}
       - SIGN_SHARED_DIR=/app/sign
-      - PUBLIC_SIGN_BASE_URL=${PUBLIC_SIGN_BASE_URL:-https://sign.linart.club}
+      - PUBLIC_SIGN_BASE_URL=${PUBLIC_SIGN_BASE_URL:-https://sign.lsc-led.de}
     volumes:
       - sign-data:/app/sign
     labels:
       - traefik.enable=true
-      - traefik.http.routers.sign.rule=Host(`sign.linart.club`)
+      - traefik.http.routers.sign.rule=Host(`sign.lsc-led.de`)
       - traefik.http.routers.sign.entrypoints=web
       - traefik.http.services.sign.loadbalancer.server.port=3002
 
