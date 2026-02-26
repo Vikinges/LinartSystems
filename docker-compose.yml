@@ -6,9 +6,16 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
-      # ACME disabled; Cloudflare tunnel terminates TLS upstream.
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+      - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web
+      - --certificatesresolvers.letsencrypt.acme.email=vladimir@linart.club
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./traefik/letsencrypt:/letsencrypt
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -27,7 +34,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.linart.rule=Host(`lsc-led.de`)
-      - traefik.http.routers.linart.entrypoints=web
+      - traefik.http.routers.linart.entrypoints=websecure
+      - traefik.http.routers.linart.tls=true
+      - traefik.http.routers.linart.tls.certresolver=letsencrypt
       - traefik.http.services.linart.loadbalancer.server.port=8080
     environment:
       - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
@@ -72,7 +81,9 @@ services:
     labels:
       - traefik.enable=true
       - traefik.http.routers.sign.rule=Host(`sign.lsc-led.de`)
-      - traefik.http.routers.sign.entrypoints=web
+      - traefik.http.routers.sign.entrypoints=websecure
+      - traefik.http.routers.sign.tls=true
+      - traefik.http.routers.sign.tls.certresolver=letsencrypt
       - traefik.http.services.sign.loadbalancer.server.port=3002
 
   paddle-ocr:
