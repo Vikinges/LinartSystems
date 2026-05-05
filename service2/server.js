@@ -9616,19 +9616,25 @@ ${rows.join('\n')}
 
         padding: 0.5rem;
 
+        box-sizing: border-box;
+
+        width: 100%;
+
       }
 
       body.mobile-mode > .container {
 
-        width: 100vw;
+        width: 100%;
 
-        max-width: 100vw;
+        max-width: 100%;
 
-        min-width: 100vw;
+        min-width: 0;
 
         margin: 0;
 
         padding: 0 0.5rem;
+
+        box-sizing: border-box;
 
       }
 

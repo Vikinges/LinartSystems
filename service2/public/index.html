@@ -1390,19 +1390,25 @@
 
         padding: 0.5rem;
 
+        box-sizing: border-box;
+
+        width: 100%;
+
       }
 
       body.mobile-mode > .container {
 
-        width: 100vw;
+        width: 100%;
 
-        max-width: 100vw;
+        max-width: 100%;
 
-        min-width: 100vw;
+        min-width: 0;
 
         margin: 0;
 
         padding: 0 0.5rem;
+
+        box-sizing: border-box;
 
       }
 
@@ -4431,10 +4437,10 @@
 
 
         const statusEl = document.getElementById('status');
-        const APP_VERSION = '0.37';
+        const APP_VERSION = '0.38';
         const versionLabel = document.querySelector('[data-app-version]');
         if (versionLabel) {
-          versionLabel.textContent = `Version ${APP_VERSION}`;
+          versionLabel.textContent = 'Version ' + APP_VERSION;
         }
 
         const submitButton = formEl.querySelector('button[type="submit"]');
@@ -7641,72 +7647,61 @@
 
         const customerRepresentativeInput = document.getElementById('customer-representative');
 
+        const attendeeClientInput = document.getElementById('attendee-client');
+
         const attendeeClientHidden = document.getElementById('attendee-client-hidden');
 
         const signatureCompanySync = { engineerManual: false, customerManual: false };
 
-
-
-        const syncCustomerNameFromSite = () => {
-
-          if (!endCustomerInput || !customerNameInput) return;
-
-          if (customerNameSync.manual) {
-
-            return;
-
-          }
-
-          customerNameInput.value = endCustomerInput.value.trim();
-
+        const resolveCustomerRepresentativeInput = () => {
+          const candidates = [customerRepresentativeInput, attendeeClientInput, attendeeClientHidden];
+          return candidates.find((input) => input && !input.disabled) || null;
         };
 
+        const getCustomerRepresentativeValue = () => {
+          const sourceInput = resolveCustomerRepresentativeInput();
+          return sourceInput ? sourceInput.value.trim() : '';
+        };
 
+        const syncCustomerNameFromRepresentative = () => {
+          if (!customerNameInput) return;
+          if (customerNameSync.manual) {
+            return;
+          }
+          const sourceInput = resolveCustomerRepresentativeInput();
+          if (!sourceInput) return;
+          customerNameInput.value = sourceInput.value.trim();
+        };
 
-        if (endCustomerInput && customerNameInput) {
-
-          syncCustomerNameFromSite();
-
+        const attachCustomerNameSourceListeners = (input) => {
+          if (!input || !customerNameInput) return;
           ['input', 'change'].forEach((eventName) => {
-
-            endCustomerInput.addEventListener(eventName, () => {
-
+            input.addEventListener(eventName, () => {
               if (!customerNameSync.manual || !customerNameInput.value.trim()) {
-
                 if (!customerNameInput.value.trim()) {
-
                   customerNameSync.manual = false;
-
                 }
-
-                syncCustomerNameFromSite();
-
+                syncCustomerNameFromRepresentative();
               }
-
             });
-
           });
+        };
 
+        if (customerNameInput) {
+          syncCustomerNameFromRepresentative();
+          [customerRepresentativeInput, attendeeClientInput, attendeeClientHidden].forEach(
+            attachCustomerNameSourceListeners,
+          );
           customerNameInput.addEventListener('input', () => {
-
             const current = customerNameInput.value.trim();
-
-            const source = endCustomerInput.value.trim();
-
+            const source = getCustomerRepresentativeValue();
             if (!current) {
-
               customerNameSync.manual = false;
-
-              syncCustomerNameFromSite();
-
+              syncCustomerNameFromRepresentative();
               return;
-
             }
-
             customerNameSync.manual = current !== source;
-
           });
-
         }
 
 
@@ -8646,7 +8641,7 @@
 
             setIfEmpty('[name="customer_company"]', clientSeed);
 
-            setIfEmpty('[name="customer_name"]', clientSeed + ' contact');
+            setIfEmpty('[name="customer_name"]', clientSeed + ' representative');
 
             setIfEmpty('[name="customer_datetime"]', nowInput);
 
@@ -8702,7 +8697,7 @@
 
           setIfEmpty('#engineer-name', firstEngineer);
 
-          setIfEmpty('#customer-name', firstCustomer);
+          setIfEmpty('#customer-representative', firstCustomer + ' representative');
 
           setIfEmpty(
 
@@ -10045,6 +10040,8 @@
 
           }
 
+
+
           const employeeNamePicker = {
             overlay: null,
             input: null,
@@ -10159,7 +10156,7 @@
 
           const normalizeEmployeeToken = (value) => {
 
-            return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+            return String(value || '').trim().replace(/s+/g, ' ').toLowerCase();
 
           };
 
