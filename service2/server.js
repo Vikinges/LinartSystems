@@ -9478,6 +9478,228 @@ ${rows.join('\n')}
 
       }
 
+      /* ── Mobile‑mode signature overlay ── */
+
+      body.mobile-mode .signature-overlay {
+
+        padding: 0;
+
+        background: rgba(0, 0, 0, 0.85);
+
+      }
+
+      body.mobile-mode .signature-overlay__panel {
+
+        width: 100%;
+
+        height: 100%;
+
+        border-radius: 0;
+
+        padding: 0;
+
+        position: relative;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions {
+
+        position: absolute;
+
+        top: 0;
+
+        left: 0;
+
+        right: 0;
+
+        z-index: 10;
+
+        padding: 0.6rem 0.75rem;
+
+        margin: 0;
+
+        background: rgba(255,255,255,0.92);
+
+        backdrop-filter: blur(8px);
+
+        -webkit-backdrop-filter: blur(8px);
+
+        border-bottom: 1px solid #e5e7eb;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions > span:first-child,
+
+      body.mobile-mode .signature-overlay__actions > .spacer,
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-rotate],
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-orientation],
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-cancel] {
+
+        display: none;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-clear] {
+
+        margin-right: auto;
+
+        background: #f3f4f6;
+
+        color: #374151;
+
+        border-radius: 10px;
+
+        padding: 0.55rem 1.2rem;
+
+        font-size: 0.95rem;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-apply] {
+
+        border-radius: 10px;
+
+        padding: 0.55rem 1.4rem;
+
+        font-size: 0.95rem;
+
+      }
+
+      body.mobile-mode .signature-overlay canvas {
+
+        border: none;
+
+        border-radius: 0;
+
+        flex: 1;
+
+        width: 100%;
+
+      }
+
+      /* Arrow hint */
+
+      .signature-arrow-hint {
+
+        display: none;
+
+      }
+
+      body.mobile-mode .signature-arrow-hint {
+
+        display: flex;
+
+        position: absolute;
+
+        left: 50%;
+
+        bottom: 12%;
+
+        transform: translateX(-50%);
+
+        z-index: 5;
+
+        flex-direction: column;
+
+        align-items: center;
+
+        pointer-events: none;
+
+        animation: arrowBounce 1.6s ease-in-out infinite;
+
+        transition: opacity 0.4s ease;
+
+      }
+
+      body.mobile-mode .signature-arrow-hint.is-hidden {
+
+        opacity: 0;
+
+        pointer-events: none;
+
+      }
+
+      .signature-arrow-hint__icon {
+
+        width: 48px;
+
+        height: 120px;
+
+        position: relative;
+
+      }
+
+      .signature-arrow-hint__icon::before {
+
+        content: '';
+
+        position: absolute;
+
+        left: 50%;
+
+        bottom: 0;
+
+        width: 4px;
+
+        height: 100%;
+
+        background: linear-gradient(to top, rgba(37,99,235,0.15), rgba(37,99,235,0.7));
+
+        border-radius: 4px;
+
+        transform: translateX(-50%);
+
+      }
+
+      .signature-arrow-hint__icon::after {
+
+        content: '';
+
+        position: absolute;
+
+        left: 50%;
+
+        top: 0;
+
+        width: 0;
+
+        height: 0;
+
+        border-left: 14px solid transparent;
+
+        border-right: 14px solid transparent;
+
+        border-bottom: 20px solid rgba(37,99,235,0.7);
+
+        transform: translateX(-50%);
+
+      }
+
+      .signature-arrow-hint__label {
+
+        margin-top: 0.6rem;
+
+        font-size: 0.85rem;
+
+        font-weight: 600;
+
+        color: rgba(37,99,235,0.65);
+
+        letter-spacing: 0.03em;
+
+      }
+
+      @keyframes arrowBounce {
+
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+
+        50% { transform: translateX(-50%) translateY(-18px); }
+
+      }
+
       .employee-name-overlay {
 
         position: fixed;
@@ -18639,6 +18861,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               '<canvas data-overlay-canvas></canvas>' +
 
+              '<div class="signature-arrow-hint" data-arrow-hint>' +
+
+              '<div class="signature-arrow-hint__icon"></div>' +
+
+              '<span class="signature-arrow-hint__label">Sign here</span>' +
+
+              '</div>' +
+
               '</div>';
 
             document.body.appendChild(overlay);
@@ -18661,6 +18891,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const overlayRotateBtn = overlay.querySelector('[data-overlay-rotate]');
 
+          const arrowHint = overlay.querySelector('[data-arrow-hint]');
+
 
 
           const overlayState = {
@@ -18678,6 +18910,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             orientation: 'portrait',
 
             rotateDeg: 0,
+
+            mobileFullscreen: false,
 
           };
 
@@ -18777,6 +19011,22 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          const showArrowHint = () => {
+
+            if (arrowHint) arrowHint.classList.remove('is-hidden');
+
+          };
+
+
+
+          const hideArrowHint = () => {
+
+            if (arrowHint) arrowHint.classList.add('is-hidden');
+
+          };
+
+
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
 
             overlayState.active = true;
@@ -18791,9 +19041,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             document.body.style.overflow = 'hidden';
 
-            overlayState.rotateDeg = 0;
+            const mobile = isMobileMode();
 
-            setOverlayOrientation(overlayState.orientation);
+            overlayState.mobileFullscreen = mobile;
+
+            if (mobile) {
+
+              overlayState.rotateDeg = 90;
+
+              setOverlayOrientation('portrait');
+
+              showArrowHint();
+
+            } else {
+
+              overlayState.rotateDeg = 0;
+
+              setOverlayOrientation(overlayState.orientation);
+
+              hideArrowHint();
+
+            }
 
             updateRotateButton();
 
@@ -18801,15 +19069,33 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const resizeOverlayCanvas = () => {
 
-              const isLandscape = overlayState.orientation === 'landscape';
+              const panel = overlay.querySelector('.signature-overlay__panel');
 
-              const w = Math.max(overlay.clientWidth - 32, 320);
+              const actionsBar = overlay.querySelector('.signature-overlay__actions');
 
-              const h = Math.max(overlay.clientHeight - 96, 240);
+              const actionsH = actionsBar ? actionsBar.offsetHeight : 48;
 
-              const deviceW = isLandscape ? Math.max(w, h) : w;
+              let deviceW, deviceH;
 
-              const deviceH = isLandscape ? Math.min(w, h) : h;
+              if (mobile) {
+
+                deviceW = panel.clientWidth || window.innerWidth;
+
+                deviceH = (panel.clientHeight || window.innerHeight) - actionsH;
+
+              } else {
+
+                const isLandscape = overlayState.orientation === 'landscape';
+
+                const w = Math.max(overlay.clientWidth - 32, 320);
+
+                const h = Math.max(overlay.clientHeight - 96, 240);
+
+                deviceW = isLandscape ? Math.max(w, h) : w;
+
+                deviceH = isLandscape ? Math.min(w, h) : h;
+
+              }
 
               overlayCanvas.width = deviceW * ratio;
 
@@ -18877,9 +19163,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             overlayState.hiddenInput = null;
 
+            overlayState.mobileFullscreen = false;
+
             overlay.hidden = true;
 
             document.body.style.overflow = '';
+
+            hideArrowHint();
 
           };
 
@@ -18911,7 +19201,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             overlayCanvas.setPointerCapture(event.pointerId);
 
-            overlayDrawing = true;
+            overlayDrawing = true;\r
+\r
+            hideArrowHint();
 
             const { x, y } = overlayGetPoint(event);
 
@@ -18980,6 +19272,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             overlayCtx.strokeStyle = '#1f2937';
 
             overlayCtx.fillStyle = '#1f2937';
+
+            if (overlayState.mobileFullscreen) showArrowHint();
 
           });
 
