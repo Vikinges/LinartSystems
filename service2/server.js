@@ -19324,8 +19324,15 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               // Draw vertical watermark in mobile mode
               if (mobile) {
                 overlayCtx.save();
-                overlayCtx.globalAlpha = 0.07;
-                overlayCtx.font = 'italic 72px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                overlayCtx.globalAlpha = 0.06;
+                // Size text to fill ~80% of canvas height (which is width when rotated)
+                var wmTargetW = deviceH * 0.8;
+                var wmFontSize = 40;
+                overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                var wmMeasured = overlayCtx.measureText('Signature').width;
+                wmFontSize = Math.floor(wmFontSize * (wmTargetW / wmMeasured));
+                wmFontSize = Math.min(wmFontSize, 260);
+                overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
                 overlayCtx.fillStyle = '#2563eb';
                 overlayCtx.translate(deviceW / 2, deviceH / 2);
                 overlayCtx.rotate(-Math.PI / 2);
