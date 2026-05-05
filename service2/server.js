@@ -12224,11 +12224,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           });
 
-          const ROTATION_POPUP_KEY = 'pm-rotation-lock-shown';
-
           function showRotationLockPopup() {
-
-            if (window.localStorage.getItem(ROTATION_POPUP_KEY) === '1') return;
 
             let popup = document.querySelector('.rotation-lock-popup');
 
@@ -12266,8 +12262,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               popup.hidden = true;
 
-              window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
-
             });
 
             popup.addEventListener('click', (e) => {
@@ -12275,8 +12269,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               if (e.target === popup) {
 
                 popup.hidden = true;
-
-                window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
 
               }
 
