@@ -8,7 +8,7 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v0.38 Lin</title>
+    <title>PDF forms generator - v0.39 Lin</title>
 
     <link
 
@@ -1252,6 +1252,228 @@
 
       }
 
+      /* ── Mobile‑mode signature overlay ── */
+
+      body.mobile-mode .signature-overlay {
+
+        padding: 0;
+
+        background: rgba(0, 0, 0, 0.85);
+
+      }
+
+      body.mobile-mode .signature-overlay__panel {
+
+        width: 100%;
+
+        height: 100%;
+
+        border-radius: 0;
+
+        padding: 0;
+
+        position: relative;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions {
+
+        position: absolute;
+
+        top: 0;
+
+        left: 0;
+
+        right: 0;
+
+        z-index: 10;
+
+        padding: 0.6rem 0.75rem;
+
+        margin: 0;
+
+        background: rgba(255,255,255,0.92);
+
+        backdrop-filter: blur(8px);
+
+        -webkit-backdrop-filter: blur(8px);
+
+        border-bottom: 1px solid #e5e7eb;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions > span:first-child,
+
+      body.mobile-mode .signature-overlay__actions > .spacer,
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-rotate],
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-orientation],
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-cancel] {
+
+        display: none;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-clear] {
+
+        margin-right: auto;
+
+        background: #f3f4f6;
+
+        color: #374151;
+
+        border-radius: 10px;
+
+        padding: 0.55rem 1.2rem;
+
+        font-size: 0.95rem;
+
+      }
+
+      body.mobile-mode .signature-overlay__actions [data-overlay-apply] {
+
+        border-radius: 10px;
+
+        padding: 0.55rem 1.4rem;
+
+        font-size: 0.95rem;
+
+      }
+
+      body.mobile-mode .signature-overlay canvas {
+
+        border: none;
+
+        border-radius: 0;
+
+        flex: 1;
+
+        width: 100%;
+
+      }
+
+      /* Arrow hint */
+
+      .signature-arrow-hint {
+
+        display: none;
+
+      }
+
+      body.mobile-mode .signature-arrow-hint {
+
+        display: flex;
+
+        position: absolute;
+
+        left: 50%;
+
+        bottom: 12%;
+
+        transform: translateX(-50%);
+
+        z-index: 5;
+
+        flex-direction: column;
+
+        align-items: center;
+
+        pointer-events: none;
+
+        animation: arrowBounce 1.6s ease-in-out infinite;
+
+        transition: opacity 0.4s ease;
+
+      }
+
+      body.mobile-mode .signature-arrow-hint.is-hidden {
+
+        opacity: 0;
+
+        pointer-events: none;
+
+      }
+
+      .signature-arrow-hint__icon {
+
+        width: 48px;
+
+        height: 120px;
+
+        position: relative;
+
+      }
+
+      .signature-arrow-hint__icon::before {
+
+        content: '';
+
+        position: absolute;
+
+        left: 50%;
+
+        bottom: 0;
+
+        width: 4px;
+
+        height: 100%;
+
+        background: linear-gradient(to top, rgba(37,99,235,0.15), rgba(37,99,235,0.7));
+
+        border-radius: 4px;
+
+        transform: translateX(-50%);
+
+      }
+
+      .signature-arrow-hint__icon::after {
+
+        content: '';
+
+        position: absolute;
+
+        left: 50%;
+
+        top: 0;
+
+        width: 0;
+
+        height: 0;
+
+        border-left: 14px solid transparent;
+
+        border-right: 14px solid transparent;
+
+        border-bottom: 20px solid rgba(37,99,235,0.7);
+
+        transform: translateX(-50%);
+
+      }
+
+      .signature-arrow-hint__label {
+
+        margin-top: 0.6rem;
+
+        font-size: 0.85rem;
+
+        font-weight: 600;
+
+        color: rgba(37,99,235,0.65);
+
+        letter-spacing: 0.03em;
+
+      }
+
+      @keyframes arrowBounce {
+
+        0%, 100% { transform: translateX(-50%) translateY(0); }
+
+        50% { transform: translateX(-50%) translateY(-18px); }
+
+      }
+
       .employee-name-overlay {
 
         position: fixed;
@@ -1519,6 +1741,148 @@
         font-size: 0.85rem;
 
         color: #475569;
+
+      }
+
+      /* ── Rotation lock popup ── */
+
+      .rotation-lock-popup {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 3000;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 1.5rem;
+
+        background: rgba(0, 0, 0, 0.6);
+
+        backdrop-filter: blur(6px);
+
+        -webkit-backdrop-filter: blur(6px);
+
+        animation: fadeInPopup 0.3s ease;
+
+      }
+
+      .rotation-lock-popup[hidden] {
+
+        display: none;
+
+      }
+
+      .rotation-lock-popup__card {
+
+        background: #fff;
+
+        border-radius: 20px;
+
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+
+        max-width: 340px;
+
+        width: 100%;
+
+        overflow: hidden;
+
+        animation: slideUpPopup 0.35s ease;
+
+      }
+
+      .rotation-lock-popup__img {
+
+        width: 100%;
+
+        max-height: 280px;
+
+        object-fit: cover;
+
+        border-bottom: 1px solid #e5e7eb;
+
+      }
+
+      .rotation-lock-popup__body {
+
+        padding: 1.25rem;
+
+        text-align: center;
+
+      }
+
+      .rotation-lock-popup__title {
+
+        margin: 0 0 0.5rem;
+
+        font-size: 1.05rem;
+
+        font-weight: 700;
+
+        color: #1f2937;
+
+      }
+
+      .rotation-lock-popup__text {
+
+        margin: 0 0 1rem;
+
+        font-size: 0.9rem;
+
+        color: #4b5563;
+
+        line-height: 1.45;
+
+      }
+
+      .rotation-lock-popup__btn {
+
+        display: inline-block;
+
+        background: #2563eb;
+
+        color: #fff;
+
+        border: none;
+
+        border-radius: 12px;
+
+        padding: 0.65rem 2rem;
+
+        font-size: 1rem;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition: background 0.2s;
+
+      }
+
+      .rotation-lock-popup__btn:hover {
+
+        background: #1d4ed8;
+
+      }
+
+      @keyframes fadeInPopup {
+
+        from { opacity: 0; }
+
+        to { opacity: 1; }
+
+      }
+
+      @keyframes slideUpPopup {
+
+        from { transform: translateY(30px); opacity: 0; }
+
+        to { transform: translateY(0); opacity: 1; }
 
       }
 
@@ -2424,7 +2788,7 @@
 
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
 
-        <h1>PDF forms generator - v0.38 Lin</h1>
+        <h1>PDF forms generator - v0.39 Lin</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
@@ -4437,7 +4801,7 @@
 
 
         const statusEl = document.getElementById('status');
-        const APP_VERSION = '0.38';
+        const APP_VERSION = '0.39';
         const versionLabel = document.querySelector('[data-app-version]');
         if (versionLabel) {
           versionLabel.textContent = 'Version ' + APP_VERSION;
@@ -4701,7 +5065,73 @@
 
             applyMobileMode(event.target.checked);
 
+            if (event.target.checked) {
+
+              showRotationLockPopup();
+
+            }
+
           });
+
+          const ROTATION_POPUP_KEY = 'pm-rotation-lock-shown';
+
+          function showRotationLockPopup() {
+
+            if (window.localStorage.getItem(ROTATION_POPUP_KEY) === '1') return;
+
+            let popup = document.querySelector('.rotation-lock-popup');
+
+            if (popup) { popup.hidden = false; return; }
+
+            popup = document.createElement('div');
+
+            popup.className = 'rotation-lock-popup';
+
+            popup.innerHTML =
+
+              '<div class="rotation-lock-popup__card">' +
+
+              '<img class="rotation-lock-popup__img" src="rotation-lock-hint.png" alt="Enable rotation lock" />' +
+
+              '<div class="rotation-lock-popup__body">' +
+
+              '<h3 class="rotation-lock-popup__title">📱 Enable Rotation Lock</h3>' +
+
+              '<p class="rotation-lock-popup__text">' +
+
+              'For the best experience, please lock your screen orientation.<br>' +
+
+              'Open <b>Control Center</b> and tap the <b>rotation lock</b> button.' +
+
+              '</p>' +
+
+              '<button type="button" class="rotation-lock-popup__btn" data-rotation-ok>OK, got it</button>' +
+
+              '</div></div>';
+
+            document.body.appendChild(popup);
+
+            popup.querySelector('[data-rotation-ok]').addEventListener('click', () => {
+
+              popup.hidden = true;
+
+              window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
+
+            });
+
+            popup.addEventListener('click', (e) => {
+
+              if (e.target === popup) {
+
+                popup.hidden = true;
+
+                window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
+
+              }
+
+            });
+
+          }
 
           const adjustScale = (delta) => {
 
@@ -11488,6 +11918,14 @@
 
               '<canvas data-overlay-canvas></canvas>' +
 
+              '<div class="signature-arrow-hint" data-arrow-hint>' +
+
+              '<div class="signature-arrow-hint__icon"></div>' +
+
+              '<span class="signature-arrow-hint__label">Sign here</span>' +
+
+              '</div>' +
+
               '</div>';
 
             document.body.appendChild(overlay);
@@ -11510,6 +11948,8 @@
 
           const overlayRotateBtn = overlay.querySelector('[data-overlay-rotate]');
 
+          const arrowHint = overlay.querySelector('[data-arrow-hint]');
+
 
 
           const overlayState = {
@@ -11527,6 +11967,8 @@
             orientation: 'portrait',
 
             rotateDeg: 0,
+
+            mobileFullscreen: false,
 
           };
 
@@ -11626,6 +12068,22 @@
 
 
 
+          const showArrowHint = () => {
+
+            if (arrowHint) arrowHint.classList.remove('is-hidden');
+
+          };
+
+
+
+          const hideArrowHint = () => {
+
+            if (arrowHint) arrowHint.classList.add('is-hidden');
+
+          };
+
+
+
           const openOverlay = (pad, hiddenInput, sampleText) => {
 
             overlayState.active = true;
@@ -11640,9 +12098,27 @@
 
             document.body.style.overflow = 'hidden';
 
-            overlayState.rotateDeg = 0;
+            const mobile = isMobileMode();
 
-            setOverlayOrientation(overlayState.orientation);
+            overlayState.mobileFullscreen = mobile;
+
+            if (mobile) {
+
+              overlayState.rotateDeg = 90;
+
+              setOverlayOrientation('portrait');
+
+              showArrowHint();
+
+            } else {
+
+              overlayState.rotateDeg = 0;
+
+              setOverlayOrientation(overlayState.orientation);
+
+              hideArrowHint();
+
+            }
 
             updateRotateButton();
 
@@ -11650,15 +12126,33 @@
 
             const resizeOverlayCanvas = () => {
 
-              const isLandscape = overlayState.orientation === 'landscape';
+              const panel = overlay.querySelector('.signature-overlay__panel');
 
-              const w = Math.max(overlay.clientWidth - 32, 320);
+              const actionsBar = overlay.querySelector('.signature-overlay__actions');
 
-              const h = Math.max(overlay.clientHeight - 96, 240);
+              const actionsH = actionsBar ? actionsBar.offsetHeight : 48;
 
-              const deviceW = isLandscape ? Math.max(w, h) : w;
+              let deviceW, deviceH;
 
-              const deviceH = isLandscape ? Math.min(w, h) : h;
+              if (mobile) {
+
+                deviceW = panel.clientWidth || window.innerWidth;
+
+                deviceH = (panel.clientHeight || window.innerHeight) - actionsH;
+
+              } else {
+
+                const isLandscape = overlayState.orientation === 'landscape';
+
+                const w = Math.max(overlay.clientWidth - 32, 320);
+
+                const h = Math.max(overlay.clientHeight - 96, 240);
+
+                deviceW = isLandscape ? Math.max(w, h) : w;
+
+                deviceH = isLandscape ? Math.min(w, h) : h;
+
+              }
 
               overlayCanvas.width = deviceW * ratio;
 
@@ -11684,6 +12178,21 @@
 
               overlayCtx.fillStyle = '#1f2937';
 
+              // Draw vertical watermark in mobile mode
+              if (mobile) {
+                overlayCtx.save();
+                overlayCtx.globalAlpha = 0.07;
+                overlayCtx.font = 'italic 72px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                overlayCtx.fillStyle = '#2563eb';
+                overlayCtx.translate(deviceW / 2, deviceH / 2);
+                overlayCtx.rotate(-Math.PI / 2);
+                overlayCtx.textAlign = 'center';
+                overlayCtx.textBaseline = 'middle';
+                overlayCtx.fillText('Signature', 0, 0);
+                overlayCtx.restore();
+                // Reset pen after watermark
+                overlayCtx.fillStyle = '#1f2937';
+              }
 
 
               if (hiddenInput.value) {
@@ -11726,9 +12235,13 @@
 
             overlayState.hiddenInput = null;
 
+            overlayState.mobileFullscreen = false;
+
             overlay.hidden = true;
 
             document.body.style.overflow = '';
+
+            hideArrowHint();
 
           };
 
@@ -11761,6 +12274,8 @@
             overlayCanvas.setPointerCapture(event.pointerId);
 
             overlayDrawing = true;
+
+            hideArrowHint();
 
             const { x, y } = overlayGetPoint(event);
 
@@ -11829,6 +12344,8 @@
             overlayCtx.strokeStyle = '#1f2937';
 
             overlayCtx.fillStyle = '#1f2937';
+
+            if (overlayState.mobileFullscreen) showArrowHint();
 
           });
 

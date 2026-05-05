@@ -344,7 +344,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.38';
+const SERVICE2_VERSION = '0.39';
 
 
 
@@ -8234,7 +8234,7 @@ ${rows.join('\n')}
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v0.38 Lin</title>
+    <title>PDF forms generator - v0.39 Lin</title>
 
     <link
 
@@ -9970,6 +9970,148 @@ ${rows.join('\n')}
 
       }
 
+      /* ── Rotation lock popup ── */
+
+      .rotation-lock-popup {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 3000;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 1.5rem;
+
+        background: rgba(0, 0, 0, 0.6);
+
+        backdrop-filter: blur(6px);
+
+        -webkit-backdrop-filter: blur(6px);
+
+        animation: fadeInPopup 0.3s ease;
+
+      }
+
+      .rotation-lock-popup[hidden] {
+
+        display: none;
+
+      }
+
+      .rotation-lock-popup__card {
+
+        background: #fff;
+
+        border-radius: 20px;
+
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+
+        max-width: 340px;
+
+        width: 100%;
+
+        overflow: hidden;
+
+        animation: slideUpPopup 0.35s ease;
+
+      }
+
+      .rotation-lock-popup__img {
+
+        width: 100%;
+
+        max-height: 280px;
+
+        object-fit: cover;
+
+        border-bottom: 1px solid #e5e7eb;
+
+      }
+
+      .rotation-lock-popup__body {
+
+        padding: 1.25rem;
+
+        text-align: center;
+
+      }
+
+      .rotation-lock-popup__title {
+
+        margin: 0 0 0.5rem;
+
+        font-size: 1.05rem;
+
+        font-weight: 700;
+
+        color: #1f2937;
+
+      }
+
+      .rotation-lock-popup__text {
+
+        margin: 0 0 1rem;
+
+        font-size: 0.9rem;
+
+        color: #4b5563;
+
+        line-height: 1.45;
+
+      }
+
+      .rotation-lock-popup__btn {
+
+        display: inline-block;
+
+        background: #2563eb;
+
+        color: #fff;
+
+        border: none;
+
+        border-radius: 12px;
+
+        padding: 0.65rem 2rem;
+
+        font-size: 1rem;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition: background 0.2s;
+
+      }
+
+      .rotation-lock-popup__btn:hover {
+
+        background: #1d4ed8;
+
+      }
+
+      @keyframes fadeInPopup {
+
+        from { opacity: 0; }
+
+        to { opacity: 1; }
+
+      }
+
+      @keyframes slideUpPopup {
+
+        from { transform: translateY(30px); opacity: 0; }
+
+        to { transform: translateY(0); opacity: 1; }
+
+      }
+
       @media (max-width: 640px) {
 
         .signature-pad {
@@ -10872,7 +11014,7 @@ ${rows.join('\n')}
 
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
 
-        <h1>PDF forms generator - v0.38 Lin</h1>
+        <h1>PDF forms generator - v0.39 Lin</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
@@ -12074,7 +12216,73 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             applyMobileMode(event.target.checked);
 
+            if (event.target.checked) {
+
+              showRotationLockPopup();
+
+            }
+
           });
+
+          const ROTATION_POPUP_KEY = 'pm-rotation-lock-shown';
+
+          function showRotationLockPopup() {
+
+            if (window.localStorage.getItem(ROTATION_POPUP_KEY) === '1') return;
+
+            let popup = document.querySelector('.rotation-lock-popup');
+
+            if (popup) { popup.hidden = false; return; }
+
+            popup = document.createElement('div');
+
+            popup.className = 'rotation-lock-popup';
+
+            popup.innerHTML =
+
+              '<div class="rotation-lock-popup__card">' +
+
+              '<img class="rotation-lock-popup__img" src="rotation-lock-hint.png" alt="Enable rotation lock" />' +
+
+              '<div class="rotation-lock-popup__body">' +
+
+              '<h3 class="rotation-lock-popup__title">📱 Enable Rotation Lock</h3>' +
+
+              '<p class="rotation-lock-popup__text">' +
+
+              'For the best experience, please lock your screen orientation.<br>' +
+
+              'Open <b>Control Center</b> and tap the <b>rotation lock</b> button.' +
+
+              '</p>' +
+
+              '<button type="button" class="rotation-lock-popup__btn" data-rotation-ok>OK, got it</button>' +
+
+              '</div></div>';
+
+            document.body.appendChild(popup);
+
+            popup.querySelector('[data-rotation-ok]').addEventListener('click', () => {
+
+              popup.hidden = true;
+
+              window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
+
+            });
+
+            popup.addEventListener('click', (e) => {
+
+              if (e.target === popup) {
+
+                popup.hidden = true;
+
+                window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
+
+              }
+
+            });
+
+          }
 
           const adjustScale = (delta) => {
 
@@ -19121,6 +19329,21 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               overlayCtx.fillStyle = '#1f2937';
 
+              // Draw vertical watermark in mobile mode
+              if (mobile) {
+                overlayCtx.save();
+                overlayCtx.globalAlpha = 0.07;
+                overlayCtx.font = 'italic 72px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                overlayCtx.fillStyle = '#2563eb';
+                overlayCtx.translate(deviceW / 2, deviceH / 2);
+                overlayCtx.rotate(-Math.PI / 2);
+                overlayCtx.textAlign = 'center';
+                overlayCtx.textBaseline = 'middle';
+                overlayCtx.fillText('Signature', 0, 0);
+                overlayCtx.restore();
+                // Reset pen after watermark
+                overlayCtx.fillStyle = '#1f2937';
+              }
 
 
               if (hiddenInput.value) {
