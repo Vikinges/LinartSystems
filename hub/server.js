@@ -13,7 +13,7 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
-const PROXY_PREFIXES = ['/service2'];
+const PROXY_PREFIXES = ['/service2', '/sign'];
 
 const SESSION_SECRET = process.env.SESSION_SECRET;
 if (!SESSION_SECRET) {
@@ -1845,6 +1845,14 @@ app.get('/files', requireFilesAccess, (req, res) => {
 app.use('/download', requireFilesAccess, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
+  logLevel: 'warn'
+}));
+
+// Public signing routes — no auth required (cryptographic tokens protect access)
+app.use('/sign', createProxyMiddleware({
+  target: 'http://service-sign:3002',
+  changeOrigin: true,
+  pathRewrite: { '^/sign': '' },
   logLevel: 'warn'
 }));
 

@@ -24,6 +24,7 @@ services:
     build: ./hub
     depends_on:
       - service2
+      - service-sign
     ports:
       - "${HUB_PORT:-8080}:8080"
     healthcheck:
@@ -75,16 +76,10 @@ services:
     environment:
       - SIGN_INTERNAL_TOKEN=${SIGN_INTERNAL_TOKEN:-}
       - SIGN_SHARED_DIR=/app/sign
-      - PUBLIC_SIGN_BASE_URL=${PUBLIC_SIGN_BASE_URL:-https://sign.lsc-led.de}
+      - PUBLIC_SIGN_BASE_URL=https://lsc-led.de/sign
+      - BASE_PATH=/sign
     volumes:
       - sign-data:/app/sign
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.sign.rule=Host(`sign.lsc-led.de`)
-      - traefik.http.routers.sign.entrypoints=websecure
-      - traefik.http.routers.sign.tls=true
-      - traefik.http.routers.sign.tls.certresolver=letsencrypt
-      - traefik.http.services.sign.loadbalancer.server.port=3002
 
   paddle-ocr:
     image: 987846/paddleocr:latest

@@ -1,5 +1,8 @@
 ## PDF forms generator · service2
 
+### v0.38
+- Signatures: customer representative autofill now uses the representative field (not customer company).
+
 ### v0.37
 - Employee add dialog now asks for name and role with suggestions; new rows are prefilled.
 - Multi-day add clones full day set for a new employee (name/role preserved).

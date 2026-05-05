@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "better-sqlite3": "^9.4.0",
+    "cookie-parser": "^1.4.6",
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
     "helmet": "^7.0.0",

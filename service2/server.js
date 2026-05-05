@@ -23477,15 +23477,11 @@ app.get('/download/:type/:file', async (req, res) => {
 
   const filePath = path.join(baseDir, requestedFile);
 
-
-
   if (!filePath.startsWith(baseDir)) {
 
     return res.status(400).json({ ok: false, error: 'Invalid file path.' });
 
   }
-
-
 
   if (!fs.existsSync(filePath)) {
 
@@ -23493,10 +23489,59 @@ app.get('/download/:type/:file', async (req, res) => {
 
   }
 
-
-
   res.download(filePath, requestedFile);
 
+});
+
+app.post('/api/sign/create', async (req, res) => {
+  try {
+    const type = sanitizeFilename(req.body && req.body.type);
+    const file = sanitizeFilename(req.body && req.body.file);
+    if (!type || !file) {
+      return res.status(400).json({ ok: false, error: 'Missing type or file.' });
+    }
+    const sourcePdfPath = path.join(OUTPUT_DIR, type, 'pdf', file);
+    if (!fs.existsSync(sourcePdfPath)) {
+      return res.status(404).json({ ok: false, error: 'Source PDF not found.' });
+    }
+    if (!SIGN_SERVICE_URL || !SIGN_INTERNAL_TOKEN) {
+      return res.status(500).json({ ok: false, error: 'Signing service not configured.' });
+    }
+
+    fsExtra.ensureDirSync(SIGN_INBOX_DIR);
+    const inboxFile = `${Date.now()}_${file}`;
+    const inboxPath = path.join(SIGN_INBOX_DIR, inboxFile);
+    fsExtra.copySync(sourcePdfPath, inboxPath);
+
+    // Dynamic import for node-fetch if using Node < 18, else use global fetch
+    const response = await fetch(`${SIGN_SERVICE_URL}/internal/jobs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SIGN_INTERNAL_TOKEN}`
+      },
+      body: JSON.stringify({
+        storedPath: `inbox/${inboxFile}`,
+        originalName: file,
+        expiresInDays: Number(req.body && req.body.expiresInDays) || 7
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.ok) {
+      throw new Error(data && data.error ? data.error : 'Failed to create sign job');
+    }
+
+    return res.json({
+      ok: true,
+      url: data.url,
+      pin: data.pin,
+      expiresAt: data.expiresAt
+    });
+  } catch (err) {
+    console.error('[server] sign job error:', err);
+    return res.status(500).json({ ok: false, error: err.message || 'Internal error' });
+  }
 });
 
 

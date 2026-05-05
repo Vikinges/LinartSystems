@@ -189,3 +189,30 @@ textarea {
     min-height: 360px;
   }
 }
+
+.pin-card {
+  max-width: 400px;
+  margin: 40px auto;
+  text-align: center;
+}
+
+.pin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.pin-input {
+  font-size: 24px;
+  letter-spacing: 0.5em;
+  text-align: center;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-family: monospace;
+  font-weight: bold;
+}
+.pin-input::placeholder {
+  letter-spacing: 0.2em;
+}

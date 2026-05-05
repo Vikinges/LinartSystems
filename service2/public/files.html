@@ -390,7 +390,7 @@
           return fetch(buildAppUrl(path), { ...options, headers });
         };
 
-        const APP_VERSION = '0.39';
+        const APP_VERSION = '0.40';
         const versionMetaEl = document.getElementById('version-meta');
         if (versionMetaEl) {
           versionMetaEl.textContent = `Version ${APP_VERSION}`;
@@ -601,6 +601,11 @@
               linkInput.className = 'row-link-input';
               linkInput.hidden = true;
 
+              const pinLabel = document.createElement('span');
+              pinLabel.style.fontWeight = 'bold';
+              pinLabel.style.marginLeft = '0.5rem';
+              pinLabel.hidden = true;
+
               const copyBtn = document.createElement('button');
               copyBtn.type = 'button';
               copyBtn.className = 'button secondary small';
@@ -630,13 +635,12 @@
                 signBtn.disabled = true;
                 setRowStatus('Creating link...');
                 try {
-                  const response = await fetchWithAdminToken('admin/sign/create', {
+                  const response = await fetchWithAdminToken('api/sign/create', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      downloadPath: file.downloadPath,
-                      templateType: file.templateType,
-                      filename: file.filename,
+                      type: file.templateType,
+                      file: file.filename,
                       expiresInDays: Number(ttlSelect.value || '7'),
                     }),
                     credentials: 'same-origin',
@@ -645,9 +649,11 @@
                   if (!response.ok || !payload.ok) {
                     throw new Error(payload && payload.error ? payload.error : 'Unable to create link.');
                   }
-                  const linkValue = payload.signUrl || '';
+                  const linkValue = payload.url || '';
                   linkInput.value = linkValue;
                   linkInput.hidden = false;
+                  pinLabel.textContent = `PIN: ${payload.pin || ''}`;
+                  pinLabel.hidden = !payload.pin;
                   copyBtn.hidden = false;
                   openBtn.href = linkValue || '#';
                   openBtn.hidden = !linkValue;
@@ -669,6 +675,7 @@
               actionsWrap.appendChild(ttlWrap);
               actionsWrap.appendChild(signBtn);
               actionsWrap.appendChild(linkInput);
+              actionsWrap.appendChild(pinLabel);
               actionsWrap.appendChild(copyBtn);
               actionsWrap.appendChild(openBtn);
               actionsWrap.appendChild(meta);

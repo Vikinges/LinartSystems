@@ -24,14 +24,16 @@
   "DBG-001": {
     "end_customer_name": "Debug Customer GmbH",
     "site_location": "Berlin, Teststrasse 1",
-    "led_display_model": "FA 1.5 / 1.9 / 2.5, LED-FE009I2/A31",
+    "led_display_model": "FA 1.5 / 1.9 / 2.5, LED-FE009I2/A31, 47M360065T/M36, LED-FE009I2/07YBO, 47M360065T/360, LED-FE009I2/Batch A31, LED-FE012I3/Batch Q47, FA012I2960260022T/Batch A01",
     "batch_number": "DBG-001",
     "lsc_project_number": "DBG-001",
     "date_of_service": "2025-12-04",
     "service_company_name": "Sharp / NEC LED Solution Center",
     "form_type": "service_report",
-    "updated_at": "2025-12-08T10:48:19.801Z",
-    "customer_company": "Siemens"
+    "updated_at": "2025-12-19T11:15:14.428Z",
+    "customer_company": "Debug Customer GmbH",
+    "customer_representative": "Screen 1000\"",
+    "attendee_client": "Screen 1000\""
   },
   "25-0000": {
     "building_project": "slingen .....",
@@ -52,5 +54,17 @@
     "lsc_project_number": "TEST-001",
     "form_type": "installation_report",
     "updated_at": "2025-12-08T09:48:04.883Z"
+  },
+  "BATCH-001": {
+    "end_customer_name": "Siemens AG",
+    "site_location": "Erlangen",
+    "led_display_model": "FA 1.5/1.9/2.5",
+    "batch_number": "BATCH-001",
+    "date_of_service": "2025-11-26",
+    "service_company_name": "Sharp",
+    "customer_company": "Mercedes-Benz AG",
+    "lsc_project_number": "BATCH-001",
+    "form_type": "service_report",
+    "updated_at": "2025-12-19T09:09:00.500Z"
   }
 }

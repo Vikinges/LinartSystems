@@ -1,6 +1,6 @@
 {
   "username": "admin",
-  "passwordHash": "6a07233de34b10530671ee1cb5f75c41232e52724e5d0cf370c19b5d3f50bf93",
-  "salt": "c43e715b85e82d141ca63f7820a04aa9",
-  "updatedAt": "2025-12-09T14:01:07.629Z"
+  "passwordHash": "527d8348dbafda34b3f41d4ecf259654efdd831e4abfca8797e63fb0b8f01009",
+  "salt": "74f9f610f449b0532240026f71868f7f",
+  "updatedAt": "2026-05-05T07:07:33.406Z"
 }

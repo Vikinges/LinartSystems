@@ -1,5 +1,6 @@
 (() => {
   const token = document.body.dataset.token || "";
+  const basePath = document.body.dataset.basePath || "";
   const canvas = document.querySelector("[data-signature-canvas]");
   const clearBtn = document.querySelector("[data-clear]");
   const submitBtn = document.querySelector("[data-submit]");
@@ -103,7 +104,7 @@
         comment: commentEl ? commentEl.value.trim() : "",
       };
 
-      const response = await fetch(`/s/${encodeURIComponent(token)}/submit`, {
+      const response = await fetch(`${basePath}/s/${encodeURIComponent(token)}/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -118,7 +119,7 @@
 
       setStatus("Signed successfully. You can download the final PDF now.");
       if (downloadWrap && downloadLink) {
-        downloadLink.href = data.downloadUrl || `/s/${encodeURIComponent(token)}/download`;
+        downloadLink.href = data.downloadUrl ? (basePath + data.downloadUrl) : `${basePath}/s/${encodeURIComponent(token)}/download`;
         downloadWrap.hidden = false;
       }
     } catch (err) {
