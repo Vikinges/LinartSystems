@@ -407,7 +407,17 @@ function normalizeSessionUser(user) {
     isSuperadmin,
     normalizeFilesAccess(user.canViewFiles, false)
   );
-  return { username, isSuperadmin, allowedServices, role, canViewFiles };
+  const canGenerateLinks = resolveFilesAccess(
+    role,
+    isSuperadmin,
+    normalizeFilesAccess(user.canGenerateLinks, false)
+  );
+  const canDeleteFiles = resolveFilesAccess(
+    role,
+    isSuperadmin,
+    normalizeFilesAccess(user.canDeleteFiles, false)
+  );
+  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles };
 }
 
 function getNextPort() {
@@ -514,6 +524,8 @@ function buildAdminAuthToken(user) {
     a: normalized.isSuperadmin ? 1 : 0,
     r: normalized.role,
     f: normalized.canViewFiles ? 1 : 0,
+    g: normalized.canGenerateLinks ? 1 : 0,
+    d: normalized.canDeleteFiles ? 1 : 0,
     s: Array.isArray(normalized.allowedServices) ? normalized.allowedServices : [],
     t: Date.now(),
   });
@@ -545,11 +557,15 @@ function parseAdminAuthToken(token) {
   const isSuperadmin = data.a === 1;
   const role = normalizeUserRole(data.r, isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
   const canViewFiles = normalizeFilesAccess(data.f, false);
+  const canGenerateLinks = normalizeFilesAccess(data.g, false);
+  const canDeleteFiles = normalizeFilesAccess(data.d, false);
   return normalizeSessionUser({
     username: String(data.u),
     isSuperadmin,
     role,
     canViewFiles,
+    canGenerateLinks,
+    canDeleteFiles,
     allowedServices: Array.isArray(data.s) ? data.s : [],
   });
 }
@@ -630,6 +646,8 @@ function attachHubProxyHeaders(req, _res, next) {
   if (user) {
     req.headers['x-hub-role'] = user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
     req.headers['x-hub-user'] = user.username;
+    if (user.canGenerateLinks) req.headers['x-hub-can-generate-links'] = '1';
+    if (user.canDeleteFiles) req.headers['x-hub-can-delete-files'] = '1';
   }
   next();
 }
@@ -1076,6 +1094,8 @@ app.get('/api/status', async (req, res) => {
             isSuperadmin: user.isSuperadmin,
             role: user.role,
             canViewFiles: user.canViewFiles,
+            canGenerateLinks: user.canGenerateLinks,
+            canDeleteFiles: user.canDeleteFiles,
             allowedServices: user.allowedServices || [],
           }
         : null,
@@ -1125,6 +1145,8 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
             isSuperadmin: false,
             role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
             canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
+            canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
+            canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
             allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
           };
           break;
@@ -1677,6 +1699,8 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         allowedServices: normalizeAllowedServices(u.allowedServices),
         role: normalizeUserRole(u.role, USER_ROLE_MANAGER),
         canViewFiles: normalizeFilesAccess(u.canViewFiles, false),
+        canGenerateLinks: normalizeFilesAccess(u.canGenerateLinks, false),
+        canDeleteFiles: normalizeFilesAccess(u.canDeleteFiles, false),
       }))
     : [];
   res.json({ ok: true, users });
@@ -1694,10 +1718,13 @@ app.get('/admin/me', requireSuperadmin, (req, res) => {
       isSuperadmin: user.isSuperadmin,
       role: user.role,
       canViewFiles: user.canViewFiles,
+      canGenerateLinks: user.canGenerateLinks,
+      canDeleteFiles: user.canDeleteFiles,
       allowedServices: user.allowedServices || [],
     },
   });
 });
+
 
 app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) => {
   const body = req.body || {};
@@ -1707,6 +1734,8 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
   const rawFilesAccess = normalizeFilesAccess(body.canViewFiles, false);
   const canViewFiles = resolveFilesAccess(role, false, rawFilesAccess);
+  const canGenerateLinks = resolveFilesAccess(role, false, normalizeFilesAccess(body.canGenerateLinks, false));
+  const canDeleteFiles = resolveFilesAccess(role, false, normalizeFilesAccess(body.canDeleteFiles, false));
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -1720,7 +1749,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  adminCredentials.users.push({ username, passwordHash, allowedServices, role, canViewFiles });
+  adminCredentials.users.push({ username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles });
   saveAdminCredentials(adminCredentials);
   res.json({ ok: true });
 });
@@ -1748,10 +1777,26 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   if (Object.prototype.hasOwnProperty.call(body, 'canViewFiles')) {
     user.canViewFiles = normalizeFilesAccess(body.canViewFiles, false);
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'canGenerateLinks')) {
+    user.canGenerateLinks = normalizeFilesAccess(body.canGenerateLinks, false);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'canDeleteFiles')) {
+    user.canDeleteFiles = normalizeFilesAccess(body.canDeleteFiles, false);
+  }
   user.canViewFiles = resolveFilesAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
     false,
     normalizeFilesAccess(user.canViewFiles, false)
+  );
+  user.canGenerateLinks = resolveFilesAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    normalizeFilesAccess(user.canGenerateLinks, false)
+  );
+  user.canDeleteFiles = resolveFilesAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    normalizeFilesAccess(user.canDeleteFiles, false)
   );
   if (typeof body.password === 'string' && body.password.length >= 4) {
     user.passwordHash = await bcrypt.hash(body.password, 10);

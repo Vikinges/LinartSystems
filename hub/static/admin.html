@@ -283,13 +283,23 @@
           <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
         </label>
         <div>
-          <div class="hint" style="margin-bottom:6px;">Role</div>
+          <div class="hint" style="margin-bottom:6px;">Permissions</div>
           <div id="newUserRoles" class="role-options"></div>
         </div>
-        <label class="inline" style="gap:8px;">
-          <input type="checkbox" id="newUserFilesAccess">
-          Files access
-        </label>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
+            <input type="checkbox" id="newUserFilesAccess">
+            Files access
+          </label>
+          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
+            <input type="checkbox" id="newUserCanGenerateLinks">
+            Generate links
+          </label>
+          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
+            <input type="checkbox" id="newUserCanDeleteFiles">
+            Delete files
+          </label>
+        </div>
         <label class="inline" style="gap:8px;">
           <input type="checkbox" id="newUserAllowAll" checked>
           Allow all services
@@ -448,7 +458,7 @@
       return role === 'admin' || role === 'blocked';
     }
 
-    function syncServiceControls(allowAllInput, servicesBox, role, filesAccessInput) {
+    function syncServiceControls(allowAllInput, servicesBox, role, filesAccessInput, genLinksInput, delFilesInput) {
       const disableServices = isServiceRoleRestricted(role);
       if (allowAllInput) {
         allowAllInput.disabled = disableServices;
@@ -462,16 +472,18 @@
           cb.disabled = disableCheckboxes;
         });
       }
-      if (filesAccessInput) {
-        const disableFiles = role === 'admin' || role === 'blocked';
-        filesAccessInput.disabled = disableFiles;
-        if (role === 'admin') {
-          filesAccessInput.checked = true;
-        }
-        if (role === 'blocked') {
-          filesAccessInput.checked = false;
-        }
-      }
+      
+      const disableFiles = role === 'admin' || role === 'blocked';
+      const applyPermission = (input) => {
+        if (!input) return;
+        input.disabled = disableFiles;
+        if (role === 'admin') input.checked = true;
+        if (role === 'blocked') input.checked = false;
+      };
+      
+      applyPermission(filesAccessInput);
+      applyPermission(genLinksInput);
+      applyPermission(delFilesInput);
     }
 
     function renderRoleOptions(container, selectedRole, onChange) {
@@ -568,6 +580,8 @@
     const newUserPasswordInput = document.getElementById('newUserPassword');
     const newUserRoles = document.getElementById('newUserRoles');
     const newUserFilesAccess = document.getElementById('newUserFilesAccess');
+    const newUserCanGenerateLinks = document.getElementById('newUserCanGenerateLinks');
+    const newUserCanDeleteFiles = document.getElementById('newUserCanDeleteFiles');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
@@ -598,7 +612,7 @@
     surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
     if (newUserRoles) {
       getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (role) => {
-        syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess);
+        syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
       });
     }
 
@@ -936,6 +950,24 @@
         filesAccessWrap.appendChild(document.createTextNode(' Files access'));
         actions.appendChild(filesAccessWrap);
 
+        const canGenerateLinksWrap = document.createElement('label');
+        canGenerateLinksWrap.className = 'inline';
+        const canGenerateLinksInput = document.createElement('input');
+        canGenerateLinksInput.type = 'checkbox';
+        canGenerateLinksInput.checked = Boolean(user.canGenerateLinks);
+        canGenerateLinksWrap.appendChild(canGenerateLinksInput);
+        canGenerateLinksWrap.appendChild(document.createTextNode(' Generate links'));
+        actions.appendChild(canGenerateLinksWrap);
+
+        const canDeleteFilesWrap = document.createElement('label');
+        canDeleteFilesWrap.className = 'inline';
+        const canDeleteFilesInput = document.createElement('input');
+        canDeleteFilesInput.type = 'checkbox';
+        canDeleteFilesInput.checked = Boolean(user.canDeleteFiles);
+        canDeleteFilesWrap.appendChild(canDeleteFilesInput);
+        canDeleteFilesWrap.appendChild(document.createTextNode(' Delete files'));
+        actions.appendChild(canDeleteFilesWrap);
+
         const allowAllWrap = document.createElement('label');
         allowAllWrap.className = 'inline';
         const allowAllInput = document.createElement('input');
@@ -949,7 +981,7 @@
         servicesBox.className = 'service-checkboxes';
         renderServiceCheckboxes(servicesBox, new Set(user.allowedServices || []), allowAllInput.checked);
         allowAllInput.addEventListener('change', () => {
-          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
         });
         actions.appendChild(servicesBox);
 
@@ -958,10 +990,10 @@
         let currentRole = roleValue;
         const getRole = renderRoleOptions(roleBox, currentRole, (nextRole) => {
           currentRole = nextRole;
-          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
         });
         actions.insertBefore(roleBox, allowAllWrap);
-        syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput);
+        syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
 
         const passwordInput = document.createElement('input');
         passwordInput.type = 'password';
@@ -977,6 +1009,8 @@
             const payload = {};
             payload.role = getRole();
             payload.canViewFiles = filesAccessInput.checked;
+            payload.canGenerateLinks = canGenerateLinksInput.checked;
+            payload.canDeleteFiles = canDeleteFilesInput.checked;
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {
@@ -1025,10 +1059,10 @@
       if (!newUserServices) return;
       const selected = new Set();
       renderServiceCheckboxes(newUserServices, selected, false);
-      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess);
+      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
       if (newUserAllowAll) {
         newUserAllowAll.addEventListener('change', () => {
-          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess);
+          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
         });
       }
     }
@@ -1239,11 +1273,9 @@
         const password = newUserPasswordInput.value;
         const role = getNewUserRole();
         const allowAll = isServiceRoleRestricted(role) || (newUserAllowAll && newUserAllowAll.checked);
-        const canViewFiles = role === 'admin'
-          ? true
-          : role === 'blocked'
-            ? false
-            : (newUserFilesAccess && newUserFilesAccess.checked);
+        const canViewFiles = role === 'admin' ? true : role === 'blocked' ? false : (newUserFilesAccess && newUserFilesAccess.checked);
+        const canGenerateLinks = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanGenerateLinks && newUserCanGenerateLinks.checked);
+        const canDeleteFiles = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanDeleteFiles && newUserCanDeleteFiles.checked);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -1257,7 +1289,7 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role, canViewFiles, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, allowedServices: selectedServices })
           });
           newUserPasswordInput.value = '';
           if (newUserServices) {
@@ -1265,9 +1297,11 @@
           }
           if (newUserAllowAll) newUserAllowAll.checked = true;
           if (newUserFilesAccess) newUserFilesAccess.checked = false;
+          if (newUserCanGenerateLinks) newUserCanGenerateLinks.checked = false;
+          if (newUserCanDeleteFiles) newUserCanDeleteFiles.checked = false;
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
-              syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess);
+              syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
             });
           }
           await loadAll();

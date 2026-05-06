@@ -19111,7 +19111,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             rotateDeg: 0,
 
+            rotateDeg: 0,
+
             mobileFullscreen: false,
+
+            hasDrawn: false,
 
           };
 
@@ -19344,6 +19348,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
                 overlayCtx.fillStyle = '#1f2937';
               }
 
+              overlayState.hasDrawn = false;
 
               if (hiddenInput.value) {
 
@@ -19429,6 +19434,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const { x, y } = overlayGetPoint(event);
 
+            if (!overlayState.hasDrawn && (!overlayState.hiddenInput || !overlayState.hiddenInput.value)) {
+              overlayCtx.save();
+              overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+              overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+              overlayCtx.restore();
+              overlayState.hasDrawn = true;
+            }
+
             overlayCtx.beginPath();
 
             overlayCtx.moveTo(x, y);
@@ -19494,6 +19507,38 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             overlayCtx.strokeStyle = '#1f2937';
 
             overlayCtx.fillStyle = '#1f2937';
+
+            overlayState.hasDrawn = false;
+            
+            // Redraw watermark
+            const deviceW = overlayCanvas.parentElement.clientWidth;
+            const deviceH = overlayCanvas.parentElement.clientHeight;
+            const mobile = document.body.style.getPropertyValue('--mobile-scale') || 
+                          getComputedStyle(document.body).getPropertyValue('--mobile-scale').trim();
+            if (mobile) {
+              overlayCtx.save();
+              overlayCtx.globalAlpha = 0.06;
+              var wmTargetW = deviceH * 0.8;
+              var wmFontSize = 40;
+              overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+              var wmMeasured = overlayCtx.measureText('Signature').width;
+              wmFontSize = Math.floor(wmFontSize * (wmTargetW / wmMeasured));
+              wmFontSize = Math.min(wmFontSize, 260);
+              overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+              overlayCtx.fillStyle = '#2563eb';
+              overlayCtx.translate(deviceW / 2, deviceH / 2);
+              overlayCtx.rotate(-Math.PI / 2);
+              overlayCtx.textAlign = 'center';
+              overlayCtx.textBaseline = 'middle';
+              overlayCtx.fillText('Signature', 0, 0);
+              overlayCtx.restore();
+              overlayCtx.fillStyle = '#1f2937';
+            } else if (overlayState.sampleText) {
+              overlayCtx.font = '28px "Segoe Script", cursive';
+              overlayCtx.globalAlpha = 0.1;
+              overlayCtx.fillText(overlayState.sampleText, 24, deviceH / 2 + 10);
+              overlayCtx.globalAlpha = 1.0;
+            }
 
             if (overlayState.mobileFullscreen) showArrowHint();
 
@@ -21095,14 +21140,28 @@ function requireHubAdmin(req, res, next) {
 
 function requireFileAdmin(req, res, next) {
   const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
-  if (role === 'admin') {
-    return next();
-  }
+  if (role === 'admin') return next();
   const token = extractAdminToken(req);
-  if (token && adminTokens.has(token)) {
-    return next();
-  }
+  if (token && adminTokens.has(token)) return next();
   return res.status(403).json({ ok: false, error: 'Forbidden' });
+}
+
+function requireDeleteFiles(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin') return next();
+  if (req.headers['x-hub-can-delete-files'] === '1') return next();
+  const token = extractAdminToken(req);
+  if (token && adminTokens.has(token)) return next();
+  return res.status(403).json({ ok: false, error: 'Forbidden: requires delete files permission.' });
+}
+
+function requireGenerateLinks(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin') return next();
+  if (req.headers['x-hub-can-generate-links'] === '1') return next();
+  const token = extractAdminToken(req);
+  if (token && adminTokens.has(token)) return next();
+  return res.status(403).json({ ok: false, error: 'Forbidden: requires generate links permission.' });
 }
 
 
@@ -22085,7 +22144,7 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
 });
 
-app.post(['/admin/sign/create', '/service2/admin/sign/create'], requireFileAdmin, async (req, res) => {
+app.post(['/admin/sign/create', '/service2/admin/sign/create'], requireGenerateLinks, async (req, res) => {
   if (!SIGN_SERVICE_URL || !SIGN_INTERNAL_TOKEN) {
     return res.status(500).json({ ok: false, error: 'Signing service is not configured.' });
   }
@@ -22227,7 +22286,7 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   }
 });
 
-app.post(['/api/files/delete', '/service2/api/files/delete'], requireFileAdmin, async (req, res) => {
+app.post(['/api/files/delete', '/service2/api/files/delete'], requireDeleteFiles, async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
     return res.status(400).json({ ok: false, error: 'no_files_selected' });
@@ -22284,7 +22343,7 @@ app.post(['/api/files/delete', '/service2/api/files/delete'], requireFileAdmin, 
   return res.json({ ok: true, deleted, missing, errors });
 });
 
-app.post(['/api/files/zip', '/service2/api/files/zip'], requireFileAdmin, async (req, res) => {
+app.post(['/api/files/zip', '/service2/api/files/zip'], requireDeleteFiles, async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
     return res.status(400).json({ ok: false, error: 'no_files_selected' });
@@ -23493,7 +23552,9 @@ app.get('/download/:type/:file', async (req, res) => {
 
 });
 
-app.post('/api/sign/create', async (req, res) => {
+// This route can be called directly from public interface if we are not authenticated. 
+// But since we want to restrict link generation, we should protect it too!
+app.post('/api/sign/create', requireGenerateLinks, async (req, res) => {
   try {
     const type = sanitizeFilename(req.body && req.body.type);
     const file = sanitizeFilename(req.body && req.body.file);

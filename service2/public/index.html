@@ -2785,13 +2785,17 @@
     <div class="container">
 
       <header>
-
-        <button type="button" class="admin-launch" data-admin-open>Admin</button>
-
-        <h1>PDF forms generator - v0.39 Lin</h1>
-
-        <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
-
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h1>PDF forms generator - v0.41 Lin</h1>
+            <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <a href="/admin" class="button secondary" style="text-decoration: none; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: #e2e8f0; color: #1e293b;">⚙️ Admin</a>
+            <a href="/files" class="button" style="text-decoration: none; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: #2563eb; color: white;">📂 Files</a>
+            <button type="button" class="button ghost" data-admin-open style="padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: transparent; border: 1px solid #cbd5e1; color: #475569; display: none;">Template editor</button>
+          </div>
+        </div>
       </header>
 
       <form id="pm-form" enctype="multipart/form-data">
@@ -4801,7 +4805,7 @@
 
 
         const statusEl = document.getElementById('status');
-        const APP_VERSION = '0.40';
+        const APP_VERSION = '0.41';
         const versionLabel = document.querySelector('[data-app-version]');
         if (versionLabel) {
           versionLabel.textContent = 'Version ' + APP_VERSION;
