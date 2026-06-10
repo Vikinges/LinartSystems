@@ -3,7 +3,24 @@
 <h2>Admin Login</h2>
 <form method="POST" action="/admin/login">
   <label>Username: <input type="text" name="username" value="admin"></label>
-  <label>Password: <input type="password" name="password"></label>
+  <label>Password: <span style="position:relative;display:inline-flex;align-items:center;">
+    <input type="password" name="password" id="passwordInput" style="padding-right:32px;">
+    <button type="button" id="togglePasswordBtn" aria-label="Show password" title="Show password"
+      style="position:absolute;right:4px;background:none;border:none;cursor:pointer;font-size:15px;padding:2px;">&#128065;</button>
+  </span></label>
   <button type="submit">Login</button>
 </form>
+<script>
+  (function () {
+    var input = document.getElementById('passwordInput');
+    var btn = document.getElementById('togglePasswordBtn');
+    btn.addEventListener('click', function () {
+      var hidden = input.type === 'password';
+      input.type = hidden ? 'text' : 'password';
+      btn.innerHTML = hidden ? '&#128584;' : '&#128065;';
+      btn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+      input.focus();
+    });
+  })();
+</script>
 </body></html>

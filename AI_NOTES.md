@@ -1,7 +1,7 @@
 ## Краткие инструкции для AI
 
 - Проект: docker-compose в корне (`docker compose up -d --build` или `scripts/dev-up.ps1`). Сервисы: `service2` (Node.js/PDF), `service-sign` (sign links), `hub`, `reverse-proxy`, `paddle-ocr`.
-- Деплой: после push можно дергать webhook Portainer (обновляет стек): `https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2` (POST).
+- Деплой: после push можно дергать webhook Portainer (обновляет стек): `https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f71779e249` (POST). Старый адрес port.linart.club больше не действует (июнь 2026).
 - Админка hub: пользователи и права хранятся в `admin.json` (superadmin + users). Для персистентности задайте `HUB_DATA_DIR=/app/data` и смонтируйте volume `hub-data:/app/data` (там будут `admin.json`, `services.json`, `config.json`). Для логотипов/медиа — volume `hub-uploads:/app/static/uploads`.
 - Если пароль admin потерян: установить `HUB_ADMIN_PASSWORD_FORCE=1` и `HUB_ADMIN_PASSWORD=<новый>` — при старте пароль супер‑админа будет переустановлен, список пользователей сохраняется.
 - Локальный запуск `service2`: из `service2/` `npm install` (первый раз), затем `npm start` (порт 3001). При старте генерится `public/index.html` на основе шаблона в `server.js`.

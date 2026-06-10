@@ -76,7 +76,11 @@
           </label>
           <label class="inline" style="gap:8px;">
             Password
-            <input type="password" id="adminPasswordInput" autocomplete="current-password" required>
+            <span style="position:relative;display:flex;align-items:center;width:100%;">
+              <input type="password" id="adminPasswordInput" autocomplete="current-password" required style="width:100%;padding-right:42px;">
+              <button type="button" id="togglePasswordBtn" aria-label="Show password" title="Show password"
+                style="position:absolute;right:8px;background:none;border:none;cursor:pointer;font-size:17px;line-height:1;color:#94a3b8;padding:4px;">&#128065;</button>
+            </span>
           </label>
           <div class="modal__error" id="adminLoginError"></div>
           <div class="modal__actions">
@@ -96,6 +100,17 @@
   const adminModalEl = document.getElementById('adminModal');
   const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
+  const togglePasswordBtn = document.getElementById('togglePasswordBtn');
+  if (togglePasswordBtn) {
+    togglePasswordBtn.addEventListener('click', () => {
+      const hidden = adminPasswordInput.type === 'password';
+      adminPasswordInput.type = hidden ? 'text' : 'password';
+      togglePasswordBtn.innerHTML = hidden ? '&#128584;' : '&#128065;';
+      togglePasswordBtn.setAttribute('aria-label', hidden ? 'Hide password' : 'Show password');
+      togglePasswordBtn.setAttribute('title', hidden ? 'Hide password' : 'Show password');
+      adminPasswordInput.focus();
+    });
+  }
   const adminLoginForm = document.getElementById('adminLoginForm');
   const adminLoginErrorEl = document.getElementById('adminLoginError');
   const closeAdminModalBtn = document.getElementById('closeAdminModal');

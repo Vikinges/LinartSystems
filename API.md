@@ -174,13 +174,13 @@ healthcheck:
 Для обновления стека после push в Git используйте webhook Portainer:
 
 ```
-POST https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2
+POST https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f71779e249
 ```
 
 Пример:
 
 ```bash
-curl -X POST https://port.linart.club/api/stacks/webhooks/102e1dee-6a8d-44ab-b13f-207ce89807f2
+curl -X POST https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f71779e249
 ```
 
 ## Где искать исходные примеры
