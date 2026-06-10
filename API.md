@@ -180,7 +180,8 @@ POST https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f7177
 Пример:
 
 ```bash
-curl -X POST https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f71779e249
+curl -k -X POST https://lsc-led.de:9443/api/stacks/webhooks/b903907f-2110-4593-963b-e0f71779e249
+# -k обязателен: у Portainer на :9443 самоподписанный сертификат
 ```
 
 ## Где искать исходные примеры
