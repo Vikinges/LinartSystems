@@ -134,6 +134,71 @@ function saveProjectsStore(store) {
 
 }
 
+// --- Idempotent submissions (mobile sync): clientReportId -> stored success response ---
+
+const SUBMISSIONS_STORE_PATH = path.join(DATA_DIR, 'submissions.json');
+
+const SUBMISSION_STORE_MAX_ENTRIES = 2000;
+
+const SUBMISSION_STORE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+const inFlightClientReportIds = new Set();
+
+function normalizeClientReportId(value) {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 128) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+function loadSubmissionsStore() {
+  try {
+    if (!fs.existsSync(SUBMISSIONS_STORE_PATH)) return {};
+    const raw = fs.readFileSync(SUBMISSIONS_STORE_PATH, 'utf8');
+    const data = JSON.parse(raw);
+    return data && typeof data === 'object' ? data : {};
+  } catch (err) {
+    console.warn('[server] Unable to read submissions store:', err.message);
+    return {};
+  }
+}
+
+function saveSubmissionsStore(store) {
+  try {
+    fs.writeFileSync(SUBMISSIONS_STORE_PATH, JSON.stringify(store || {}, null, 2));
+    return true;
+  } catch (err) {
+    console.warn('[server] Unable to write submissions store:', err.message);
+    return false;
+  }
+}
+
+function pruneSubmissionsStore(store) {
+  const now = Date.now();
+  const entries = Object.entries(store).filter(([, value]) => {
+    const at = value && Number(value.at);
+    return Number.isFinite(at) && now - at <= SUBMISSION_STORE_TTL_MS;
+  });
+  entries.sort((a, b) => Number(b[1].at) - Number(a[1].at));
+  return Object.fromEntries(entries.slice(0, SUBMISSION_STORE_MAX_ENTRIES));
+}
+
+function findStoredSubmission(clientReportId) {
+  const store = loadSubmissionsStore();
+  const entry = store[clientReportId];
+  if (!entry || !entry.response) return null;
+  const at = Number(entry.at);
+  if (!Number.isFinite(at) || Date.now() - at > SUBMISSION_STORE_TTL_MS) return null;
+  return entry;
+}
+
+function rememberSubmission(clientReportId, response) {
+  const store = loadSubmissionsStore();
+  store[clientReportId] = { at: Date.now(), response };
+  saveSubmissionsStore(pruneSubmissionsStore(store));
+}
+
 
 
 function clampNumber(value, min, max) {
@@ -270,10 +335,13 @@ async function listFileEntries(filters) {
   });
 
   const limit = filters.limit || FILE_LIST_DEFAULT_LIMIT;
+  const offset = Number.isFinite(filters.offset) && filters.offset > 0 ? Math.trunc(filters.offset) : 0;
   return {
     types,
-    entries: entries.slice(0, limit),
+    entries: entries.slice(offset, offset + limit),
     total: entries.length,
+    offset,
+    limit,
   };
 }
 
@@ -344,7 +412,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.39';
+const SERVICE2_VERSION = '0.40';
 
 
 
@@ -19117,6 +19185,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             hasDrawn: false,
 
+            cleared: false,
+
           };
 
 
@@ -19349,6 +19419,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               }
 
               overlayState.hasDrawn = false;
+              overlayState.cleared = false;
 
               if (hiddenInput.value) {
 
@@ -19428,8 +19499,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             overlayCanvas.setPointerCapture(event.pointerId);
 
-            overlayDrawing = true;\r
-\r
+            overlayDrawing = true;
+            overlayState.cleared = false;
             hideArrowHint();
 
             const { x, y } = overlayGetPoint(event);
@@ -19600,6 +19671,21 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               return;
 
+            }
+
+            if (!overlayState.hasDrawn) {
+              if (overlayState.cleared) {
+                overlayState.hiddenInput.value = '';
+                const targetCanvas = overlayState.targetPad.querySelector('canvas');
+                if (targetCanvas) {
+                  const targetCtx = targetCanvas.getContext('2d');
+                  targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+                }
+                overlayState.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                window.dispatchEvent(new CustomEvent('signature:cleared', { detail: { pad: overlayState.targetPad } }));
+              }
+              closeOverlay();
+              return;
             }
 
             let dataUrl = overlayCanvas.toDataURL('image/png');
@@ -19929,13 +20015,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               canvas.setPointerCapture(event.pointerId);
 
               if (sampleActive) {
-
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
                 setPenDefaults();
-
                 hiddenInput.value = '';
-
                 sampleActive = false;
-
               }
 
               drawing = true;
@@ -22207,6 +22293,35 @@ app.post(['/admin/sign/create', '/service2/admin/sign/create'], requireGenerateL
   }
 });
 
+app.get(['/api/sign/jobs', '/service2/api/sign/jobs'], requireGenerateLinks, async (req, res) => {
+  if (!SIGN_SERVICE_URL || !SIGN_INTERNAL_TOKEN) {
+    return res.status(500).json({ ok: false, error: 'Signing service is not configured.' });
+  }
+  try {
+    const params = new URLSearchParams();
+    const status = typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : '';
+    if (status) params.set('status', status);
+    const limitRaw = Number(req.query.limit);
+    if (Number.isFinite(limitRaw)) params.set('limit', String(Math.trunc(limitRaw)));
+    const offsetRaw = Number(req.query.offset);
+    if (Number.isFinite(offsetRaw)) params.set('offset', String(Math.trunc(offsetRaw)));
+    const queryString = params.toString();
+    const targetUrl = `${SIGN_SERVICE_URL.replace(/\/$/, '')}/internal/jobs${queryString ? `?${queryString}` : ''}`;
+    const response = await fetch(targetUrl, {
+      headers: { 'x-internal-token': SIGN_INTERNAL_TOKEN },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload.ok) {
+      const error = payload && payload.error ? payload.error : 'Failed to list sign jobs.';
+      return res.status(502).json({ ok: false, error });
+    }
+    return res.json(payload);
+  } catch (err) {
+    console.error('[server] Failed to list sign jobs', err);
+    return res.status(500).json({ ok: false, error: 'Unable to list sign jobs.' });
+  }
+});
+
 
 
 app.get('/admin/templates/:templateId/preview', (req, res) => {
@@ -22263,6 +22378,8 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   const limit = Number.isFinite(rawLimit)
     ? clampNumber(Math.floor(rawLimit), 1, FILE_LIST_MAX_LIMIT)
     : FILE_LIST_DEFAULT_LIMIT;
+  const rawOffset = Number(req.query.offset);
+  const offset = Number.isFinite(rawOffset) ? Math.max(Math.floor(rawOffset), 0) : 0;
 
   try {
     const result = await listFileEntries({
@@ -22272,13 +22389,16 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
       submitter,
       query,
       limit,
+      offset,
     });
     return res.json({
       ok: true,
       files: result.entries,
       total: result.total,
+      offset: result.offset,
+      limit: result.limit,
       types: result.types,
-      filters: { type, project, reportDate, submitter, query, limit },
+      filters: { type, project, reportDate, submitter, query, limit, offset },
     });
   } catch (err) {
     console.error('[server] Failed to list files', err);
@@ -22404,6 +22524,25 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
   });
 
 }, async (req, res) => {
+
+  // Idempotency for mobile sync: same clientReportId never creates a duplicate report.
+  const clientReportId = normalizeClientReportId(
+    toSingleValue(req.body?.client_report_id) || toSingleValue(req.body?.clientReportId)
+  );
+
+  if (clientReportId) {
+    const stored = findStoredSubmission(clientReportId);
+    if (stored) {
+      return res.json({ ...stored.response, duplicate: true });
+    }
+    if (inFlightClientReportIds.has(clientReportId)) {
+      return res.status(409).json({ ok: false, error: 'duplicate_in_progress' });
+    }
+    inFlightClientReportIds.add(clientReportId);
+    const releaseInFlight = () => inFlightClientReportIds.delete(clientReportId);
+    res.once('finish', releaseInFlight);
+    res.once('close', releaseInFlight);
+  }
 
   const photoFiles = collectPhotoFiles(req.files);
 
@@ -23438,7 +23577,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
 
 
-    return res.json({
+    const successPayload = {
 
       ok: true,
 
@@ -23492,7 +23631,15 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
       employeesBreakSummary: formatBreakStatsSummary(employeeSummary.breakStats),
 
-    });
+    };
+
+    if (clientReportId) {
+
+      rememberSubmission(clientReportId, successPayload);
+
+    }
+
+    return res.json(successPayload);
 
   } catch (err) {
 
@@ -23579,7 +23726,7 @@ app.post('/api/sign/create', requireGenerateLinks, async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SIGN_INTERNAL_TOKEN}`
+        'x-internal-token': SIGN_INTERNAL_TOKEN,
       },
       body: JSON.stringify({
         storedPath: `inbox/${inboxFile}`,

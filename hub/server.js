@@ -466,6 +466,13 @@ if (FORCE_ADMIN_PASSWORD) {
   }
 }
 
+function getBearerAuthToken(req) {
+  const header = req.get ? req.get('authorization') || '' : '';
+  if (!header.toLowerCase().startsWith('bearer ')) return null;
+  const token = header.slice(7).trim();
+  return token || null;
+}
+
 function getSessionUser(req) {
   if (req.session && req.session.user) {
     const normalized = normalizeSessionUser(req.session.user);
@@ -475,11 +482,18 @@ function getSessionUser(req) {
     return normalized;
   }
   const token = req.cookies ? req.cookies[ADMIN_AUTH_COOKIE] : null;
-  if (!token) return null;
-  const user = parseAdminAuthToken(token);
-  if (user) {
-    setSessionUser(req, user);
-    return user;
+  if (token) {
+    const user = parseAdminAuthToken(token);
+    if (user) {
+      setSessionUser(req, user);
+      return user;
+    }
+  }
+  // Mobile/API clients: Authorization: Bearer <token> (same signed payload as cookie).
+  const bearer = getBearerAuthToken(req);
+  if (bearer) {
+    const user = parseAdminAuthToken(bearer);
+    if (user) return user;
   }
   return null;
 }
@@ -1111,6 +1125,85 @@ app.get('/admin', (req, res) => {
   return res.sendFile(path.join(__dirname, 'static', 'admin-login.html'));
 });
 
+// Shared credential check used by /admin/login (cookie session) and /api/auth/token (Bearer).
+async function authenticateCredentials(usernameRaw, pass) {
+  const normalizedUsername = (typeof usernameRaw === 'string' && usernameRaw.trim()) || DEFAULT_ADMIN_USERNAME;
+  if (typeof pass !== 'string' || !pass.length) return null;
+  let matchedUser = null;
+  const superadmin = adminCredentials.superadmin;
+  if (
+    superadmin &&
+    typeof superadmin.passwordHash === 'string' &&
+    await bcrypt.compare(pass, superadmin.passwordHash) &&
+    normalizedUsername === (superadmin.username || DEFAULT_ADMIN_USERNAME)
+  ) {
+    matchedUser = {
+      username: superadmin.username || DEFAULT_ADMIN_USERNAME,
+      isSuperadmin: true,
+      role: USER_ROLE_ADMIN,
+      allowedServices: [],
+    };
+  } else if (Array.isArray(adminCredentials.users)) {
+    for (const user of adminCredentials.users) {
+      if (!user || typeof user.username !== 'string' || typeof user.passwordHash !== 'string') continue;
+      if (user.username.trim() !== normalizedUsername) continue;
+      const ok = await bcrypt.compare(pass, user.passwordHash);
+      if (ok) {
+        matchedUser = {
+          username: user.username.trim(),
+          isSuperadmin: false,
+          role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
+          canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
+          canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
+          canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
+          allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
+        };
+        break;
+      }
+    }
+  }
+  if (!matchedUser && normalizedUsername === (superadmin && superadmin.username ? superadmin.username : DEFAULT_ADMIN_USERNAME)) {
+    if (pass === HUB_ADMIN_PASSWORD) {
+      matchedUser = { username: normalizedUsername, isSuperadmin: true, role: USER_ROLE_ADMIN, allowedServices: [] };
+      try {
+        const next = buildSuperadminCredentials(adminCredentials, HUB_ADMIN_PASSWORD);
+        saveAdminCredentials(next);
+        console.warn('[hub] Admin login matched HUB_ADMIN_PASSWORD; refreshed stored hash.');
+      } catch (err) {
+        console.warn('[hub] Failed to refresh admin credentials after env login', err);
+      }
+    }
+  }
+  return matchedUser;
+}
+
+// Look up current permissions for a known username (used by token refresh).
+function buildSessionUserFromStore(username) {
+  const normalizedUsername = String(username || '').trim();
+  if (!normalizedUsername) return null;
+  const superadmin = adminCredentials.superadmin;
+  const superName = (superadmin && superadmin.username) || DEFAULT_ADMIN_USERNAME;
+  if (normalizedUsername === superName) {
+    return normalizeSessionUser({ username: superName, isSuperadmin: true, role: USER_ROLE_ADMIN, allowedServices: [] });
+  }
+  if (Array.isArray(adminCredentials.users)) {
+    for (const user of adminCredentials.users) {
+      if (!user || typeof user.username !== 'string') continue;
+      if (user.username.trim() !== normalizedUsername) continue;
+      return normalizeSessionUser({
+        username: user.username.trim(),
+        isSuperadmin: false,
+        role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
+        canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
+        canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
+        canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
+        allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
+      });
+    }
+  }
+  return null;
+}
+
 app.post('/admin/login', rateLimitLogin, async (req, res) => {
   setNoCache(res);
   const username = (req.body && typeof req.body.username === 'string' && req.body.username.trim()) || DEFAULT_ADMIN_USERNAME;
@@ -1119,52 +1212,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     return res.status(403).json({ ok: false, error: 'missing_credentials' });
   }
   try {
-    let matchedUser = null;
-    const superadmin = adminCredentials.superadmin;
-    const normalizedUsername = username.trim();
-    if (
-      superadmin &&
-      typeof superadmin.passwordHash === 'string' &&
-      await bcrypt.compare(pass, superadmin.passwordHash) &&
-      normalizedUsername === (superadmin.username || DEFAULT_ADMIN_USERNAME)
-    ) {
-      matchedUser = {
-        username: superadmin.username || DEFAULT_ADMIN_USERNAME,
-        isSuperadmin: true,
-        role: USER_ROLE_ADMIN,
-        allowedServices: [],
-      };
-    } else if (Array.isArray(adminCredentials.users)) {
-      for (const user of adminCredentials.users) {
-        if (!user || typeof user.username !== 'string' || typeof user.passwordHash !== 'string') continue;
-        if (user.username.trim() !== normalizedUsername) continue;
-        const ok = await bcrypt.compare(pass, user.passwordHash);
-        if (ok) {
-          matchedUser = {
-            username: user.username.trim(),
-            isSuperadmin: false,
-            role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
-            canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
-            canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
-            canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
-            allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
-          };
-          break;
-        }
-      }
-    }
-    if (!matchedUser && normalizedUsername === (superadmin && superadmin.username ? superadmin.username : DEFAULT_ADMIN_USERNAME)) {
-      if (pass === HUB_ADMIN_PASSWORD) {
-        matchedUser = { username: normalizedUsername, isSuperadmin: true, role: USER_ROLE_ADMIN, allowedServices: [] };
-        try {
-          const next = buildSuperadminCredentials(adminCredentials, HUB_ADMIN_PASSWORD);
-          saveAdminCredentials(next);
-          console.warn('[hub] Admin login matched HUB_ADMIN_PASSWORD; refreshed stored hash.');
-        } catch (err) {
-          console.warn('[hub] Failed to refresh admin credentials after env login', err);
-        }
-      }
-    }
+    const matchedUser = await authenticateCredentials(username, pass);
 
     if (matchedUser) {
       req.session.authenticated = true;
@@ -1203,6 +1251,76 @@ app.post('/api/logout', (req, res) => {
   }
   res.clearCookie(ADMIN_AUTH_COOKIE, adminCookieOptions());
   res.json({ ok: true });
+});
+
+// --- Token auth for API/mobile clients (no cookies) ---
+
+function buildTokenResponse(user) {
+  return {
+    ok: true,
+    token: buildAdminAuthToken(user),
+    tokenType: 'Bearer',
+    expiresAt: new Date(Date.now() + ADMIN_AUTH_TTL_MS).toISOString(),
+    user: {
+      username: user.username,
+      isSuperadmin: user.isSuperadmin,
+      role: user.role,
+      canViewFiles: user.canViewFiles,
+      canGenerateLinks: user.canGenerateLinks,
+      canDeleteFiles: user.canDeleteFiles,
+      allowedServices: user.allowedServices || [],
+    },
+  };
+}
+
+// Login with credentials, receive a Bearer token (send as `Authorization: Bearer <token>`).
+app.post('/api/auth/token', rateLimitLogin, async (req, res) => {
+  setNoCache(res);
+  const username = req.body && typeof req.body.username === 'string' ? req.body.username : '';
+  const pass = req.body && req.body.password;
+  if (typeof pass !== 'string' || !pass.length) {
+    return res.status(403).json({ ok: false, error: 'missing_credentials' });
+  }
+  try {
+    const matchedUser = await authenticateCredentials(username, pass);
+    if (!matchedUser) return res.status(403).json({ ok: false, error: 'forbidden' });
+    const normalized = normalizeSessionUser(matchedUser);
+    return res.json(buildTokenResponse(normalized));
+  } catch (err) {
+    console.warn('[hub] /api/auth/token failed', err);
+    return res.status(500).json({ ok: false, error: 'login_failed' });
+  }
+});
+
+// Exchange a still-valid token for a fresh one; permissions are re-read from the user store.
+app.post('/api/auth/refresh', (req, res) => {
+  setNoCache(res);
+  const current = getSessionUser(req);
+  if (!current) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const fresh = buildSessionUserFromStore(current.username);
+  if (!fresh || fresh.role === USER_ROLE_BLOCKED) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
+  return res.json(buildTokenResponse(fresh));
+});
+
+// Current user info (works with both cookie and Bearer auth).
+app.get('/api/auth/me', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  return res.json({
+    ok: true,
+    user: {
+      username: user.username,
+      isSuperadmin: user.isSuperadmin,
+      role: user.role,
+      canViewFiles: user.canViewFiles,
+      canGenerateLinks: user.canGenerateLinks,
+      canDeleteFiles: user.canDeleteFiles,
+      allowedServices: user.allowedServices || [],
+    },
+  });
 });
 
 function requireAuth(req, res, next){
@@ -1805,7 +1923,6 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   saveAdminCredentials(adminCredentials);
   res.json({ ok: true });
 });
-
 app.delete('/admin/users/:username', requireSuperadmin, requireSameOrigin, (req, res) => {
   const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {

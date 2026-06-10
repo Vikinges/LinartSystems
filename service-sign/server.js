@@ -396,6 +396,53 @@ app.post('/internal/jobs', requireInternal, (req, res) => {
   });
 });
 
+// List sign jobs (for service2 /api/sign/jobs proxy → mobile/web clients).
+app.get('/internal/jobs', requireInternal, (req, res) => {
+  const allowedStatuses = ['pending', 'signed', 'expired'];
+  const statusFilter =
+    typeof req.query.status === 'string' ? req.query.status.trim().toLowerCase() : '';
+  const limitRaw = Number(req.query.limit);
+  const offsetRaw = Number(req.query.offset);
+  const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(Math.trunc(limitRaw), 1), 200) : 50;
+  const offset = Number.isFinite(offsetRaw) ? Math.max(Math.trunc(offsetRaw), 0) : 0;
+
+  // Keep reported statuses accurate: mark overdue pending jobs as expired first.
+  db.prepare(`UPDATE sign_jobs SET status = 'expired' WHERE status = 'pending' AND expires_at < ?`)
+    .run(new Date().toISOString());
+
+  const hasFilter = allowedStatuses.includes(statusFilter);
+  const whereClause = hasFilter ? 'WHERE status = ?' : '';
+  const filterParams = hasFilter ? [statusFilter] : [];
+
+  const totalRow = db
+    .prepare(`SELECT COUNT(*) AS n FROM sign_jobs ${whereClause}`)
+    .get(...filterParams);
+  const rows = db
+    .prepare(
+      `SELECT id, status, original_name, created_at, expires_at, signed_at, download_count
+       FROM sign_jobs ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+    )
+    .all(...filterParams, limit, offset);
+
+  return res.json({
+    ok: true,
+    total: totalRow ? totalRow.n : 0,
+    limit,
+    offset,
+    jobs: rows.map((row) => ({
+      id: row.id,
+      status: row.status,
+      originalName: row.original_name,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      signedAt: row.signed_at,
+      downloadCount: row.download_count,
+    })),
+  });
+});
+
 function isPinVerified(req, job) {
   if (!job.pin_hash) return true;
   const cookie = req.cookies ? req.cookies[`sign_pin_${job.id}`] : null;

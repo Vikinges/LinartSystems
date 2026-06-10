@@ -4,3 +4,8 @@ hub/static/uploads/
 hub/node_modules/
 traefik/letsencrypt/acme.json
 secrets/
+
+# mobile/test artifacts
+service2/data/submissions.json
+service-sign/node_modules/
+service2/test-server.log

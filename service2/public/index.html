@@ -2785,17 +2785,13 @@
     <div class="container">
 
       <header>
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-          <div>
-            <h1>PDF forms generator - v0.41 Lin</h1>
-            <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
-          </div>
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <a href="/admin" class="button secondary" style="text-decoration: none; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: #e2e8f0; color: #1e293b;">⚙️ Admin</a>
-            <a href="/files" class="button" style="text-decoration: none; padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: #2563eb; color: white;">📂 Files</a>
-            <button type="button" class="button ghost" data-admin-open style="padding: 0.5rem 1rem; border-radius: 999px; font-weight: 600; background: transparent; border: 1px solid #cbd5e1; color: #475569; display: none;">Template editor</button>
-          </div>
-        </div>
+
+        <button type="button" class="admin-launch" data-admin-open>Admin</button>
+
+        <h1>PDF forms generator - v0.39 Lin</h1>
+
+        <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
+
       </header>
 
       <form id="pm-form" enctype="multipart/form-data">
@@ -4805,7 +4801,7 @@
 
 
         const statusEl = document.getElementById('status');
-        const APP_VERSION = '0.41';
+        const APP_VERSION = '0.40';
         const versionLabel = document.querySelector('[data-app-version]');
         if (versionLabel) {
           versionLabel.textContent = 'Version ' + APP_VERSION;
@@ -5077,11 +5073,7 @@
 
           });
 
-          const ROTATION_POPUP_KEY = 'pm-rotation-lock-shown';
-
           function showRotationLockPopup() {
-
-            if (window.localStorage.getItem(ROTATION_POPUP_KEY) === '1') return;
 
             let popup = document.querySelector('.rotation-lock-popup');
 
@@ -5119,8 +5111,6 @@
 
               popup.hidden = true;
 
-              window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
-
             });
 
             popup.addEventListener('click', (e) => {
@@ -5128,8 +5118,6 @@
               if (e.target === popup) {
 
                 popup.hidden = true;
-
-                window.localStorage.setItem(ROTATION_POPUP_KEY, '1');
 
               }
 
@@ -11972,7 +11960,13 @@
 
             rotateDeg: 0,
 
+            rotateDeg: 0,
+
             mobileFullscreen: false,
+
+            hasDrawn: false,
+
+            cleared: false,
 
           };
 
@@ -12185,8 +12179,15 @@
               // Draw vertical watermark in mobile mode
               if (mobile) {
                 overlayCtx.save();
-                overlayCtx.globalAlpha = 0.07;
-                overlayCtx.font = 'italic 72px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                overlayCtx.globalAlpha = 0.06;
+                // Size text to fill ~80% of canvas height (which is width when rotated)
+                var wmTargetW = deviceH * 0.8;
+                var wmFontSize = 40;
+                overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+                var wmMeasured = overlayCtx.measureText('Signature').width;
+                wmFontSize = Math.floor(wmFontSize * (wmTargetW / wmMeasured));
+                wmFontSize = Math.min(wmFontSize, 260);
+                overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
                 overlayCtx.fillStyle = '#2563eb';
                 overlayCtx.translate(deviceW / 2, deviceH / 2);
                 overlayCtx.rotate(-Math.PI / 2);
@@ -12198,6 +12199,8 @@
                 overlayCtx.fillStyle = '#1f2937';
               }
 
+              overlayState.hasDrawn = false;
+              overlayState.cleared = false;
 
               if (hiddenInput.value) {
 
@@ -12278,10 +12281,18 @@
             overlayCanvas.setPointerCapture(event.pointerId);
 
             overlayDrawing = true;
-
+            overlayState.cleared = false;
             hideArrowHint();
 
             const { x, y } = overlayGetPoint(event);
+
+            if (!overlayState.hasDrawn && (!overlayState.hiddenInput || !overlayState.hiddenInput.value)) {
+              overlayCtx.save();
+              overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+              overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+              overlayCtx.restore();
+              overlayState.hasDrawn = true;
+            }
 
             overlayCtx.beginPath();
 
@@ -12349,6 +12360,38 @@
 
             overlayCtx.fillStyle = '#1f2937';
 
+            overlayState.hasDrawn = false;
+            
+            // Redraw watermark
+            const deviceW = overlayCanvas.parentElement.clientWidth;
+            const deviceH = overlayCanvas.parentElement.clientHeight;
+            const mobile = document.body.style.getPropertyValue('--mobile-scale') || 
+                          getComputedStyle(document.body).getPropertyValue('--mobile-scale').trim();
+            if (mobile) {
+              overlayCtx.save();
+              overlayCtx.globalAlpha = 0.06;
+              var wmTargetW = deviceH * 0.8;
+              var wmFontSize = 40;
+              overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+              var wmMeasured = overlayCtx.measureText('Signature').width;
+              wmFontSize = Math.floor(wmFontSize * (wmTargetW / wmMeasured));
+              wmFontSize = Math.min(wmFontSize, 260);
+              overlayCtx.font = 'italic ' + wmFontSize + 'px "Segoe Script", "Brush Script MT", "Dancing Script", cursive';
+              overlayCtx.fillStyle = '#2563eb';
+              overlayCtx.translate(deviceW / 2, deviceH / 2);
+              overlayCtx.rotate(-Math.PI / 2);
+              overlayCtx.textAlign = 'center';
+              overlayCtx.textBaseline = 'middle';
+              overlayCtx.fillText('Signature', 0, 0);
+              overlayCtx.restore();
+              overlayCtx.fillStyle = '#1f2937';
+            } else if (overlayState.sampleText) {
+              overlayCtx.font = '28px "Segoe Script", cursive';
+              overlayCtx.globalAlpha = 0.1;
+              overlayCtx.fillText(overlayState.sampleText, 24, deviceH / 2 + 10);
+              overlayCtx.globalAlpha = 1.0;
+            }
+
             if (overlayState.mobileFullscreen) showArrowHint();
 
           });
@@ -12409,6 +12452,21 @@
 
               return;
 
+            }
+
+            if (!overlayState.hasDrawn) {
+              if (overlayState.cleared) {
+                overlayState.hiddenInput.value = '';
+                const targetCanvas = overlayState.targetPad.querySelector('canvas');
+                if (targetCanvas) {
+                  const targetCtx = targetCanvas.getContext('2d');
+                  targetCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+                }
+                overlayState.hiddenInput.dispatchEvent(new Event('change', { bubbles: true }));
+                window.dispatchEvent(new CustomEvent('signature:cleared', { detail: { pad: overlayState.targetPad } }));
+              }
+              closeOverlay();
+              return;
             }
 
             let dataUrl = overlayCanvas.toDataURL('image/png');
@@ -12738,13 +12796,13 @@
               canvas.setPointerCapture(event.pointerId);
 
               if (sampleActive) {
-
+                ctx.save();
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.restore();
                 setPenDefaults();
-
                 hiddenInput.value = '';
-
                 sampleActive = false;
-
               }
 
               drawing = true;
@@ -13521,50 +13579,7 @@
 
               if (statusEl) {
 
-                const filename = payload.url.split('/').pop();
-                statusEl.innerHTML = `
-                  <div style="margin-top: 1rem; padding: 1rem; background: #f0fdf4; border: 1px solid #16a34a; border-radius: 8px; text-align: left;">
-                    <p style="color: #166534; font-weight: bold; margin: 0 0 0.5rem 0;">Document created successfully!</p>
-                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                      <a href="${payload.url}" class="button" style="background: #e2e8f0; color: #1e293b; text-decoration: none;" target="_blank">📥 Download PDF</a>
-                      <button type="button" class="button" style="background: #2563eb; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer;" id="sendForSignatureBtn" data-type="${payload.templateType}" data-file="${filename}">📝 Send for signature</button>
-                    </div>
-                    <div id="signatureResult" style="margin-top: 10px; font-size: 0.9em; color: #1f2937;"></div>
-                  </div>
-                `;
-
-                document.getElementById('sendForSignatureBtn').addEventListener('click', async (e) => {
-                  const btn = e.target;
-                  btn.disabled = true;
-                  btn.textContent = 'Creating link...';
-                  try {
-                    const res = await fetch('/api/sign/create', {
-                      method: 'POST',
-                      headers: {'Content-Type': 'application/json'},
-                      body: JSON.stringify({ type: btn.dataset.type, file: btn.dataset.file })
-                    });
-                    const data = await res.json();
-                    if(data.ok) {
-                      document.getElementById('signatureResult').innerHTML = `
-                        <div style="padding: 10px; background: white; border-radius: 4px; border: 1px dashed #16a34a;">
-                          <div style="margin-bottom: 5px;"><strong>Link:</strong> <a href="${data.url}" target="_blank" style="color: #2563eb; text-decoration: underline;">${data.url}</a></div>
-                          <div><strong>PIN Code:</strong> <span style="font-family: monospace; font-size: 1.2em; font-weight: bold; letter-spacing: 2px; padding: 2px 6px; background: #f1f5f9; border-radius: 4px;">${data.pin}</span></div>
-                          <div style="margin-top: 5px; font-size: 0.85em; color: #64748b;">Share this link and PIN with the client.</div>
-                        </div>
-                      `;
-                      btn.textContent = 'Link created';
-                      btn.style.background = '#16a34a';
-                    } else {
-                      alert('Error: ' + data.error);
-                      btn.disabled = false;
-                      btn.textContent = '📝 Send for signature';
-                    }
-                  } catch(err) {
-                    alert('Error creating link');
-                    btn.disabled = false;
-                    btn.textContent = '📝 Send for signature';
-                  }
-                });
+                statusEl.textContent = 'Download starting...';
 
               }
 

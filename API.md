@@ -38,6 +38,30 @@ Base URL (локально): `http://localhost:8080`
 }
 ```
 
+### Token auth для API/мобильных клиентов
+Base URL (локально): `http://localhost:8080`
+
+- `POST /api/auth/token` — логин, выдаёт Bearer-токен (TTL 7 дней).
+  - Body: `{ "username": "operator1", "password": "secret" }`
+  - Ответ: `{ "ok": true, "token": "...", "tokenType": "Bearer", "expiresAt": "...", "user": { ... } }`
+  - Токен отправлять как `Authorization: Bearer <token>` — принимается на всех маршрутах hub (включая прокси `/service2/*`) наравне с cookie.
+- `POST /api/auth/refresh` — обновить токен (требует действующий токен; права перечитываются из хранилища).
+- `GET /api/auth/me` — текущий пользователь и права.
+
+### Идемпотентность /submit (service2)
+
+- В `multipart/form-data` можно передать поле `client_report_id` (UUID, `[A-Za-z0-9_-]`, ≤128).
+- Повторная отправка с тем же id не создаёт дубликат: сервер возвращает сохранённый ответ + `"duplicate": true`. Одновременный повтор → HTTP 409 `duplicate_in_progress`.
+
+### Пагинация /api/files (service2)
+
+- `GET /api/files?type=&limit=&offset=` — ответ содержит `total`, `offset`, `limit`, `files`.
+
+### Задания на подпись (service2 → service-sign)
+
+- `POST /api/sign/create` — создать задание (admin/links-права). Body: `{ "type": "...", "file": "..." }`.
+- `GET /api/sign/jobs?status=pending|signed|expired&limit=&offset=` — список заданий: `{ ok, total, limit, offset, jobs: [{ id, status, originalName, createdAt, expiresAt, signedAt, downloadCount }] }`.
+
 ### Admin API (только superadmin)
 Base URL (локально): `http://localhost:8080`
 

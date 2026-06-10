@@ -25,6 +25,15 @@
 - Hub: added per-user files access flag; Files button appears only when allowed, and /files + /download are restricted.
 - Service2: admin-only file actions (delete + download zip) via /api/files/delete and /api/files/zip; files page shows logged role.
 
+- Mobile API (June 2026, для iOS-приложения; см. XCODE_LLM_INSTRUCTIONS.md):
+  - Hub: `POST /api/auth/token` (логин → Bearer-токен, TTL 7 дней), `POST /api/auth/refresh`, `GET /api/auth/me`. `Authorization: Bearer <token>` принимается на всех маршрутах hub наравне с cookie (см. getSessionUser).
+  - Service2 `/submit`: поле `client_report_id` (UUID с устройства) — идемпотентность; повтор возвращает сохранённый ответ + `duplicate: true`, гонка → 409. Стор: `data/submissions.json` (TTL 30 дней, max 2000).
+  - Service2 `/api/files`: пагинация `limit`/`offset`, ответ содержит `total`/`offset`/`limit`.
+  - Service2 `GET /api/sign/jobs?status=&limit=&offset=` (requireGenerateLinks) → проксирует в service-sign `GET /internal/jobs` (новый, X-Internal-Token).
+  - Багфикс: старый дублирующий route `/api/sign/create` слал `Authorization: Bearer` вместо `x-internal-token` и без Content-Type — исправлено (requireInternal проверяет только x-internal-token).
+- service-sign: `GET /internal/jobs` — список заданий (фильтр status, limit/offset, total); перед выдачей помечает просроченные pending как expired.
+- hub: тестовый запуск локально: `SESSION_SECRET=x HUB_ADMIN_PASSWORD=y HUB_DATA_DIR=/tmp/hub-data PORT=8080 node server.js` (стартует ~5-10 сек).
+
 Обновляй этот файл при изменении логики/команд, чтобы не обучать систему заново.
 
 ## TODO
