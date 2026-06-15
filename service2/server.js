@@ -21748,6 +21748,107 @@ app.get(projectRoutes, (req, res) => {
 
 
 
+// --- Mobile app (P0): project autofill under /api/projects/* ---
+
+// Aggregate report count + last submitter per project number by scanning meta.
+// Project number is read from the stored requestBody (lsc_project_number / batch_number /
+// daily_project_number) or the daily-report block. Reports without a number are skipped.
+async function aggregateProjectStats() {
+  const stats = {};
+  const types = await listOutputTypes();
+  for (const type of types) {
+    const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+    let files = [];
+    try {
+      files = await fs.promises.readdir(metaDir);
+    } catch (err) {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.json')) continue;
+      let meta;
+      try {
+        meta = JSON.parse(await fs.promises.readFile(path.join(metaDir, file), 'utf8'));
+      } catch (err) {
+        continue;
+      }
+      const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+      const daily = (meta.dailyReport && typeof meta.dailyReport === 'object') ? meta.dailyReport : {};
+      const key = String(
+        rb.lsc_project_number || rb.batch_number || rb.daily_project_number || daily.projectNumber || ''
+      ).trim();
+      if (!key) continue;
+      const submittedAt = String(meta.createdAt || '');
+      const submitter = String(detectSubmitterName(rb) || daily.submitterName || '').trim();
+      const cur = stats[key] || { reportCount: 0, lastSubmittedAt: '', lastSubmitterName: '' };
+      cur.reportCount += 1;
+      if (!cur.lastSubmittedAt || submittedAt > cur.lastSubmittedAt) {
+        cur.lastSubmittedAt = submittedAt;
+        if (submitter) cur.lastSubmitterName = submitter;
+      }
+      stats[key] = cur;
+    }
+  }
+  return stats;
+}
+
+function projectCardSummary(key, card, stat) {
+  const c = card && typeof card === 'object' ? card : {};
+  const s = stat || {};
+  return {
+    projectNumber: key,
+    endCustomerName: c.end_customer_name || null,
+    siteLocation: c.site_location || null,
+    customerRepresentative: c.customer_representative || null,
+    ledDisplayModel: c.led_display_model || null,
+    formType: c.form_type || null,
+    lastSubmitterName: s.lastSubmitterName || null,
+    lastSubmittedAt: c.updated_at || s.lastSubmittedAt || null,
+    reportCount: s.reportCount || 0,
+  };
+}
+
+// Recent projects, newest first (project picker / autocomplete in the app).
+app.get(['/api/projects/recent', '/service2/api/projects/recent'], async (req, res) => {
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? clampNumber(Math.floor(rawLimit), 1, 100) : 20;
+  try {
+    const store = loadProjectsStore() || {};
+    const stats = await aggregateProjectStats();
+    const projects = Object.entries(store)
+      .map(([key, card]) => projectCardSummary(key, card, stats[key]))
+      .sort((a, b) => String(b.lastSubmittedAt || '').localeCompare(String(a.lastSubmittedAt || '')))
+      .slice(0, limit);
+    return res.json({ ok: true, projects });
+  } catch (err) {
+    console.error('[server] Failed to list recent projects', err);
+    return res.status(500).json({ ok: false, error: 'projects_failed' });
+  }
+});
+
+// Single project card by LSC project number (smart autofill on number entry).
+app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], async (req, res) => {
+  const projectKey = typeof req.params.projectKey === 'string' ? req.params.projectKey.trim() : '';
+  if (!projectKey) {
+    return res.status(400).json({ ok: false, error: 'Project number is required.' });
+  }
+  try {
+    const projects = loadProjectsStore();
+    const card = projects ? projects[projectKey] : null;
+    if (!card) {
+      return res.status(404).json({ ok: false, error: 'Project not found.' });
+    }
+    const stats = await aggregateProjectStats();
+    const summary = projectCardSummary(projectKey, card, stats[projectKey]);
+    return res.json({ ok: true, project: { ...summary, lastFields: card } });
+  } catch (err) {
+    console.error('[server] Failed to load project', err);
+    return res.status(500).json({ ok: false, error: 'project_failed' });
+  }
+});
+
+
+
 app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {
 
   const fieldName = typeof req.body?.field === 'string' ? req.body.field.trim() : '';
@@ -22403,6 +22504,93 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   } catch (err) {
     console.error('[server] Failed to list files', err);
     return res.status(500).json({ ok: false, error: 'files_list_failed' });
+  }
+});
+
+// --- Mobile app (P0): canonical form types + stored submission data ---
+
+// Canonical list of report/form types — single source of truth for the app
+// (removes the hardcoded mirror on iOS). available:false = recognised, not yet shippable.
+const FORM_TYPES = [
+  { id: 'service_report', label: 'Service report', available: true },
+  { id: 'maintenance', label: 'Maintenance', available: true },
+  { id: 'daily_report', label: 'Daily report', available: true },
+  { id: 'installation_report', label: 'Installation report', available: true },
+  { id: 'calibration', label: 'Calibration', available: false },
+];
+
+app.get(['/api/form-types', '/service2/api/form-types'], (req, res) => {
+  // Attach the active template slug as defaultTemplateSlug for available types
+  // (this codebase has one active template, not a per-type mapping). Omitted for
+  // unavailable types, so iOS falls back to the server's active template.
+  let activeSlug = null;
+  try {
+    const pub = buildPublicTemplatesResponse();
+    const active = (pub.templates || []).find((t) => t.isActive || t.id === pub.activeTemplateId);
+    activeSlug = active ? active.slug : null;
+  } catch (err) {
+    activeSlug = null;
+  }
+  const formTypes = FORM_TYPES.map((t) =>
+    (t.available && activeSlug) ? { ...t, defaultTemplateSlug: activeSlug } : { ...t }
+  );
+  return res.json({ ok: true, formTypes });
+});
+
+// Return the stored submission fields used to render a past PDF, so the app can
+// restore + edit + resubmit a previous report. Keys match the web form / fields.json.
+async function readFileDataResponse(type, filename) {
+  const metaPath = buildMetaPath(type, filename);
+  if (!metaPath || !fs.existsSync(metaPath)) return null;
+  const raw = await fs.promises.readFile(metaPath, 'utf8');
+  const meta = JSON.parse(raw);
+  const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+  return {
+    ok: true,
+    filename: meta.filename || filename,
+    type: meta.templateType || type,
+    templateSlug: meta.templateSlug || null,
+    templateLabel: meta.templateLabel || null,
+    submittedAt: meta.createdAt || null,
+    clientReportId: rb.client_report_id || null,
+    fields: rb,
+  };
+}
+
+// Primary shape (type in the path), e.g. /api/files/daily_report/<file>.pdf/data
+app.get(['/api/files/:type/:filename/data', '/service2/api/files/:type/:filename/data'], async (req, res) => {
+  const type = sanitizeFilename(req.params.type || '');
+  const filename = sanitizeFilename(req.params.filename || '');
+  if (!type || !filename) {
+    return res.status(400).json({ ok: false, error: 'invalid_request' });
+  }
+  try {
+    const data = await readFileDataResponse(type, filename);
+    if (!data) return res.status(404).json({ ok: false, error: 'file_not_found' });
+    return res.json(data);
+  } catch (err) {
+    console.error('[server] Failed to read file data', err);
+    return res.status(500).json({ ok: false, error: 'file_data_failed' });
+  }
+});
+
+// Convenience: no type in the path — search across output types (optional ?type= hint).
+app.get(['/api/files/:filename/data', '/service2/api/files/:filename/data'], async (req, res) => {
+  const filename = sanitizeFilename(req.params.filename || '');
+  if (!filename) {
+    return res.status(400).json({ ok: false, error: 'invalid_filename' });
+  }
+  const rawType = normalizeQueryText(req.query.type);
+  const types = rawType ? [sanitizeFilename(rawType)] : await listOutputTypes();
+  try {
+    for (const type of types) {
+      const data = await readFileDataResponse(type, filename);
+      if (data) return res.json(data);
+    }
+    return res.status(404).json({ ok: false, error: 'file_not_found' });
+  } catch (err) {
+    console.error('[server] Failed to read file data', err);
+    return res.status(500).json({ ok: false, error: 'file_data_failed' });
   }
 });
 
@@ -23701,7 +23889,7 @@ app.get('/download/:type/:file', async (req, res) => {
 
 // This route can be called directly from public interface if we are not authenticated. 
 // But since we want to restrict link generation, we should protect it too!
-app.post('/api/sign/create', requireGenerateLinks, async (req, res) => {
+app.post(['/api/sign/create', '/service2/api/sign/create'], requireGenerateLinks, async (req, res) => {
   try {
     const type = sanitizeFilename(req.body && req.body.type);
     const file = sanitizeFilename(req.body && req.body.file);
