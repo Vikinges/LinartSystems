@@ -882,7 +882,9 @@ function rateLimitLogin(req, res, next) {
   bucket.count += 1;
   loginAttempts.set(key, bucket);
   if (bucket.count > LOGIN_MAX_ATTEMPTS) {
-    return res.status(429).json({ ok: false, error: 'too_many_attempts' });
+    const retryAfterSec = Math.max(1, Math.ceil((bucket.ts + LOGIN_WINDOW_MS - now) / 1000));
+    res.set('Retry-After', String(retryAfterSec));
+    return res.status(429).json({ ok: false, error: 'too_many_attempts', retryAfter: retryAfterSec });
   }
   return next();
 }
@@ -1241,7 +1243,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     console.warn('[hub] Failed to compare admin password', err);
     return res.status(500).json({ ok: false, error: 'login_failed' });
   }
-  return res.status(403).json({ ok: false, error: 'forbidden' });
+  return res.status(401).json({ ok: false, error: 'invalid_credentials' });
 });
 
 app.post('/api/logout', (req, res) => {
