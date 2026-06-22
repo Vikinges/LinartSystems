@@ -21780,11 +21780,13 @@ async function aggregateProjectStats() {
       if (!key) continue;
       const submittedAt = String(meta.createdAt || '');
       const submitter = String(detectSubmitterName(rb) || daily.submitterName || '').trim();
-      const cur = stats[key] || { reportCount: 0, lastSubmittedAt: '', lastSubmitterName: '' };
+      const cur = stats[key] || { reportCount: 0, lastSubmittedAt: '', lastSubmitterName: '', lastFields: null, lastType: '' };
       cur.reportCount += 1;
       if (!cur.lastSubmittedAt || submittedAt > cur.lastSubmittedAt) {
         cur.lastSubmittedAt = submittedAt;
         if (submitter) cur.lastSubmitterName = submitter;
+        cur.lastFields = rb;
+        cur.lastType = meta.templateType || type;
       }
       stats[key] = cur;
     }
@@ -21795,13 +21797,24 @@ async function aggregateProjectStats() {
 function projectCardSummary(key, card, stat) {
   const c = card && typeof card === 'object' ? card : {};
   const s = stat || {};
+  const f = (s.lastFields && typeof s.lastFields === 'object') ? s.lastFields : {};
+  // Prefer the curated projects.json card; fall back to the newest submission's
+  // raw fields (covers daily reports, which never get a projects.json card).
+  const pick = (...keys) => {
+    for (const src of [c, f]) {
+      for (const k of keys) {
+        if (src[k] != null && String(src[k]).trim() !== '') return src[k];
+      }
+    }
+    return null;
+  };
   return {
     projectNumber: key,
-    endCustomerName: c.end_customer_name || null,
-    siteLocation: c.site_location || null,
-    customerRepresentative: c.customer_representative || null,
-    ledDisplayModel: c.led_display_model || null,
-    formType: c.form_type || null,
+    endCustomerName: pick('end_customer_name'),
+    siteLocation: pick('site_location'),
+    customerRepresentative: pick('customer_representative'),
+    ledDisplayModel: pick('led_display_model'),
+    formType: c.form_type || s.lastType || null,
     lastSubmitterName: s.lastSubmitterName || null,
     lastSubmittedAt: c.updated_at || s.lastSubmittedAt || null,
     reportCount: s.reportCount || 0,
@@ -21815,8 +21828,9 @@ app.get(['/api/projects/recent', '/service2/api/projects/recent'], async (req, r
   try {
     const store = loadProjectsStore() || {};
     const stats = await aggregateProjectStats();
-    const projects = Object.entries(store)
-      .map(([key, card]) => projectCardSummary(key, card, stats[key]))
+    const keys = Array.from(new Set([...Object.keys(store), ...Object.keys(stats)]));
+    const projects = keys
+      .map((key) => projectCardSummary(key, store[key], stats[key]))
       .sort((a, b) => String(b.lastSubmittedAt || '').localeCompare(String(a.lastSubmittedAt || '')))
       .slice(0, limit);
     return res.json({ ok: true, projects });
@@ -21833,14 +21847,16 @@ app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], asy
     return res.status(400).json({ ok: false, error: 'Project number is required.' });
   }
   try {
-    const projects = loadProjectsStore();
-    const card = projects ? projects[projectKey] : null;
-    if (!card) {
+    const projects = loadProjectsStore() || {};
+    const card = projects[projectKey] || null;
+    const stats = await aggregateProjectStats();
+    const stat = stats[projectKey] || null;
+    if (!card && !stat) {
       return res.status(404).json({ ok: false, error: 'Project not found.' });
     }
-    const stats = await aggregateProjectStats();
-    const summary = projectCardSummary(projectKey, card, stats[projectKey]);
-    return res.json({ ok: true, project: { ...summary, lastFields: card } });
+    const summary = projectCardSummary(projectKey, card, stat);
+    const lastFields = (card && typeof card === 'object') ? card : ((stat && stat.lastFields) || {});
+    return res.json({ ok: true, project: { ...summary, lastFields } });
   } catch (err) {
     console.error('[server] Failed to load project', err);
     return res.status(500).json({ ok: false, error: 'project_failed' });
