@@ -23785,6 +23785,12 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
       ok: true,
 
+      filename,
+
+      type: templateType,
+
+      duplicate: false,
+
       url: downloadUrl,
 
       templateId: submissionTemplateEntry.id,
