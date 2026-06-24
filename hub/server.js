@@ -297,13 +297,19 @@ function loadAdminCredentials() {
                 const username = typeof user.username === 'string' ? user.username.trim() : '';
                 const passwordHash = typeof user.passwordHash === 'string' ? user.passwordHash : '';
                 if (!username || !passwordHash) return null;
-                return {
+                const normalizedUser = {
                   username,
                   passwordHash,
                   allowedServices: normalizeAllowedServices(user.allowedServices),
                   role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
                   canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
                 };
+                // Preserve account-lifecycle fields (Apple deletion flow) across reloads.
+                if (user.appReviewProtected === true) normalizedUser.appReviewProtected = true;
+                if (user.pendingDeletion && typeof user.pendingDeletion === 'object') {
+                  normalizedUser.pendingDeletion = user.pendingDeletion;
+                }
+                return normalizedUser;
               })
               .filter(Boolean)
           : [],
@@ -1041,6 +1047,14 @@ app.get('/status', (req, res) => {
   res.sendFile(path.join(__dirname, 'static', 'status.html'));
 });
 
+// Public legal/support pages (no auth) — required for Apple App Store review.
+app.get('/privacy', (req, res) => {
+  res.sendFile(path.join(__dirname, 'static', 'privacy.html'));
+});
+app.get('/support', (req, res) => {
+  res.sendFile(path.join(__dirname, 'static', 'support.html'));
+});
+
 // Simple pages
 // Aggregated status API that queries each service health endpoint
 app.get('/api/status', async (req, res) => {
@@ -1084,6 +1098,7 @@ app.get('/api/status', async (req, res) => {
   );
 
   res.json({
+    ok: true,
     services: results,
     hub: {
       now: new Date().toISOString(),
@@ -1151,6 +1166,11 @@ async function authenticateCredentials(usernameRaw, pass) {
       if (user.username.trim() !== normalizedUsername) continue;
       const ok = await bcrypt.compare(pass, user.passwordHash);
       if (ok) {
+        // Logging in within the grace window cancels a pending account deletion.
+        if (user.pendingDeletion) {
+          delete user.pendingDeletion;
+          try { saveAdminCredentials(adminCredentials); } catch (e) { /* best-effort */ }
+        }
         matchedUser = {
           username: user.username.trim(),
           isSuperadmin: false,
@@ -1323,6 +1343,45 @@ app.get('/api/auth/me', (req, res) => {
       allowedServices: user.allowedServices || [],
     },
   });
+});
+
+// --- Account self-deletion (Apple App Store Guideline 5.1.1(v)) ---
+// Works with cookie OR Bearer auth (uses getSessionUser, not requireAuth, since
+// mobile clients authenticate via the hub_admin_auth cookie / Authorization header).
+const ACCOUNT_DELETION_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+app.post('/api/account/delete-request', (req, res) => {
+  setNoCache(res);
+  const current = getSessionUser(req);
+  if (!current) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (current.isSuperadmin) {
+    return res.status(403).json({ ok: false, error: 'cannot_delete_superadmin' });
+  }
+  const body = req.body || {};
+  if (body.confirm !== true) {
+    return res.status(400).json({ ok: false, error: 'confirmation_required' });
+  }
+  if (!Array.isArray(adminCredentials.users)) adminCredentials.users = [];
+  const idx = adminCredentials.users.findIndex((u) => u && u.username === current.username);
+  if (idx === -1) return res.status(404).json({ ok: false, error: 'not_found' });
+
+  const now = Date.now();
+  const scheduledFor = new Date(now + ACCOUNT_DELETION_GRACE_MS).toISOString();
+  adminCredentials.users[idx].pendingDeletion = {
+    requestedAt: new Date(now).toISOString(),
+    scheduledFor,
+    ...(typeof body.reason === 'string' && body.reason.trim()
+      ? { reason: body.reason.trim().slice(0, 500) }
+      : {}),
+  };
+  saveAdminCredentials(adminCredentials);
+
+  // Revoke the current session + cookie so the client is signed out immediately.
+  clearSessionUser(req);
+  if (req.session) req.session.destroy(() => {});
+  res.clearCookie(ADMIN_AUTH_COOKIE, adminCookieOptions());
+
+  return res.json({ ok: true, scheduledFor });
 });
 
 function requireAuth(req, res, next){
@@ -1869,7 +1928,10 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  adminCredentials.users.push({ username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles });
+  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles };
+  // appReviewProtected accounts are exempt from the account-deletion sweeper (Apple review account).
+  if (body.appReviewProtected === true) newUser.appReviewProtected = true;
+  adminCredentials.users.push(newUser);
   saveAdminCredentials(adminCredentials);
   res.json({ ok: true });
 });
@@ -1893,6 +1955,10 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   }
   if (Object.prototype.hasOwnProperty.call(body, 'role')) {
     user.role = normalizeUserRole(body.role, USER_ROLE_MANAGER);
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'appReviewProtected')) {
+    if (body.appReviewProtected === true) user.appReviewProtected = true;
+    else delete user.appReviewProtected;
   }
   if (Object.prototype.hasOwnProperty.call(body, 'canViewFiles')) {
     user.canViewFiles = normalizeFilesAccess(body.canViewFiles, false);
@@ -2033,5 +2099,34 @@ app.use((err, req, res, next) => {
   }
   return next();
 });
+
+// --- Account-deletion sweeper: purge accounts whose 7-day grace window elapsed ---
+// appReviewProtected accounts (Apple reviewer) are never purged. Report/PDF purge in
+// service2 is a documented follow-up; this removes the hub login record.
+function sweepPendingDeletions() {
+  try {
+    if (!Array.isArray(adminCredentials.users) || !adminCredentials.users.length) return;
+    const now = Date.now();
+    const survivors = [];
+    const purged = [];
+    for (const user of adminCredentials.users) {
+      const pd = user && user.pendingDeletion;
+      if (pd && !user.appReviewProtected && pd.scheduledFor && Date.parse(pd.scheduledFor) <= now) {
+        purged.push(user.username);
+        continue;
+      }
+      survivors.push(user);
+    }
+    if (purged.length) {
+      adminCredentials.users = survivors;
+      saveAdminCredentials(adminCredentials);
+      console.warn(`[hub] account-deletion sweeper purged ${purged.length} account(s): ${purged.join(', ')}`);
+    }
+  } catch (err) {
+    console.warn('[hub] account-deletion sweeper failed', err);
+  }
+}
+setInterval(sweepPendingDeletions, 60 * 60 * 1000); // hourly
+sweepPendingDeletions(); // run once on boot
 
 app.listen(PORT, () => console.log(`Hub listening on ${PORT}`));

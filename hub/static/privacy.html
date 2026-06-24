@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="index, follow" />
+  <title>Privacy Policy — LSC LED Doc / Linart Systems</title>
+  <style>
+    :root { color-scheme: light dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6; color: #1c2530; background: #f4f6f9;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 40px 22px 80px; }
+    h1 { font-size: 1.8rem; margin: 0 0 6px; }
+    h2 { font-size: 1.15rem; margin: 32px 0 8px; }
+    .updated { color: #6b7785; font-size: 0.9rem; margin: 0 0 28px; }
+    a { color: #1763c6; }
+    ul { padding-left: 20px; }
+    li { margin: 4px 0; }
+    .card { background: #fff; border: 1px solid #e2e7ee; border-radius: 14px; padding: 26px 28px; }
+    footer { margin-top: 36px; font-size: 0.85rem; color: #6b7785; }
+    @media (prefers-color-scheme: dark) {
+      body { background: #05060b; color: #d8dee7; }
+      .card { background: #0c1820; border-color: #1d2a36; }
+      a { color: #6fb0ff; }
+      .updated, footer { color: #8a96a4; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Privacy Policy</h1>
+      <p class="updated">LSC LED Doc mobile app &amp; Linart Systems backend · Last updated: 24 June 2026</p>
+
+      <p>This policy explains what data the <strong>LSC LED Doc</strong> app and the Linart Systems
+      backend (<a href="https://lsc-led.de">lsc-led.de</a>) collect, why, where it is stored, how long
+      it is kept, and how you can have it deleted. The app is a professional field-engineering tool used
+      to create and manage service / installation / maintenance reports.</p>
+
+      <h2>1. What we collect</h2>
+      <ul>
+        <li><strong>Account data</strong> — your username / email and a hashed password used to sign in.</li>
+        <li><strong>Report contents</strong> — free-form notes, project numbers, customer and site names,
+            equipment details and other fields you enter into reports.</li>
+        <li><strong>Photos</strong> you attach to a report as work evidence.</li>
+        <li><strong>Signatures</strong> captured to sign off a report.</li>
+        <li><strong>Coarse location</strong> — only when you use the in-app site-address picker, to help
+            fill the site address. We do not track your location in the background.</li>
+        <li><strong>Basic technical data</strong> — app version and device type, sent with requests so we
+            can keep the service working.</li>
+      </ul>
+
+      <h2>2. How we use it</h2>
+      <p>Data is used solely to provide the reporting service: to authenticate you, generate the PDF
+      reports you create, let you and authorised colleagues retrieve them, and obtain client signatures.
+      We do not sell your data and we do not use it for advertising.</p>
+
+      <h2>3. Where it is stored</h2>
+      <p>All data is stored on servers located in the European Union. Connections use HTTPS/TLS.
+      Passwords are stored only as salted hashes, never in plain text.</p>
+
+      <h2>4. How long we keep it</h2>
+      <p>Account and report data are retained for as long as the account is active, so that past reports
+      remain available to you and your organisation. When an account is deleted (see below), the account
+      record is removed after a 7-day grace period.</p>
+
+      <h2>5. Deleting your account and data</h2>
+      <p>You can request deletion of your account directly inside the app:
+      <strong>Profile → Delete my account</strong>. This calls our
+      <code>POST /api/account/delete-request</code> endpoint, immediately signs you out, and schedules
+      your account for removal after a 7-day grace period (logging back in within that window cancels the
+      deletion). You can also request deletion or ask any privacy question via the contact below.</p>
+
+      <h2>6. Contact</h2>
+      <p>Linart Systems — Vladimir<br />
+      Email: <a href="mailto:vladimir@linart.club">vladimir@linart.club</a><br />
+      WhatsApp: +49 175 4000261</p>
+
+      <footer>
+        See also our <a href="/support">Support page</a>.
+      </footer>
+    </div>
+  </div>
+</body>
+</html>
