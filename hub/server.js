@@ -10,6 +10,7 @@ const { exec } = require('child_process');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const http2 = require('http2');
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -84,6 +85,32 @@ const ADMIN_STORE_FILE = process.env.HUB_ADMIN_STORE_FILE
   : (DATA_DIR ? path.join(DATA_DIR, 'admin.json') : path.join(__dirname, 'admin.json'));
 const UPLOAD_DIR = path.join(__dirname, 'static', 'uploads');
 const TEMP_DIR = path.join(UPLOAD_DIR, 'tmp');
+
+// --- Push notifications (P3): APNs config + device-registry path ---
+const APNS_KEY_ID = process.env.APNS_KEY_ID || '';
+const APNS_TEAM_ID = process.env.APNS_TEAM_ID || '';
+const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID || '';
+const APNS_ENV = (process.env.APNS_ENV || 'production').toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+const PUSH_DEVICES_FILE = process.env.HUB_PUSH_DEVICES_FILE
+  ? path.resolve(process.env.HUB_PUSH_DEVICES_FILE)
+  : (DATA_DIR ? path.join(DATA_DIR, 'push-devices.json') : path.join(__dirname, 'push-devices.json'));
+let APNS_PRIVATE_KEY = null;
+(function loadApnsKey() {
+  try {
+    if (process.env.APNS_KEY_P8_BASE64) {
+      APNS_PRIVATE_KEY = Buffer.from(process.env.APNS_KEY_P8_BASE64, 'base64').toString('utf8');
+    } else if (process.env.APNS_KEY_PATH && fs.existsSync(process.env.APNS_KEY_PATH)) {
+      APNS_PRIVATE_KEY = fs.readFileSync(process.env.APNS_KEY_PATH, 'utf8');
+    }
+    if (APNS_PRIVATE_KEY) crypto.createPrivateKey(APNS_PRIVATE_KEY); // validate or throw
+  } catch (err) {
+    console.warn('[hub] APNs private key failed to load:', err.message);
+    APNS_PRIVATE_KEY = null;
+  }
+})();
+function apnsConfigured() {
+  return !!(APNS_KEY_ID && APNS_TEAM_ID && APNS_BUNDLE_ID && APNS_PRIVATE_KEY);
+}
 const DEFAULT_CONFIG = {
   siteLogo: '/static/logo1.svg',
   siteTitle: 'Linart Systems',
@@ -2147,6 +2174,173 @@ app.get('/admin/storage', requireDashboardAccess, async (req, res) => {
   const stats = await fetchService2Stats();
   if (!stats) return res.status(502).json({ ok: false, error: 'stats_unavailable' });
   return res.json({ ok: true, totals: stats.totals, byType: stats.byType, byMonth: stats.byMonth, byUser: stats.byUser });
+});
+
+// --- Push notifications (P3): device registry + APNs sender ---
+function loadPushDevices() {
+  try {
+    const data = JSON.parse(fs.readFileSync(PUSH_DEVICES_FILE, 'utf8'));
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    return [];
+  }
+}
+function savePushDevices(list) {
+  try {
+    fs.writeFileSync(PUSH_DEVICES_FILE, JSON.stringify(list, null, 2));
+  } catch (err) {
+    console.warn('[hub] push-devices save failed', err.message);
+  }
+}
+
+// APNs provider JWT (ES256), reusable up to ~60 min — cache for 40.
+let _apnsJwt = { token: null, at: 0 };
+function apnsJwt() {
+  const now = Date.now();
+  if (_apnsJwt.token && (now - _apnsJwt.at) < 40 * 60 * 1000) return _apnsJwt.token;
+  const header = base64UrlEncode(JSON.stringify({ alg: 'ES256', kid: APNS_KEY_ID }));
+  const claims = base64UrlEncode(JSON.stringify({ iss: APNS_TEAM_ID, iat: Math.floor(now / 1000) }));
+  const input = `${header}.${claims}`;
+  const sig = crypto.sign('SHA256', Buffer.from(input), {
+    key: crypto.createPrivateKey(APNS_PRIVATE_KEY),
+    dsaEncoding: 'ieee-p1363',
+  });
+  _apnsJwt = { token: `${input}.${base64UrlEncode(sig)}`, at: now };
+  return _apnsJwt.token;
+}
+
+// Send one notification to one device token over APNs HTTP/2. Never throws.
+function apnsSend(deviceToken, payload, pushType) {
+  return new Promise((resolve) => {
+    const host = APNS_ENV === 'sandbox' ? 'https://api.sandbox.push.apple.com' : 'https://api.push.apple.com';
+    const body = Buffer.from(JSON.stringify(payload));
+    let client;
+    try {
+      client = http2.connect(host);
+    } catch (e) {
+      return resolve({ ok: false, status: 0, error: e.message });
+    }
+    let settled = false;
+    const done = (r) => { if (!settled) { settled = true; resolve(r); } try { client.close(); } catch (e) { /* noop */ } };
+    client.on('error', (e) => done({ ok: false, status: 0, error: e.message }));
+    const req = client.request({
+      ':method': 'POST',
+      ':path': `/3/device/${deviceToken}`,
+      authorization: `bearer ${apnsJwt()}`,
+      'apns-topic': APNS_BUNDLE_ID,
+      'apns-push-type': pushType || 'alert',
+      'content-type': 'application/json',
+      'content-length': body.length,
+    });
+    let status = 0; let data = '';
+    req.on('response', (h) => { status = h[':status']; });
+    req.setEncoding('utf8');
+    req.on('data', (d) => { data += d; });
+    req.on('end', () => done({ ok: status === 200, status, body: data }));
+    req.on('error', (e) => done({ ok: false, status: 0, error: e.message }));
+    req.end(body);
+  });
+}
+
+// Send to every device a user registered; prune tokens APNs reports dead.
+async function sendPushToUser(username, payload, pushType) {
+  if (!apnsConfigured()) return { ok: false, error: 'apns_not_configured', sent: 0 };
+  const devices = loadPushDevices();
+  const mine = devices.filter((d) => d && d.username === username);
+  let sent = 0;
+  const results = [];
+  const dead = new Set();
+  for (const d of mine) {
+    const r = await apnsSend(d.token, payload, pushType);
+    results.push({ token: String(d.token).slice(0, 8) + '…', status: r.status, ok: r.ok });
+    if (r.ok) sent += 1;
+    if (r.status === 410 || (r.status === 400 && /BadDeviceToken/i.test(r.body || ''))) dead.add(d.token);
+  }
+  if (dead.size) savePushDevices(devices.filter((d) => !dead.has(d.token)));
+  return { ok: true, sent, total: mine.length, results };
+}
+
+app.post('/api/push/register', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const b = req.body || {};
+  const token = typeof b.token === 'string' ? b.token.trim() : '';
+  if (!token) return res.status(400).json({ ok: false, error: 'token_required' });
+  const devices = loadPushDevices();
+  const entry = {
+    token,
+    username: user.username,
+    platform: typeof b.platform === 'string' ? b.platform : 'ios',
+    environment: b.environment === 'sandbox' ? 'sandbox' : (b.environment === 'production' ? 'production' : APNS_ENV),
+    appVersion: typeof b.appVersion === 'string' ? b.appVersion : null,
+    locale: typeof b.locale === 'string' ? b.locale : null,
+    updatedAt: new Date().toISOString(),
+  };
+  const idx = devices.findIndex((d) => d && d.token === token);
+  if (idx >= 0) devices[idx] = entry; else devices.push(entry);
+  savePushDevices(devices);
+  return res.json({ ok: true, deviceId: token, apnsConfigured: apnsConfigured() });
+});
+
+app.delete('/api/push/register', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const token = (req.body && typeof req.body.token === 'string' && req.body.token.trim())
+    || (typeof req.query.token === 'string' ? req.query.token.trim() : '');
+  if (!token) return res.status(400).json({ ok: false, error: 'token_required' });
+  const devices = loadPushDevices();
+  const next = devices.filter((d) => !(d && d.token === token && d.username === user.username));
+  savePushDevices(next);
+  return res.json({ ok: true, removed: devices.length - next.length });
+});
+
+app.get('/api/push/devices', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const mine = loadPushDevices()
+    .filter((d) => d && d.username === user.username)
+    .map((d) => ({
+      token: String(d.token).slice(0, 8) + '…',
+      platform: d.platform, environment: d.environment, appVersion: d.appVersion, locale: d.locale, updatedAt: d.updatedAt,
+    }));
+  return res.json({ ok: true, devices: mine, apnsConfigured: apnsConfigured() });
+});
+
+// Push pipeline status (auth) — booleans only, no secrets.
+app.get('/api/push/status', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  return res.json({
+    ok: true,
+    configured: apnsConfigured(),
+    environment: APNS_ENV,
+    hasKeyId: !!APNS_KEY_ID,
+    hasTeamId: !!APNS_TEAM_ID,
+    hasBundleId: !!APNS_BUNDLE_ID,
+    hasKey: !!APNS_PRIVATE_KEY,
+  });
+});
+
+// Send a test push to the caller's own devices (verifies the whole pipeline).
+app.post('/api/push/test', async (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (!apnsConfigured()) {
+    return res.status(503).json({
+      ok: false, error: 'apns_not_configured',
+      need: { keyId: !!APNS_KEY_ID, teamId: !!APNS_TEAM_ID, bundleId: !!APNS_BUNDLE_ID, key: !!APNS_PRIVATE_KEY },
+    });
+  }
+  const title = (req.body && typeof req.body.title === 'string') ? req.body.title : 'LinArt';
+  const message = (req.body && typeof req.body.body === 'string') ? req.body.body : 'Push pipeline works ✅';
+  const payload = { aps: { alert: { title, body: message }, sound: 'default' } };
+  const result = await sendPushToUser(user.username, payload, 'alert');
+  return res.json(result);
 });
 
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
