@@ -21941,6 +21941,82 @@ app.get(['/api/projects/:projectKey/history', '/service2/api/projects/:projectKe
   }
 });
 
+// --- Manager dashboard (P2): aggregate report stats over all meta + PDF sizes ---
+// Totals, per-type (count+bytes), per-month counts, and per-user breakdown.
+// Cached 60s because the iOS dashboard polls frequently.
+async function aggregateReportStats() {
+  const result = {
+    totals: { reportCount: 0, totalBytes: 0 },
+    byType: {},   // type -> { count, bytes }
+    byMonth: {},  // "YYYY-MM" -> count
+    byUser: {},   // user -> { reportCount, bytes, lastSubmittedAt, last7Days }
+  };
+  const now = Date.now();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const types = await listOutputTypes();
+  for (const type of types) {
+    const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+    const pdfDir = path.join(OUTPUT_DIR, type, 'pdf');
+    let files = [];
+    try {
+      files = await fs.promises.readdir(metaDir);
+    } catch (err) {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.json')) continue;
+      let meta;
+      try {
+        meta = JSON.parse(await fs.promises.readFile(path.join(metaDir, file), 'utf8'));
+      } catch (err) {
+        continue;
+      }
+      const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+      const resolvedType = meta.templateType || type;
+      const resolvedName = meta.filename || file.replace(/\.json$/i, '.pdf');
+      const createdAt = String(meta.createdAt || '');
+      const user = String(rb.owner_user_id || detectSubmitterName(rb) || 'unknown').trim() || 'unknown';
+      let bytes = 0;
+      try { bytes = (await fs.promises.stat(path.join(pdfDir, resolvedName))).size; } catch (err) { /* pdf missing */ }
+
+      result.totals.reportCount += 1;
+      result.totals.totalBytes += bytes;
+
+      const t = result.byType[resolvedType] || { count: 0, bytes: 0 };
+      t.count += 1; t.bytes += bytes; result.byType[resolvedType] = t;
+
+      const month = createdAt.slice(0, 7);
+      if (/^\d{4}-\d{2}$/.test(month)) result.byMonth[month] = (result.byMonth[month] || 0) + 1;
+
+      const u = result.byUser[user] || { reportCount: 0, bytes: 0, lastSubmittedAt: '', last7Days: 0 };
+      u.reportCount += 1; u.bytes += bytes;
+      if (!u.lastSubmittedAt || createdAt > u.lastSubmittedAt) u.lastSubmittedAt = createdAt;
+      if (createdAt && Date.parse(createdAt) >= weekAgo) u.last7Days += 1;
+      result.byUser[user] = u;
+    }
+  }
+  return result;
+}
+
+let _reportStatsCache = { at: 0, data: null };
+async function getReportStats() {
+  const now = Date.now();
+  if (_reportStatsCache.data && (now - _reportStatsCache.at) < 60 * 1000) return _reportStatsCache.data;
+  const data = await aggregateReportStats();
+  _reportStatsCache = { at: now, data };
+  return data;
+}
+
+app.get(['/api/admin/stats', '/service2/api/admin/stats'], async (req, res) => {
+  try {
+    const stats = await getReportStats();
+    return res.json({ ok: true, ...stats });
+  } catch (err) {
+    console.error('[server] Failed to aggregate report stats', err);
+    return res.status(500).json({ ok: false, error: 'stats_failed' });
+  }
+});
+
 
 
 app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {

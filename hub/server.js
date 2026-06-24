@@ -983,6 +983,16 @@ function registerProxies(app){
   });
 }
 
+// Gate the service2 manager-stats path to admin/manager BEFORE the open dynamic
+// proxy below catches /service2/*. (registerProxies mounts an unauthenticated
+// catch-all for each service prefix; anything needing auth must be registered first.)
+app.use('/service2/api/admin', requireDashboardAccess, attachHubProxyHeaders, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+
 // register once on startup
 registerProxies(app);
 
@@ -2025,6 +2035,118 @@ app.post('/admin/upload-logo', requireSuperadmin, requireSameOrigin, (req, res, 
 
 app.get('/admin/logs', requireSuperadmin, (_req, res) => {
   res.json({ ok: true, logs: HUB_LOG });
+});
+
+// --- Manager dashboard (P2): presence (heartbeat) + dashboard composition ---
+const presence = new Map(); // username -> { lastSeen: ms, userAgent, appVersion }
+const ONLINE_WINDOW_MS = 90 * 1000;
+
+function isOnline(entry) {
+  return entry && (Date.now() - entry.lastSeen) < ONLINE_WINDOW_MS;
+}
+
+// admin OR manager (not blocked) — managers get the dashboard on their phone.
+function requireDashboardAccess(req, res, next) {
+  const user = getSessionUser(req);
+  if (user && (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_MANAGER)) {
+    return next();
+  }
+  return res.status(403).json({ ok: false, error: 'forbidden' });
+}
+
+// Fetch the report-stats aggregation from service2 over the internal network.
+async function fetchService2Stats() {
+  let target = 'http://service2:3001';
+  try {
+    const svc = loadServices().find((s) => (s.id || s.name) === 'service2');
+    if (svc && svc.target) target = svc.target;
+  } catch (err) { /* fall back to default */ }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const r = await fetch(new URL('/api/admin/stats', target).toString(), { signal: controller.signal });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (err) {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// iOS sends this every ~60s to report presence (cookie or Bearer auth).
+app.post('/api/heartbeat', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  presence.set(user.username, {
+    lastSeen: Date.now(),
+    userAgent: req.get('user-agent') || null,
+    appVersion: (req.body && typeof req.body.appVersion === 'string') ? req.body.appVersion : null,
+  });
+  const onlineCount = [...presence.values()].filter(isOnline).length;
+  return res.json({ ok: true, onlineCount });
+});
+
+app.get('/admin/online', requireDashboardAccess, (req, res) => {
+  setNoCache(res);
+  const online = [...presence.entries()]
+    .filter(([, v]) => isOnline(v))
+    .map(([username, v]) => ({
+      username,
+      lastSeen: new Date(v.lastSeen).toISOString(),
+      userAgent: v.userAgent,
+      appVersion: v.appVersion,
+    }));
+  return res.json({ ok: true, count: online.length, online });
+});
+
+app.get('/admin/dashboard/overview', requireDashboardAccess, async (req, res) => {
+  setNoCache(res);
+  const users = Array.isArray(adminCredentials.users) ? adminCredentials.users : [];
+  const totalUsers = users.length + (adminCredentials.superadmin ? 1 : 0);
+  const onlineCount = [...presence.values()].filter(isOnline).length;
+  const stats = await fetchService2Stats();
+  return res.json({
+    ok: true,
+    users: totalUsers,
+    online: onlineCount,
+    reports: stats ? stats.totals.reportCount : null,
+    storageBytes: stats ? stats.totals.totalBytes : null,
+    byType: stats ? stats.byType : null,
+  });
+});
+
+app.get('/admin/users/stats', requireDashboardAccess, async (req, res) => {
+  setNoCache(res);
+  const stats = await fetchService2Stats();
+  const byUser = (stats && stats.byUser) || {};
+  const users = Array.isArray(adminCredentials.users) ? adminCredentials.users : [];
+  const list = users.map((u) => {
+    const pres = presence.get(u.username);
+    const us = byUser[u.username] || { reportCount: 0, bytes: 0, lastSubmittedAt: null, last7Days: 0 };
+    return {
+      username: u.username,
+      role: normalizeUserRole(u.role, USER_ROLE_MANAGER),
+      online: isOnline(pres),
+      lastSeen: pres ? new Date(pres.lastSeen).toISOString() : null,
+      reportCount: us.reportCount,
+      bytes: us.bytes,
+      last7Days: us.last7Days,
+      lastSubmittedAt: us.lastSubmittedAt || null,
+    };
+  });
+  // Surface report submitters that don't map to a hub user (e.g. legacy/owner_user_id mismatches).
+  const known = new Set(users.map((u) => u.username));
+  const unmatched = Object.keys(byUser).filter((k) => !known.has(k)).map((k) => ({ username: k, ...byUser[k] }));
+  return res.json({ ok: true, users: list, unmatchedSubmitters: unmatched, statsAvailable: !!stats });
+});
+
+app.get('/admin/storage', requireDashboardAccess, async (req, res) => {
+  setNoCache(res);
+  const stats = await fetchService2Stats();
+  if (!stats) return res.status(502).json({ ok: false, error: 'stats_unavailable' });
+  return res.json({ ok: true, totals: stats.totals, byType: stats.byType, byMonth: stats.byMonth, byUser: stats.byUser });
 });
 
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
