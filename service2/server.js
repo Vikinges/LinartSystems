@@ -21863,6 +21863,84 @@ app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], asy
   }
 });
 
+// --- Mobile app (P5): full visit history for a project number ---
+// All reports submitted under a project key, newest first, with a per-type breakdown.
+// Powers the "9th visit to this site" UX. Project key resolves the same way as
+// aggregateProjectStats (lsc_project_number / batch_number / daily_project_number / daily block).
+async function collectProjectVisits(projectKey) {
+  const visits = [];
+  const types = await listOutputTypes();
+  for (const type of types) {
+    const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+    let files = [];
+    try {
+      files = await fs.promises.readdir(metaDir);
+    } catch (err) {
+      continue;
+    }
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.json')) continue;
+      let meta;
+      try {
+        meta = JSON.parse(await fs.promises.readFile(path.join(metaDir, file), 'utf8'));
+      } catch (err) {
+        continue;
+      }
+      const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+      const daily = (meta.dailyReport && typeof meta.dailyReport === 'object') ? meta.dailyReport : {};
+      const key = String(
+        rb.lsc_project_number || rb.batch_number || rb.daily_project_number || daily.projectNumber || ''
+      ).trim();
+      if (key !== projectKey) continue;
+      const resolvedType = meta.templateType || type;
+      const resolvedName = meta.filename || file.replace(/\.json$/i, '.pdf');
+      visits.push({
+        filename: resolvedName,
+        type: resolvedType,
+        submittedAt: meta.createdAt || null,
+        submitterName: String(detectSubmitterName(rb) || daily.submitterName || '').trim() || null,
+        clientReportId: rb.client_report_id || null,
+        url: `download/${resolvedType}/${resolvedName}`,
+        summary: {
+          end_customer_name: rb.end_customer_name || null,
+          site_location: rb.site_location || null,
+          date_of_service: rb.date_of_service || rb.daily_report_date || null,
+        },
+      });
+    }
+  }
+  visits.sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+  return visits;
+}
+
+app.get(['/api/projects/:projectKey/history', '/service2/api/projects/:projectKey/history'], async (req, res) => {
+  const projectKey = typeof req.params.projectKey === 'string' ? req.params.projectKey.trim() : '';
+  if (!projectKey) {
+    return res.status(400).json({ ok: false, error: 'Project number is required.' });
+  }
+  try {
+    const visits = await collectProjectVisits(projectKey);
+    if (!visits.length) {
+      return res.status(404).json({ ok: false, error: 'Project not found.' });
+    }
+    const byType = {};
+    for (const v of visits) { byType[v.type] = (byType[v.type] || 0) + 1; }
+    const submitted = visits.map((v) => v.submittedAt).filter(Boolean).sort();
+    return res.json({
+      ok: true,
+      projectNumber: projectKey,
+      reportCount: visits.length,
+      firstSubmittedAt: submitted[0] || null,
+      lastSubmittedAt: submitted[submitted.length - 1] || null,
+      byType,
+      visits,
+    });
+  } catch (err) {
+    console.error('[server] Failed to load project history', err);
+    return res.status(500).json({ ok: false, error: 'project_history_failed' });
+  }
+});
+
 
 
 app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {
