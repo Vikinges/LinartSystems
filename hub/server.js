@@ -339,6 +339,9 @@ function loadAdminCredentials() {
                 if (user.pendingDeletion && typeof user.pendingDeletion === 'object') {
                   normalizedUser.pendingDeletion = user.pendingDeletion;
                 }
+                if (user.twoFactor && typeof user.twoFactor === 'object') {
+                  normalizedUser.twoFactor = user.twoFactor;
+                }
                 return normalizedUser;
               })
               .filter(Boolean)
@@ -351,6 +354,9 @@ function loadAdminCredentials() {
           username: data.superadmin.username || DEFAULT_ADMIN_USERNAME,
           passwordHash: data.superadmin.passwordHash,
         };
+        if (data.superadmin.twoFactor && typeof data.superadmin.twoFactor === 'object') {
+          normalized.superadmin.twoFactor = data.superadmin.twoFactor;
+        }
       }
       return normalized;
     }
@@ -388,7 +394,11 @@ function buildSuperadminCredentials(existing, password) {
       : DEFAULT_ADMIN_USERNAME;
   const users = Array.isArray(existing && existing.users) ? existing.users : [];
   const passwordHash = bcrypt.hashSync(password, 10);
-  return { superadmin: { username, passwordHash }, users };
+  const superadmin = { username, passwordHash };
+  if (existing && existing.superadmin && existing.superadmin.twoFactor) {
+    superadmin.twoFactor = existing.superadmin.twoFactor;
+  }
+  return { superadmin, users };
 }
 
 function normalizeAllowedServices(input) {
@@ -1286,6 +1296,15 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     const matchedUser = await authenticateCredentials(username, pass);
 
     if (matchedUser) {
+      const rec2fa = find2faRecord(matchedUser);
+      if (twoFactorRequired(rec2fa)) {
+        const totp = req.body ? (req.body.totp || req.body.code) : null;
+        const recovery = req.body ? req.body.recoveryCode : null;
+        if (!verifyTwoFactor(rec2fa, totp, recovery)) {
+          appendAudit('login_2fa_failed', { actor: matchedUser.username, ip: clientIp(req) });
+          return res.status(401).json({ ok: false, error: (totp || recovery) ? 'invalid_totp' : 'totp_required' });
+        }
+      }
       req.session.authenticated = true;
       const normalized = normalizeSessionUser(matchedUser);
       setSessionUser(req, normalized);
@@ -1357,6 +1376,14 @@ app.post('/api/auth/token', rateLimitLogin, async (req, res) => {
   try {
     const matchedUser = await authenticateCredentials(username, pass);
     if (!matchedUser) return res.status(403).json({ ok: false, error: 'forbidden' });
+    const rec2fa = find2faRecord(matchedUser);
+    if (twoFactorRequired(rec2fa)) {
+      const totp = req.body ? (req.body.totp || req.body.code) : null;
+      const recovery = req.body ? req.body.recoveryCode : null;
+      if (!verifyTwoFactor(rec2fa, totp, recovery)) {
+        return res.status(401).json({ ok: false, error: (totp || recovery) ? 'invalid_totp' : 'totp_required' });
+      }
+    }
     const normalized = normalizeSessionUser(matchedUser);
     return res.json(buildTokenResponse(normalized));
   } catch (err) {
@@ -2426,6 +2453,136 @@ app.get('/admin/audit', requireDashboardAccess, (req, res) => {
     events.push(o);
   }
   res.json({ ok: true, total: events.length, events });
+});
+
+// --- Two-factor auth (P7): opt-in TOTP (RFC 6238), built on crypto, no deps ---
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buf) {
+  let bits = 0; let value = 0; let out = '';
+  for (let i = 0; i < buf.length; i++) {
+    value = (value << 8) | buf[i]; bits += 8;
+    while (bits >= 5) { out += BASE32_ALPHABET[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+function base32Decode(str) {
+  const clean = String(str).toUpperCase().replace(/=+$/, '').replace(/\s/g, '');
+  let bits = 0; let value = 0; const out = [];
+  for (const ch of clean) {
+    const idx = BASE32_ALPHABET.indexOf(ch);
+    if (idx < 0) continue;
+    value = (value << 5) | idx; bits += 5;
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return Buffer.from(out);
+}
+function hotp(secretBuf, counter) {
+  const buf = Buffer.alloc(8);
+  let c = counter;
+  for (let i = 7; i >= 0; i--) { buf[i] = c & 0xff; c = Math.floor(c / 256); }
+  const hmac = crypto.createHmac('sha1', secretBuf).update(buf).digest();
+  const offset = hmac[hmac.length - 1] & 0xf;
+  const code = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16)
+    | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+  return String(code % 1000000).padStart(6, '0');
+}
+function verifyTotp(secretBase32, code, window) {
+  if (!secretBase32 || !/^\d{6}$/.test(String(code || ''))) return false;
+  const secretBuf = base32Decode(secretBase32);
+  const step = Math.floor(Date.now() / 1000 / 30);
+  const w = Number.isInteger(window) ? window : 1;
+  for (let i = -w; i <= w; i++) {
+    if (hotp(secretBuf, step + i) === String(code)) return true;
+  }
+  return false;
+}
+function generateTotpSecret() { return base32Encode(crypto.randomBytes(20)); }
+function generateRecoveryCodes(n) {
+  const codes = [];
+  for (let i = 0; i < n; i++) codes.push(crypto.randomBytes(5).toString('hex'));
+  return codes;
+}
+function hashRecovery(code) {
+  return crypto.createHash('sha256').update(String(code).toLowerCase()).digest('hex');
+}
+
+// Resolve the *stored* account record (superadmin obj or users[] entry) for a session user.
+function find2faRecord(user) {
+  if (!user) return null;
+  if (user.isSuperadmin) return adminCredentials.superadmin || null;
+  return (Array.isArray(adminCredentials.users) ? adminCredentials.users : []).find((u) => u && u.username === user.username) || null;
+}
+function twoFactorRequired(rec) {
+  return !!(rec && rec.twoFactor && rec.twoFactor.enabled && !rec.appReviewProtected);
+}
+// Returns true if the 2FA challenge passes (or isn't enabled). Consumes a recovery code if used.
+function verifyTwoFactor(rec, totp, recoveryCode) {
+  const tf = rec && rec.twoFactor;
+  if (!tf || !tf.enabled) return true;
+  if (totp && tf.secret && verifyTotp(tf.secret, totp)) return true;
+  if (recoveryCode && Array.isArray(tf.recoveryCodes)) {
+    const h = hashRecovery(recoveryCode);
+    const idx = tf.recoveryCodes.indexOf(h);
+    if (idx >= 0) { tf.recoveryCodes.splice(idx, 1); saveAdminCredentials(adminCredentials); return true; }
+  }
+  return false;
+}
+
+app.get('/api/2fa/status', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const tf = (find2faRecord(user) || {}).twoFactor;
+  return res.json({
+    ok: true,
+    enabled: !!(tf && tf.enabled),
+    pending: !!(tf && tf.pendingSecret && !tf.enabled),
+    recoveryCodesRemaining: (tf && Array.isArray(tf.recoveryCodes)) ? tf.recoveryCodes.length : 0,
+  });
+});
+
+app.post('/api/2fa/setup', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const rec = find2faRecord(user);
+  if (!rec) return res.status(404).json({ ok: false, error: 'account_not_found' });
+  const secret = generateTotpSecret();
+  rec.twoFactor = Object.assign({}, rec.twoFactor, { pendingSecret: secret });
+  saveAdminCredentials(adminCredentials);
+  const otpauthUrl = `otpauth://totp/LinArt:${encodeURIComponent(user.username)}?secret=${secret}&issuer=LinArt&algorithm=SHA1&digits=6&period=30`;
+  return res.json({ ok: true, secret, otpauthUrl });
+});
+
+app.post('/api/2fa/enable', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const rec = find2faRecord(user);
+  if (!rec || !rec.twoFactor || !rec.twoFactor.pendingSecret) return res.status(400).json({ ok: false, error: 'no_pending_setup' });
+  const code = req.body && (req.body.totp || req.body.code);
+  if (!verifyTotp(rec.twoFactor.pendingSecret, code)) return res.status(400).json({ ok: false, error: 'invalid_totp' });
+  const recoveryCodes = generateRecoveryCodes(8);
+  rec.twoFactor = { enabled: true, secret: rec.twoFactor.pendingSecret, recoveryCodes: recoveryCodes.map(hashRecovery) };
+  saveAdminCredentials(adminCredentials);
+  appendAudit('2fa_enabled', { actor: user.username });
+  return res.json({ ok: true, recoveryCodes });
+});
+
+app.post('/api/2fa/disable', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const rec = find2faRecord(user);
+  if (!rec || !rec.twoFactor || !rec.twoFactor.enabled) return res.json({ ok: true, alreadyDisabled: true });
+  const code = req.body && (req.body.totp || req.body.code);
+  const recovery = req.body && req.body.recoveryCode;
+  if (!verifyTwoFactor(rec, code, recovery)) return res.status(400).json({ ok: false, error: 'invalid_totp' });
+  rec.twoFactor = { enabled: false };
+  saveAdminCredentials(adminCredentials);
+  appendAudit('2fa_disabled', { actor: user.username });
+  return res.json({ ok: true });
 });
 
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
