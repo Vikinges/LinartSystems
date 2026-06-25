@@ -1020,6 +1020,15 @@ app.use('/service2/api/admin', requireDashboardAccess, attachHubProxyHeaders, cr
   logLevel: 'warn'
 }));
 
+// P4 approval: report review/status is admin/manager only; attach authoritative
+// x-hub-user / x-hub-role so service2 records who reviewed. Must precede registerProxies.
+app.use('/service2/api/reports', requireDashboardAccess, attachHubProxyHeaders, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+
 // register once on startup
 registerProxies(app);
 

@@ -227,6 +227,12 @@ function matchesFilter(value, filter) {
   return String(value).toLowerCase().includes(filter);
 }
 
+// Approval workflow (P4): report lifecycle states.
+const REPORT_STATUSES = ['submitted', 'in_review', 'approved', 'rejected'];
+function normalizeReportStatus(s) {
+  return REPORT_STATUSES.includes(s) ? s : 'submitted';
+}
+
 function buildFileListEntry(meta, type, fallbackFilename) {
   if (!meta || typeof meta !== 'object') return null;
   const templateType = normalizeQueryText(meta.templateType) || normalizeQueryText(type);
@@ -249,6 +255,7 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     createdAt,
     createdAtMs: createdAt ? Date.parse(createdAt) : 0,
     downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
+    status: normalizeReportStatus(meta.status),
     dailyReport,
   };
 }
@@ -268,6 +275,7 @@ async function listOutputTypes() {
 function entryMatchesFilters(entry, filters) {
   if (!entry) return false;
   if (filters.type && entry.templateType.toLowerCase() !== filters.type) return false;
+  if (filters.status && (entry.status || 'submitted') !== filters.status) return false;
 
   const daily = entry.dailyReport || {};
   if (!matchesFilter(daily.projectNumber, filters.project)) return false;
@@ -22646,6 +22654,7 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   const reportDate = normalizeQueryLower(req.query.date || req.query.reportDate);
   const submitter = normalizeQueryLower(req.query.submitter || req.query.filledBy);
   const query = normalizeQueryLower(req.query.q || req.query.query || req.query.search);
+  const status = normalizeQueryLower(req.query.status);
   const rawLimit = Number(req.query.limit);
   const limit = Number.isFinite(rawLimit)
     ? clampNumber(Math.floor(rawLimit), 1, FILE_LIST_MAX_LIMIT)
@@ -22660,6 +22669,7 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
       reportDate,
       submitter,
       query,
+      status,
       limit,
       offset,
     });
@@ -22670,7 +22680,7 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
       offset: result.offset,
       limit: result.limit,
       types: result.types,
-      filters: { type, project, reportDate, submitter, query, limit, offset },
+      filters: { type, project, reportDate, submitter, query, status, limit, offset },
     });
   } catch (err) {
     console.error('[server] Failed to list files', err);
@@ -22724,6 +22734,7 @@ async function readFileDataResponse(type, filename) {
     templateLabel: meta.templateLabel || null,
     submittedAt: meta.createdAt || null,
     clientReportId: rb.client_report_id || null,
+    status: normalizeReportStatus(meta.status),
     fields: rb,
   };
 }
@@ -22762,6 +22773,85 @@ app.get(['/api/files/:filename/data', '/service2/api/files/:filename/data'], asy
   } catch (err) {
     console.error('[server] Failed to read file data', err);
     return res.status(500).json({ ok: false, error: 'file_data_failed' });
+  }
+});
+
+// --- Approval workflow (P4): review a report (admin/manager — gated at the hub) ---
+// State machine (defaults; confirm transitions with the app dev):
+//   start_review: submitted -> in_review
+//   approve:      submitted|in_review -> approved
+//   reject:       submitted|in_review -> rejected
+//   reopen:       approved|rejected -> in_review
+const REVIEW_ACTIONS = {
+  start_review: { to: 'in_review', from: ['submitted'] },
+  approve: { to: 'approved', from: ['submitted', 'in_review'] },
+  reject: { to: 'rejected', from: ['submitted', 'in_review'] },
+  reopen: { to: 'in_review', from: ['approved', 'rejected'] },
+};
+
+async function updateReportStatus(type, filename, action, reviewer) {
+  const metaPath = buildMetaPath(type, filename);
+  if (!metaPath || !fs.existsSync(metaPath)) return { error: 'not_found' };
+  const def = REVIEW_ACTIONS[action];
+  if (!def) return { error: 'invalid_action' };
+  let meta;
+  try {
+    meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'));
+  } catch (err) {
+    return { error: 'meta_unreadable' };
+  }
+  const current = normalizeReportStatus(meta.status);
+  if (!def.from.includes(current)) return { error: 'invalid_transition', current };
+  meta.status = def.to;
+  const entry = {
+    action,
+    status: def.to,
+    previous: current,
+    at: new Date().toISOString(),
+    by: reviewer.user || null,
+    role: reviewer.role || null,
+    ...(reviewer.note ? { note: String(reviewer.note).slice(0, 1000) } : {}),
+  };
+  if (!Array.isArray(meta.reviewHistory)) meta.reviewHistory = [];
+  meta.reviewHistory.push(entry);
+  await fs.promises.writeFile(metaPath, JSON.stringify(meta, null, 2));
+  return { ok: true, status: def.to, previous: current, review: entry };
+}
+
+app.post(['/api/reports/:type/:filename/review', '/service2/api/reports/:type/:filename/review'], async (req, res) => {
+  const type = sanitizeFilename(req.params.type || '');
+  const filename = sanitizeFilename(req.params.filename || '');
+  if (!type || !filename) return res.status(400).json({ ok: false, error: 'invalid_request' });
+  const action = req.body && typeof req.body.action === 'string' ? req.body.action.trim() : '';
+  const reviewer = {
+    user: req.headers['x-hub-user'] || (req.body && req.body.reviewer) || null,
+    role: req.headers['x-hub-role'] || null,
+    note: req.body && req.body.note,
+  };
+  const r = await updateReportStatus(type, filename, action, reviewer);
+  if (r.error === 'not_found') return res.status(404).json({ ok: false, error: 'not_found' });
+  if (r.error === 'invalid_action') return res.status(400).json({ ok: false, error: 'invalid_action', allowed: Object.keys(REVIEW_ACTIONS) });
+  if (r.error === 'invalid_transition') return res.status(409).json({ ok: false, error: 'invalid_transition', current: r.current, allowed: Object.keys(REVIEW_ACTIONS) });
+  if (r.error) return res.status(500).json({ ok: false, error: r.error });
+  return res.json({ ok: true, type, filename, status: r.status, previous: r.previous, review: r.review });
+});
+
+app.get(['/api/reports/:type/:filename/status', '/service2/api/reports/:type/:filename/status'], async (req, res) => {
+  const type = sanitizeFilename(req.params.type || '');
+  const filename = sanitizeFilename(req.params.filename || '');
+  const metaPath = buildMetaPath(type, filename);
+  if (!metaPath || !fs.existsSync(metaPath)) return res.status(404).json({ ok: false, error: 'not_found' });
+  try {
+    const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'));
+    return res.json({
+      ok: true,
+      type,
+      filename,
+      status: normalizeReportStatus(meta.status),
+      reviewHistory: Array.isArray(meta.reviewHistory) ? meta.reviewHistory : [],
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'status_failed' });
   }
 });
 
