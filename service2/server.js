@@ -21899,6 +21899,7 @@ async function collectProjectVisits(projectKey) {
         type: resolvedType,
         submittedAt: meta.createdAt || null,
         submitterName: String(detectSubmitterName(rb) || daily.submitterName || '').trim() || null,
+        ownerUserId: rb.owner_user_id || null,
         clientReportId: rb.client_report_id || null,
         url: `download/${resolvedType}/${resolvedName}`,
         summary: {
