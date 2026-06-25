@@ -94,6 +94,9 @@ const APNS_ENV = (process.env.APNS_ENV || 'production').toLowerCase() === 'sandb
 const PUSH_DEVICES_FILE = process.env.HUB_PUSH_DEVICES_FILE
   ? path.resolve(process.env.HUB_PUSH_DEVICES_FILE)
   : (DATA_DIR ? path.join(DATA_DIR, 'push-devices.json') : path.join(__dirname, 'push-devices.json'));
+const AUDIT_FILE = process.env.HUB_AUDIT_FILE
+  ? path.resolve(process.env.HUB_AUDIT_FILE)
+  : (DATA_DIR ? path.join(DATA_DIR, 'audit.jsonl') : path.join(__dirname, 'audit.jsonl'));
 let APNS_PRIVATE_KEY = null;
 (function loadApnsKey() {
   try {
@@ -1286,6 +1289,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
       req.session.authenticated = true;
       const normalized = normalizeSessionUser(matchedUser);
       setSessionUser(req, normalized);
+      appendAudit('login', { actor: normalized.username, role: normalized.role, ip: clientIp(req) });
       res.cookie(ADMIN_AUTH_COOKIE, buildAdminAuthToken(normalized), adminCookieOptions());
       const payload = {
         ok: true,
@@ -1309,6 +1313,7 @@ app.post('/admin/login', rateLimitLogin, async (req, res) => {
     console.warn('[hub] Failed to compare admin password', err);
     return res.status(500).json({ ok: false, error: 'login_failed' });
   }
+  appendAudit('login_failed', { actor: username, ip: clientIp(req) });
   return res.status(401).json({ ok: false, error: 'invalid_credentials' });
 });
 
@@ -1421,6 +1426,7 @@ app.post('/api/account/delete-request', (req, res) => {
       : {}),
   };
   saveAdminCredentials(adminCredentials);
+  appendAudit('account_delete_request', { actor: current.username, scheduledFor, ip: clientIp(req) });
 
   // Revoke the current session + cookie so the client is signed out immediately.
   clearSessionUser(req);
@@ -1979,6 +1985,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   if (body.appReviewProtected === true) newUser.appReviewProtected = true;
   adminCredentials.users.push(newUser);
   saveAdminCredentials(adminCredentials);
+  appendAudit('user_created', { actor: (getSessionUser(req) || {}).username || null, target: username, role });
   res.json({ ok: true });
 });
 
@@ -2051,6 +2058,7 @@ app.delete('/admin/users/:username', requireSuperadmin, requireSameOrigin, (req,
     return res.status(404).json({ ok: false, error: 'not_found' });
   }
   saveAdminCredentials(adminCredentials);
+  appendAudit('user_deleted', { actor: (getSessionUser(req) || {}).username || null, target: username });
   res.json({ ok: true });
 });
 
@@ -2115,11 +2123,13 @@ app.post('/api/heartbeat', (req, res) => {
   setNoCache(res);
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const wasOnline = isOnline(presence.get(user.username));
   presence.set(user.username, {
     lastSeen: Date.now(),
     userAgent: req.get('user-agent') || null,
     appVersion: (req.body && typeof req.body.appVersion === 'string') ? req.body.appVersion : null,
   });
+  if (!wasOnline) broadcast('presence', { user: user.username, online: true }, true);
   const onlineCount = [...presence.values()].filter(isOnline).length;
   return res.json({ ok: true, onlineCount });
 });
@@ -2350,6 +2360,72 @@ app.post('/api/push/test', async (req, res) => {
   const payload = { aps: { alert: { title, body: message }, sound: 'default' } };
   const result = await sendPushToUser(user.username, payload, 'alert');
   return res.json(result);
+});
+
+// --- Audit log + realtime SSE (P8) ---
+const sseClients = new Set();
+function ssePush(client, type, data) {
+  try {
+    client.res.write(`event: ${type}\ndata: ${JSON.stringify({ type, at: new Date().toISOString(), ...data })}\n\n`);
+  } catch (e) { /* client gone */ }
+}
+function broadcast(type, data, adminOnly) {
+  for (const c of sseClients) {
+    if (adminOnly && !c.isAdmin) continue;
+    ssePush(c, type, data);
+  }
+}
+function clientIp(req) {
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return fwd || req.ip || null;
+}
+function appendAudit(event, fields) {
+  const record = { at: new Date().toISOString(), event, ...fields };
+  try {
+    fs.appendFileSync(AUDIT_FILE, JSON.stringify(record) + '\n');
+  } catch (e) { /* best-effort */ }
+  broadcast('audit', record, true);
+}
+
+// Live event stream (SSE). Auth required; admin/manager also receive presence + audit.
+app.get('/api/events', (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  const client = {
+    res,
+    user: user.username,
+    isAdmin: user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_MANAGER,
+  };
+  sseClients.add(client);
+  ssePush(client, 'ready', { user: user.username });
+  const keepAlive = setInterval(() => { try { res.write(': keep-alive\n\n'); } catch (e) { /* noop */ } }, 25000);
+  req.on('close', () => { clearInterval(keepAlive); sseClients.delete(client); });
+});
+
+// Recent audit entries (admin/manager), newest first; optional ?event= / ?actor= / ?limit=.
+app.get('/admin/audit', requireDashboardAccess, (req, res) => {
+  setNoCache(res);
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 500)) : 100;
+  const eventFilter = typeof req.query.event === 'string' ? req.query.event : '';
+  const actorFilter = typeof req.query.actor === 'string' ? req.query.actor : '';
+  let lines = [];
+  try { lines = fs.readFileSync(AUDIT_FILE, 'utf8').split('\n').filter(Boolean); } catch (e) { lines = []; }
+  const events = [];
+  for (let i = lines.length - 1; i >= 0 && events.length < limit; i--) {
+    let o;
+    try { o = JSON.parse(lines[i]); } catch (e) { continue; }
+    if (eventFilter && o.event !== eventFilter) continue;
+    if (actorFilter && o.actor !== actorFilter) continue;
+    events.push(o);
+  }
+  res.json({ ok: true, total: events.length, events });
 });
 
 // Reverse-proxy route: expose service2 under /service2/ (auth required)

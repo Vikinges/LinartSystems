@@ -22755,6 +22755,60 @@ app.get(['/api/search', '/service2/api/search'], async (req, res) => {
   }
 });
 
+// --- Calendar (P8): reports grouped by submission day ---
+async function collectCalendar(from, to) {
+  const days = {};
+  const types = await listOutputTypes();
+  for (const type of types) {
+    const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+    let files = [];
+    try { files = await fs.promises.readdir(metaDir); } catch (err) { continue; }
+    for (const file of files) {
+      if (!file.toLowerCase().endsWith('.json')) continue;
+      let meta;
+      try { meta = JSON.parse(await fs.promises.readFile(path.join(metaDir, file), 'utf8')); } catch (err) { continue; }
+      const createdAt = String(meta.createdAt || '');
+      const date = createdAt.slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (from && date < from) continue;
+      if (to && date > to) continue;
+      const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+      const entry = {
+        filename: meta.filename || file.replace(/\.json$/i, '.pdf'),
+        type: meta.templateType || type,
+        status: normalizeReportStatus(meta.status),
+        projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || null,
+        submitterName: String(detectSubmitterName(rb) || '').trim() || null,
+        submittedAt: createdAt || null,
+      };
+      if (!days[date]) days[date] = { count: 0, reports: [] };
+      days[date].count += 1;
+      days[date].reports.push(entry);
+    }
+  }
+  for (const d of Object.keys(days)) {
+    days[d].reports.sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')));
+  }
+  return days;
+}
+
+app.get(['/api/calendar', '/service2/api/calendar'], async (req, res) => {
+  const month = normalizeQueryText(req.query.month);
+  let from = normalizeQueryText(req.query.from);
+  let to = normalizeQueryText(req.query.to);
+  if (month && /^\d{4}-\d{2}$/.test(month)) { from = `${month}-01`; to = `${month}-31`; }
+  try {
+    const days = await collectCalendar(from || '', to || '');
+    const counts = {};
+    let total = 0;
+    for (const d of Object.keys(days)) { counts[d] = days[d].count; total += days[d].count; }
+    return res.json({ ok: true, range: { from: from || null, to: to || null }, total, counts, days });
+  } catch (err) {
+    console.error('[server] calendar failed', err);
+    return res.status(500).json({ ok: false, error: 'calendar_failed' });
+  }
+});
+
 // --- Mobile app (P0): canonical form types + stored submission data ---
 
 // Canonical list of report/form types — single source of truth for the app
