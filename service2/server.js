@@ -248,6 +248,16 @@ function buildFileListEntry(meta, type, fallbackFilename) {
         }
       : null;
 
+  // Key card fields (P6: surfaced in the listing + fuel for ?q= / /api/search).
+  const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+  const summary = {
+    endCustomerName: rb.end_customer_name || null,
+    siteLocation: rb.site_location || null,
+    projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || (dailyReport && dailyReport.projectNumber) || null,
+    customerRepresentative: rb.customer_representative || null,
+    ledDisplayModel: rb.led_display_model || null,
+  };
+
   return {
     templateType,
     templateLabel: normalizeQueryText(meta.templateLabel),
@@ -256,6 +266,7 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     createdAtMs: createdAt ? Date.parse(createdAt) : 0,
     downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
     status: normalizeReportStatus(meta.status),
+    summary,
     dailyReport,
   };
 }
@@ -283,6 +294,7 @@ function entryMatchesFilters(entry, filters) {
   if (!matchesFilter(daily.submitterName, filters.submitter)) return false;
 
   if (filters.query) {
+    const s = entry.summary || {};
     const haystack = [
       entry.filename,
       entry.templateLabel,
@@ -290,6 +302,11 @@ function entryMatchesFilters(entry, filters) {
       daily.projectNumber,
       daily.reportDate,
       daily.submitterName,
+      s.endCustomerName,
+      s.siteLocation,
+      s.projectNumber,
+      s.customerRepresentative,
+      s.ledDisplayModel,
     ]
       .filter(Boolean)
       .join(' ')
@@ -22685,6 +22702,56 @@ app.get(['/api/files', '/service2/api/files'], async (req, res) => {
   } catch (err) {
     console.error('[server] Failed to list files', err);
     return res.status(500).json({ ok: false, error: 'files_list_failed' });
+  }
+});
+
+// --- Search (P6): unified substring search across files + projects (no new infra) ---
+function scoreMatch(q, fields) {
+  let best = 0;
+  for (const f of fields) {
+    if (!f) continue;
+    const v = String(f).toLowerCase();
+    if (v === q) best = Math.max(best, 1.0);
+    else if (v.startsWith(q)) best = Math.max(best, 0.8);
+    else if (v.includes(q)) best = Math.max(best, 0.5);
+  }
+  return best;
+}
+
+app.get(['/api/search', '/service2/api/search'], async (req, res) => {
+  const q = normalizeQueryLower(req.query.q || req.query.query || req.query.search);
+  const rawLimit = Number(req.query.limit);
+  const limit = Number.isFinite(rawLimit) ? clampNumber(Math.floor(rawLimit), 1, 50) : 20;
+  if (!q) return res.json({ ok: true, query: '', total: 0, results: [] });
+  try {
+    const fileResult = await listFileEntries({ query: q, limit: 200, offset: 0 });
+    const fileHits = fileResult.entries.map((e) => ({
+      kind: 'file',
+      filename: e.filename,
+      type: e.templateType,
+      status: e.status,
+      submittedAt: e.createdAt || null,
+      summary: e.summary,
+      score: scoreMatch(q, [e.filename, e.summary && e.summary.endCustomerName, e.summary && e.summary.siteLocation, e.summary && e.summary.projectNumber]),
+    }));
+
+    const store = loadProjectsStore() || {};
+    const stats = await aggregateProjectStats();
+    const keys = Array.from(new Set([...Object.keys(store), ...Object.keys(stats)]));
+    const projHits = keys
+      .map((key) => projectCardSummary(key, store[key], stats[key]))
+      .filter((p) => {
+        const hay = [p.projectNumber, p.endCustomerName, p.siteLocation, p.customerRepresentative, p.ledDisplayModel]
+          .filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      })
+      .map((p) => ({ kind: 'project', ...p, score: scoreMatch(q, [p.projectNumber, p.endCustomerName, p.siteLocation]) }));
+
+    const results = [...projHits, ...fileHits].sort((a, b) => b.score - a.score).slice(0, limit);
+    return res.json({ ok: true, query: q, total: results.length, results });
+  } catch (err) {
+    console.error('[server] search failed', err);
+    return res.status(500).json({ ok: false, error: 'search_failed' });
   }
 });
 
