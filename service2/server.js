@@ -2155,6 +2155,9 @@ function getSuggestionsForField(fieldName, query) {
 
   const prefix = normalizeSuggestionValue(query).toLowerCase();
 
+  // D fix: never suggest internal staff (from the people registry) as a customer.
+  const isCustomerField = /^customer_(name|representative)$/i.test(canonical) || /^customer_(name|representative)$/i.test(fieldName);
+
   const primaryBucket = suggestionStore.suggestions[canonical] || [];
 
   const legacyBucket =
@@ -2182,6 +2185,8 @@ function getSuggestionsForField(fieldName, query) {
     const lower = String(entry || '').toLowerCase();
 
     if (!lower || seen.has(lower)) continue;
+
+    if (isCustomerField && isInternalName(entry)) continue;
 
     seen.add(lower);
 
@@ -22818,6 +22823,122 @@ app.get(['/api/calendar', '/service2/api/calendar'], async (req, res) => {
   }
 });
 
+// --- LED model catalog: 2-step picker (series -> model) for "LED display model / batch" ---
+// The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
+const LED_CATALOG = [
+  { series: 'Essential', code: 'E', models: ['LD-E121', 'LD-E151', 'LD-E181', 'LD-E251'] },
+  { series: 'Mainstream / Enterprise V2', code: 'FE', version: 2, models: ['LD-FE092', 'LD-FE122', 'LD-FE152', 'LD-FE192', 'LD-FE252', 'LD-FE312', 'LD-FE382'] },
+  { series: 'Mainstream / Enterprise V3', code: 'FE', version: 3, models: ['LD-FE093', 'LD-FE123', 'LD-FE153', 'LD-FE193'] },
+  { series: 'High-End / Advanced V2', code: 'FA', version: 2, models: ['LD-FA092', 'LD-FA122', 'LD-FA152', 'LD-FA192', 'LD-FA252', 'LD-FA312', 'LD-FA382'] },
+  { series: 'High-End / Advanced V3', code: 'FA', version: 3, models: ['LD-FA093', 'LD-FA123', 'LD-FA153', 'LD-FA193'] },
+  { series: 'COB', code: 'COB', models: ['LD-EC091 & EC019-H', 'LD-EC121 & EC121-H', 'LD-EC151 & EC151-H', 'LD-EC181 & EC181-H', 'LD-D091', 'LD-D121', 'LD-D151'] },
+];
+function parseLedModel(model) {
+  const first = String(model).split('&')[0].trim().replace(/-H$/i, '');
+  const m = /(\d{2})(\d)\s*$/.exec(first);
+  if (!m) return { pitchMm: null, version: null };
+  return { pitchMm: parseInt(m[1], 10) / 10, version: parseInt(m[2], 10) };
+}
+app.get(['/api/led-models', '/service2/api/led-models'], (req, res) => {
+  const series = LED_CATALOG.map((s) => ({
+    series: s.series,
+    code: s.code,
+    ...(s.version ? { version: s.version } : {}),
+    models: s.models.map((m) => {
+      const p = parseLedModel(m);
+      return { model: m, pitchMm: p.pitchMm, version: s.version || p.version, label: p.pitchMm != null ? `${m} · ${p.pitchMm} mm` : m };
+    }),
+  }));
+  res.json({ ok: true, series });
+});
+
+// --- People / role registry (E): remember who is internal staff (+role) vs customer-side ---
+const PEOPLE_FILE = path.join(DATA_DIR, 'people.json');
+function loadPeopleStore() {
+  try { const d = JSON.parse(fs.readFileSync(PEOPLE_FILE, 'utf8')); return (d && typeof d === 'object') ? d : {}; } catch (e) { return {}; }
+}
+function savePeopleStore(store) {
+  try { fs.writeFileSync(PEOPLE_FILE, JSON.stringify(store, null, 2)); } catch (e) { /* best-effort */ }
+}
+function personKey(name) { return String(name || '').trim().toLowerCase(); }
+function recordPeople(body) {
+  try {
+    const store = loadPeopleStore();
+    const now = new Date().toISOString();
+    const bump = (name, kind, role) => {
+      const key = personKey(name);
+      if (!key || key.length < 2) return;
+      const cur = store[key] || { name: String(name).trim(), kindCounts: {}, roles: {}, count: 0, lastSeen: null };
+      cur.name = String(name).trim();
+      cur.kindCounts[kind] = (cur.kindCounts[kind] || 0) + 1;
+      const r = role ? String(role).trim() : '';
+      if (r) cur.roles[r] = (cur.roles[r] || 0) + 1;
+      cur.count += 1;
+      cur.lastSeen = now;
+      store[key] = cur;
+    };
+    const empSummary = collectEmployeeEntries(body);
+    const employees = (empSummary && Array.isArray(empSummary.entries)) ? empSummary.entries : [];
+    for (const e of employees) { if (e && e.name) bump(e.name, 'internal', e.role); }
+    const eng = toSingleValue(body?.engineer_name);
+    if (eng) bump(eng, 'internal', null);
+    const cn = toSingleValue(body?.customer_name);
+    if (cn) bump(cn, 'customer', null);
+    const cr = toSingleValue(body?.customer_representative);
+    if (cr) bump(cr, 'customer', null);
+    savePeopleStore(store);
+  } catch (e) { /* never block a submit on registry bookkeeping */ }
+}
+function personKind(entry) {
+  const i = (entry.kindCounts && entry.kindCounts.internal) || 0;
+  const c = (entry.kindCounts && entry.kindCounts.customer) || 0;
+  if (i > c) return 'internal';
+  if (c > i) return 'customer';
+  return i ? 'internal' : 'customer';
+}
+function personTopRole(entry) {
+  let best = null; let n = 0;
+  for (const [r, c] of Object.entries(entry.roles || {})) { if (c > n) { n = c; best = r; } }
+  return best;
+}
+function isInternalName(name) {
+  const e = loadPeopleStore()[personKey(name)];
+  return e ? personKind(e) === 'internal' : false;
+}
+app.get(['/api/people', '/service2/api/people'], (req, res) => {
+  const kind = normalizeQueryLower(req.query.kind);
+  const q = normalizeQueryLower(req.query.q);
+  let people = Object.values(loadPeopleStore()).map((e) => ({
+    name: e.name, kind: personKind(e), role: personTopRole(e), count: e.count, lastSeen: e.lastSeen,
+  }));
+  if (kind === 'internal' || kind === 'customer') people = people.filter((p) => p.kind === kind);
+  if (q) people = people.filter((p) => p.name.toLowerCase().includes(q) || String(p.role || '').toLowerCase().includes(q));
+  people.sort((a, b) => (b.count - a.count) || a.name.localeCompare(b.name));
+  res.json({ ok: true, people });
+});
+
+// One-time backfill so the registry knows existing staff/customers immediately.
+async function backfillPeopleIfEmpty() {
+  try {
+    if (Object.keys(loadPeopleStore()).length > 0) return;
+    const types = await listOutputTypes();
+    for (const type of types) {
+      const metaDir = path.join(OUTPUT_DIR, type, 'meta');
+      let files = [];
+      try { files = await fs.promises.readdir(metaDir); } catch (e) { continue; }
+      for (const file of files) {
+        if (!file.toLowerCase().endsWith('.json')) continue;
+        try {
+          const meta = JSON.parse(await fs.promises.readFile(path.join(metaDir, file), 'utf8'));
+          if (meta && meta.requestBody) recordPeople(meta.requestBody);
+        } catch (e) { /* skip */ }
+      }
+    }
+    console.log('[server] people registry backfilled from existing submissions.');
+  } catch (e) { /* best-effort */ }
+}
+backfillPeopleIfEmpty();
+
 // --- Mobile app (P0): canonical form types + stored submission data ---
 
 // Canonical list of report/form types — single source of truth for the app
@@ -24142,6 +24263,8 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
 
     recordSuggestionsFromSubmission(req.body || {});
+
+    recordPeople(req.body || {});
 
 
 
