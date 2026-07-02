@@ -266,7 +266,10 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     createdAtMs: createdAt ? Date.parse(createdAt) : 0,
     downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
     status: normalizeReportStatus(meta.status),
-    submittedBy: String(detectSubmitterName(rb) || (dailyReport && dailyReport.submitterName) || '').trim() || null,
+    submittedBy: (function () {
+      const n = String(detectSubmitterName(rb) || '').trim();
+      return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
+    })(),
     summary,
     dailyReport,
   };
@@ -21642,7 +21645,10 @@ function detectSubmitterName(body) {
 
   for (const descriptor of fieldDescriptors) {
 
-    if (/submit|technician|engineer|inspector/i.test(descriptor.acroName)) {
+    if (
+      /submit|technician|engineer|inspector/i.test(descriptor.acroName)
+      && !/date|time|company|signature|comment|email|phone|note/i.test(descriptor.acroName)
+    ) {
 
       const value = toSingleValue(body[descriptor.requestName]);
 
