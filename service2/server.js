@@ -6167,7 +6167,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (label.includes('>9h') && label.includes('45m')) {
 
-        return label.replace('>9h', '>9h\n');
+        // Break BEFORE the parenthesis ("≥45m" / "(>9h)") — never inside it.
+
+        return label.replace(/\s*\(/, '\n(');
 
       }
 
@@ -6797,7 +6799,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       });
 
-      let blockHeight = Math.max(40, Math.ceil(layout.totalHeight + 18));
+      // Box = label zone (20) + text height + breathing room; text is drawn top-down
+      // below the label with the SAME precomputed layout, so it can never cross the frame.
+      let blockHeight = Math.max(40, Math.ceil(layout.totalHeight + 30));
 
       if (!Number.isFinite(blockHeight) || blockHeight <= 0) {
 
@@ -6859,17 +6863,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         font,
 
-        { x: margin + 4, y: cursorY - blockHeight, width: tableWidth - 8, height: blockHeight },
+        { x: margin, y: cursorY - blockHeight, width: tableWidth, height: blockHeight - 20 },
 
         {
 
           align: 'left',
 
-          verticalAlign: 'middle',
+          verticalAlign: 'top',
 
           paddingX: 6,
 
-          paddingY: 18,
+          paddingY: 4,
 
           color: textColor,
 
@@ -6879,7 +6883,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
           lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
 
-          layout,
+          precomputed: layout,
 
         },
 
@@ -7129,13 +7133,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
           paddingX: 8,
 
-          paddingY: 12,
+          paddingY: 4,
 
           color: textColor,
 
           fontSize: 11,
 
-          minFontSize: 10,
+          minFontSize: 9,
 
           lineHeightMultiplier: 1.15,
 
@@ -7561,7 +7565,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       page.drawText(detail.label, {
 
-        x: engineerRect.x,
+        x: engineerRect.x + 6,
 
         y: engineerLabelY,
 
@@ -7623,7 +7627,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       page.drawText(customer.label, {
 
-        x: customerRect.x,
+        x: customerRect.x + 6,
 
         y: customerLabelY,
 
@@ -22976,7 +22980,23 @@ async function readFileDataResponse(type, filename) {
   if (!metaPath || !fs.existsSync(metaPath)) return null;
   const raw = await fs.promises.readFile(metaPath, 'utf8');
   const meta = JSON.parse(raw);
-  const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
+  const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? { ...meta.requestBody } : {};
+  // F: put stored signature images back as data URLs so edit-resubmit keeps them.
+  let signaturesRestored = false;
+  if (meta.signatureFiles && typeof meta.signatureFiles === 'object') {
+    const signaturesDir = path.join(path.dirname(metaPath), '..', 'signatures');
+    for (const [sigName, sigFile] of Object.entries(meta.signatureFiles)) {
+      try {
+        const safe = sanitizeFilename(String(sigFile));
+        const sigPath = safeResolvePath(signaturesDir, path.join(signaturesDir, safe));
+        if (!sigPath || !fs.existsSync(sigPath)) continue;
+        const buf = await fs.promises.readFile(sigPath);
+        const mime = /\.png$/i.test(safe) ? 'image/png' : 'image/jpeg';
+        rb[sigName] = `data:${mime};base64,${buf.toString('base64')}`;
+        signaturesRestored = true;
+      } catch (err) { /* leave redacted */ }
+    }
+  }
   return {
     ok: true,
     filename: meta.filename || filename,
@@ -22986,6 +23006,7 @@ async function readFileDataResponse(type, filename) {
     submittedAt: meta.createdAt || null,
     clientReportId: rb.client_report_id || null,
     status: normalizeReportStatus(meta.status),
+    signaturesRestored,
     fields: rb,
   };
 }
@@ -23230,10 +23251,20 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
     toSingleValue(req.body?.client_report_id) || toSingleValue(req.body?.clientReportId)
   );
 
+  // F (edit-after-signed): edit=1 with a known client_report_id regenerates the
+  // report IN PLACE of the previous file instead of replaying the cached response.
+  const isEditRequest = ['1', 'true', 'yes', 'on'].includes(
+    String(toSingleValue(req.body?.edit) || toSingleValue(req.body?.is_edit) || '').trim().toLowerCase()
+  );
+  let editingPrevious = null;
+
   if (clientReportId) {
     const stored = findStoredSubmission(clientReportId);
     if (stored) {
-      return res.json({ ...stored.response, duplicate: true });
+      if (!isEditRequest) {
+        return res.json({ ...stored.response, duplicate: true });
+      }
+      editingPrevious = stored.response || null;
     }
     if (inFlightClientReportIds.has(clientReportId)) {
       return res.status(409).json({ ok: false, error: 'duplicate_in_progress' });
@@ -24248,6 +24279,51 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     }
 
+    // F: persist signature images so "edit past report" can restore them
+    // (requestBody redacts them to [embedded-image]).
+    if (signatureImages.length) {
+      const signaturesDir = path.join(path.dirname(outputMetaDir), 'signatures');
+      const pdfBase = filename.replace(/\.pdf$/i, '');
+      const signatureFiles = {};
+      for (const sig of signatureImages) {
+        try {
+          const decoded = decodeImageDataUrl(sig.data);
+          if (!decoded) continue;
+          const ext = decoded.mimeType === 'image/png' ? 'png' : 'jpg';
+          const sigFilename = `${pdfBase}.${sig.acroName}.${ext}`;
+          await fs.promises.mkdir(signaturesDir, { recursive: true });
+          await fs.promises.writeFile(path.join(signaturesDir, sigFilename), decoded.buffer);
+          signatureFiles[sig.acroName] = sigFilename;
+        } catch (err) {
+          console.warn(`[server] failed to persist signature ${sig.acroName}: ${err.message}`);
+        }
+      }
+      if (Object.keys(signatureFiles).length) metadata.signatureFiles = signatureFiles;
+    }
+
+    // F: an edit keeps the review trail of the report it replaces.
+    if (editingPrevious && editingPrevious.filename) {
+      try {
+        const prevMetaPath = buildMetaPath(editingPrevious.type || templateType, editingPrevious.filename);
+        if (prevMetaPath && fs.existsSync(prevMetaPath)) {
+          const prevMeta = JSON.parse(await fs.promises.readFile(prevMetaPath, 'utf8'));
+          const history = Array.isArray(prevMeta.reviewHistory) ? prevMeta.reviewHistory : [];
+          history.push({
+            action: 'edited',
+            status: 'submitted',
+            previous: normalizeReportStatus(prevMeta.status),
+            at: new Date().toISOString(),
+            by: req.headers['x-hub-user'] || toSingleValue(req.body?.owner_user_id) || null,
+            replacedFilename: editingPrevious.filename,
+          });
+          metadata.reviewHistory = history;
+          metadata.status = 'submitted';
+        }
+      } catch (err) {
+        console.warn('[server] failed to carry review history on edit', err.message);
+      }
+    }
+
     const metadataFilename = filename.replace(/\.pdf$/i, '.json');
 
     await fs.promises.writeFile(
@@ -24345,6 +24421,32 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
       employeesBreakSummary: formatBreakStatsSummary(employeeSummary.breakStats),
 
     };
+
+    // F: edit replaces the previous revision — remove its pdf/meta/signatures.
+    if (editingPrevious && editingPrevious.filename) {
+      successPayload.edited = true;
+      if (editingPrevious.filename !== filename) {
+        successPayload.replacedFilename = editingPrevious.filename;
+        try {
+          const prevType = editingPrevious.type || templateType;
+          const prevPdf = buildPdfPath(prevType, editingPrevious.filename);
+          const prevMeta = buildMetaPath(prevType, editingPrevious.filename);
+          if (prevPdf && fs.existsSync(prevPdf)) await fs.promises.unlink(prevPdf);
+          if (prevMeta && fs.existsSync(prevMeta)) await fs.promises.unlink(prevMeta);
+          const prevSigDir = path.join(OUTPUT_DIR, sanitizeFilename(prevType), 'signatures');
+          const prevBase = editingPrevious.filename.replace(/\.pdf$/i, '');
+          if (fs.existsSync(prevSigDir)) {
+            for (const f of await fs.promises.readdir(prevSigDir)) {
+              if (f.startsWith(`${prevBase}.`)) {
+                try { await fs.promises.unlink(path.join(prevSigDir, f)); } catch (e) { /* noop */ }
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('[server] failed to remove replaced revision', err.message);
+        }
+      }
+    }
 
     if (clientReportId) {
 
