@@ -266,6 +266,7 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     createdAtMs: createdAt ? Date.parse(createdAt) : 0,
     downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
     status: normalizeReportStatus(meta.status),
+    submittedBy: String(detectSubmitterName(rb) || (dailyReport && dailyReport.submitterName) || '').trim() || null,
     summary,
     dailyReport,
   };
@@ -21289,7 +21290,7 @@ function decodeImageDataUrl(dataUrl) {
 
   if (typeof dataUrl !== 'string') return null;
 
-  const match = /^data:(image\/(?:png|jpe?g));base64,(.+)$/i.exec(dataUrl.trim());
+  const match = /^data:(image\/(?:png|jpe?g))(?:;[^,]*)?;base64,([\s\S]+)$/i.exec(dataUrl.trim());
 
   if (!match) return null;
 
@@ -21297,7 +21298,9 @@ function decodeImageDataUrl(dataUrl) {
 
   try {
 
-    const buffer = Buffer.from(match[2], 'base64');
+    const buffer = Buffer.from(match[2].replace(/\s+/g, ''), 'base64');
+
+    if (!buffer.length) return null;
 
     return { mimeType, buffer };
 
@@ -23177,6 +23180,11 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
     customer_signature: req.body?.customer_signature,
 
   };
+
+  // Default the service company to Sharp when the engineer left it blank (per ops).
+  if (req.body && typeof req.body === 'object' && !String(toSingleValue(req.body.service_company_name) || '').trim()) {
+    req.body.service_company_name = 'Sharp';
+  }
 
   let overflowPlacements = [];
 
