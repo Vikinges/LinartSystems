@@ -441,7 +441,33 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.41';
+const SERVICE2_VERSION = '0.50';
+
+// LED model catalog (series -> models). Defined early: the web form template uses it.
+// The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
+const LED_CATALOG = [
+  { series: 'Essential', code: 'E', models: ['LD-E121', 'LD-E151', 'LD-E181', 'LD-E251'] },
+  { series: 'Mainstream / Enterprise V2', code: 'FE', version: 2, models: ['LD-FE092', 'LD-FE122', 'LD-FE152', 'LD-FE192', 'LD-FE252', 'LD-FE312', 'LD-FE382'] },
+  { series: 'Mainstream / Enterprise V3', code: 'FE', version: 3, models: ['LD-FE093', 'LD-FE123', 'LD-FE153', 'LD-FE193'] },
+  { series: 'High-End / Advanced V2', code: 'FA', version: 2, models: ['LD-FA092', 'LD-FA122', 'LD-FA152', 'LD-FA192', 'LD-FA252', 'LD-FA312', 'LD-FA382'] },
+  { series: 'High-End / Advanced V3', code: 'FA', version: 3, models: ['LD-FA093', 'LD-FA123', 'LD-FA153', 'LD-FA193'] },
+  { series: 'COB', code: 'COB', models: ['LD-EC091 & EC019-H', 'LD-EC121 & EC121-H', 'LD-EC151 & EC151-H', 'LD-EC181 & EC181-H', 'LD-D091', 'LD-D121', 'LD-D151'] },
+];
+function parseLedModel(model) {
+  const first = String(model).split('&')[0].trim().replace(/-H$/i, '');
+  const m = /(\d{2})(\d)\s*$/.exec(first);
+  if (!m) return { pitchMm: null, version: null };
+  return { pitchMm: parseInt(m[1], 10) / 10, version: parseInt(m[2], 10) };
+}
+function ledCatalogForClient() {
+  return LED_CATALOG.map((s) => ({
+    series: s.series,
+    models: s.models.map((m) => {
+      const p = parseLedModel(m);
+      return { model: m, label: p.pitchMm != null ? `${m} - ${p.pitchMm} mm` : m };
+    }),
+  }));
+}
 
 
 
@@ -11275,7 +11301,51 @@ ${renderTextInput('site_location', 'Site location')}
 ${renderTextInput('customer_representative', 'Customer representative', { allowUnknown: true })}
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
+<div class="field" data-form-types="service_report,maintenance">
+  <label for="led-series-select">LED model picker (series &rarr; model)</label>
+  <div style="display:flex;gap:8px;">
+    <select id="led-series-select" style="flex:1;min-width:0;">
+      <option value="">Series&hellip;</option>
+      ${LED_CATALOG.map((s) => `<option value="${escapeHtml(s.series)}">${escapeHtml(s.series)}</option>`).join('')}
+    </select>
+    <select id="led-model-select" style="flex:1;min-width:0;" disabled>
+      <option value="">Model&hellip;</option>
+    </select>
+  </div>
+</div>
 ${renderTextInput('led_display_model', 'LED display model / batch')}
+<script>
+(function () {
+  var CAT = ${JSON.stringify(ledCatalogForClient())};
+  function init() {
+    var ss = document.getElementById('led-series-select');
+    var ms = document.getElementById('led-model-select');
+    var input = document.querySelector('input[name="led_display_model"]');
+    if (!ss || !ms || !input) return;
+    ss.addEventListener('change', function () {
+      ms.innerHTML = '<option value="">Model\\u2026</option>';
+      var s = null;
+      for (var i = 0; i < CAT.length; i++) { if (CAT[i].series === ss.value) { s = CAT[i]; break; } }
+      if (!s) { ms.disabled = true; return; }
+      s.models.forEach(function (m) {
+        var o = document.createElement('option');
+        o.value = m.model;
+        o.textContent = m.label || m.model;
+        ms.appendChild(o);
+      });
+      ms.disabled = false;
+    });
+    ms.addEventListener('change', function () {
+      if (!ms.value) return;
+      input.value = ms.value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
 
 ${renderTextInput('batch_number', 'LSC Project number')}
 
@@ -22828,21 +22898,7 @@ app.get(['/api/calendar', '/service2/api/calendar'], async (req, res) => {
 });
 
 // --- LED model catalog: 2-step picker (series -> model) for "LED display model / batch" ---
-// The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
-const LED_CATALOG = [
-  { series: 'Essential', code: 'E', models: ['LD-E121', 'LD-E151', 'LD-E181', 'LD-E251'] },
-  { series: 'Mainstream / Enterprise V2', code: 'FE', version: 2, models: ['LD-FE092', 'LD-FE122', 'LD-FE152', 'LD-FE192', 'LD-FE252', 'LD-FE312', 'LD-FE382'] },
-  { series: 'Mainstream / Enterprise V3', code: 'FE', version: 3, models: ['LD-FE093', 'LD-FE123', 'LD-FE153', 'LD-FE193'] },
-  { series: 'High-End / Advanced V2', code: 'FA', version: 2, models: ['LD-FA092', 'LD-FA122', 'LD-FA152', 'LD-FA192', 'LD-FA252', 'LD-FA312', 'LD-FA382'] },
-  { series: 'High-End / Advanced V3', code: 'FA', version: 3, models: ['LD-FA093', 'LD-FA123', 'LD-FA153', 'LD-FA193'] },
-  { series: 'COB', code: 'COB', models: ['LD-EC091 & EC019-H', 'LD-EC121 & EC121-H', 'LD-EC151 & EC151-H', 'LD-EC181 & EC181-H', 'LD-D091', 'LD-D121', 'LD-D151'] },
-];
-function parseLedModel(model) {
-  const first = String(model).split('&')[0].trim().replace(/-H$/i, '');
-  const m = /(\d{2})(\d)\s*$/.exec(first);
-  if (!m) return { pitchMm: null, version: null };
-  return { pitchMm: parseInt(m[1], 10) / 10, version: parseInt(m[2], 10) };
-}
+// (LED_CATALOG + parseLedModel are defined near the top of the file — the form template uses them.)
 app.get(['/api/led-models', '/service2/api/led-models'], (req, res) => {
   const series = LED_CATALOG.map((s) => ({
     series: s.series,
