@@ -441,7 +441,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.50';
+const SERVICE2_VERSION = '0.51';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -459,13 +459,34 @@ function parseLedModel(model) {
   if (!m) return { pitchMm: null, version: null };
   return { pitchMm: parseInt(m[1], 10) / 10, version: parseInt(m[2], 10) };
 }
-function ledCatalogForClient() {
-  return LED_CATALOG.map((s) => ({
-    series: s.series,
-    models: s.models.map((m) => {
+// Group by the letter designation (LD-E / LD-FE / LD-FA / LD-EC / LD-D), merging
+// repeats across series (e.g. LD-FE appears in V2 and V3); second level = the
+// numeric designations, deduped and sorted. Picking code+number yields the model.
+function ledCodeGroups() {
+  const order = [];
+  const groups = {};
+  for (const s of LED_CATALOG) {
+    for (const m of s.models) {
+      const first = String(m).split('&')[0].trim();
+      const match = /^(LD-[A-Za-z]+)(\d{3})/.exec(first);
+      const code = match ? match[1] : first;
+      const number = match ? match[2] : '';
       const p = parseLedModel(m);
-      return { model: m, label: p.pitchMm != null ? `${m} - ${p.pitchMm} mm` : m };
-    }),
+      if (!groups[code]) { groups[code] = new Map(); order.push(code); }
+      if (number && !groups[code].has(number)) {
+        groups[code].set(number, {
+          number,
+          model: m,
+          pitchMm: p.pitchMm,
+          version: p.version,
+          label: `${number}${p.pitchMm != null ? ` - ${p.pitchMm} mm` : ''}${p.version ? ` (V${p.version})` : ''}`,
+        });
+      }
+    }
+  }
+  return order.map((code) => ({
+    code,
+    numbers: [...groups[code].values()].sort((a, b) => a.number.localeCompare(b.number)),
   }));
 }
 
@@ -11302,42 +11323,42 @@ ${renderTextInput('customer_representative', 'Customer representative', { allowU
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
 <div class="field" data-form-types="service_report,maintenance">
-  <label for="led-series-select">LED model picker (series &rarr; model)</label>
+  <label for="led-code-select">LED model picker (type &rarr; number)</label>
   <div style="display:flex;gap:8px;">
-    <select id="led-series-select" style="flex:1;min-width:0;">
-      <option value="">Series&hellip;</option>
-      ${LED_CATALOG.map((s) => `<option value="${escapeHtml(s.series)}">${escapeHtml(s.series)}</option>`).join('')}
+    <select id="led-code-select" style="flex:1;min-width:0;">
+      <option value="">Type&hellip;</option>
+      ${ledCodeGroups().map((g) => `<option value="${escapeHtml(g.code)}">${escapeHtml(g.code)}</option>`).join('')}
     </select>
-    <select id="led-model-select" style="flex:1;min-width:0;" disabled>
-      <option value="">Model&hellip;</option>
+    <select id="led-number-select" style="flex:1;min-width:0;" disabled>
+      <option value="">Model No.&hellip;</option>
     </select>
   </div>
 </div>
 ${renderTextInput('led_display_model', 'LED display model / batch')}
 <script>
 (function () {
-  var CAT = ${JSON.stringify(ledCatalogForClient())};
+  var CAT = ${JSON.stringify(ledCodeGroups())};
   function init() {
-    var ss = document.getElementById('led-series-select');
-    var ms = document.getElementById('led-model-select');
+    var cs = document.getElementById('led-code-select');
+    var ns = document.getElementById('led-number-select');
     var input = document.querySelector('input[name="led_display_model"]');
-    if (!ss || !ms || !input) return;
-    ss.addEventListener('change', function () {
-      ms.innerHTML = '<option value="">Model\\u2026</option>';
-      var s = null;
-      for (var i = 0; i < CAT.length; i++) { if (CAT[i].series === ss.value) { s = CAT[i]; break; } }
-      if (!s) { ms.disabled = true; return; }
-      s.models.forEach(function (m) {
+    if (!cs || !ns || !input) return;
+    cs.addEventListener('change', function () {
+      ns.innerHTML = '<option value="">Model No.\\u2026</option>';
+      var g = null;
+      for (var i = 0; i < CAT.length; i++) { if (CAT[i].code === cs.value) { g = CAT[i]; break; } }
+      if (!g) { ns.disabled = true; return; }
+      g.numbers.forEach(function (n) {
         var o = document.createElement('option');
-        o.value = m.model;
-        o.textContent = m.label || m.model;
-        ms.appendChild(o);
+        o.value = n.model;
+        o.textContent = n.label || n.number;
+        ns.appendChild(o);
       });
-      ms.disabled = false;
+      ns.disabled = false;
     });
-    ms.addEventListener('change', function () {
-      if (!ms.value) return;
-      input.value = ms.value;
+    ns.addEventListener('change', function () {
+      if (!ns.value) return;
+      input.value = ns.value;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
     });
@@ -22909,7 +22930,9 @@ app.get(['/api/led-models', '/service2/api/led-models'], (req, res) => {
       return { model: m, pitchMm: p.pitchMm, version: s.version || p.version, label: p.pitchMm != null ? `${m} · ${p.pitchMm} mm` : m };
     }),
   }));
-  res.json({ ok: true, series });
+  // codes = the letter-designation grouping (LD-E / LD-FE / LD-FA / LD-EC / LD-D),
+  // repeats merged across series — preferred picker shape (type -> number).
+  res.json({ ok: true, codes: ledCodeGroups(), series });
 });
 
 // --- People / role registry (E): remember who is internal staff (+role) vs customer-side ---
