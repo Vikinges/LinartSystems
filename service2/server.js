@@ -441,7 +441,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.51';
+const SERVICE2_VERSION = '0.52';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -21231,6 +21231,12 @@ const uploadFields = upload.fields([
 
   { name: 'photo_installation', maxCount: 20 },
 
+  // iOS sends signatures as raw binary PNG file parts (UIImage.pngData()),
+  // not data-URL strings like the web form — accept both.
+  { name: 'engineer_signature', maxCount: 1 },
+
+  { name: 'customer_signature', maxCount: 1 },
+
 ]);
 
 
@@ -23409,6 +23415,16 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
   const partsRowUsage = collectPartsRowUsage(req.body || {});
 
   const employeeSummary = collectEmployeeEntries(req.body || {});
+
+  // iOS path: signature arrived as a binary file part — normalize to a data URL
+  // so the rest of the pipeline (render, persist, restore) is format-agnostic.
+  for (const sigName of ['engineer_signature', 'customer_signature']) {
+    const part = req.files && Array.isArray(req.files[sigName]) ? req.files[sigName][0] : null;
+    if (part && part.buffer && part.buffer.length) {
+      const mime = /png$/i.test(part.mimetype || '') ? 'image/png' : 'image/jpeg';
+      req.body[sigName] = `data:${mime};base64,${part.buffer.toString('base64')}`;
+    }
+  }
 
   const signatureInputs = {
 

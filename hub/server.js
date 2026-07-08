@@ -2585,6 +2585,206 @@ app.post('/api/2fa/disable', (req, res) => {
   return res.json({ ok: true });
 });
 
+// --- Team chat (P9 MVP): REST-only, flat JSON storage, clients poll ---
+// direct = 1:1 between hub users (members only); project = room per projectKey
+// (visible to every authenticated user, author auto-joins on post).
+const CHAT_DIR = DATA_DIR ? path.join(DATA_DIR, 'chat') : path.join(__dirname, 'chat');
+const CHAT_INDEX_FILE = path.join(CHAT_DIR, 'conversations.json');
+const CHAT_BODY_MAX = 4000;
+
+function chatSanitizeId(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 120);
+}
+function loadChatIndex() {
+  try {
+    const data = JSON.parse(fs.readFileSync(CHAT_INDEX_FILE, 'utf8'));
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    return [];
+  }
+}
+function saveChatIndex(list) {
+  try {
+    fs.mkdirSync(CHAT_DIR, { recursive: true });
+    fs.writeFileSync(CHAT_INDEX_FILE, JSON.stringify(list, null, 2));
+  } catch (err) {
+    console.warn('[hub] chat index save failed', err.message);
+  }
+}
+function chatMessagesPath(convId) {
+  return path.join(CHAT_DIR, `msg_${chatSanitizeId(convId)}.jsonl`);
+}
+function readChatMessages(convId) {
+  try {
+    return fs.readFileSync(chatMessagesPath(convId), 'utf8')
+      .split('\n').filter(Boolean)
+      .map((line) => { try { return JSON.parse(line); } catch (e) { return null; } })
+      .filter(Boolean);
+  } catch (err) {
+    return [];
+  }
+}
+function appendChatMessage(convId, message) {
+  fs.mkdirSync(CHAT_DIR, { recursive: true });
+  fs.appendFileSync(chatMessagesPath(convId), JSON.stringify(message) + '\n');
+}
+function knownHubUsername(name) {
+  if (!name) return false;
+  const superName = adminCredentials.superadmin && adminCredentials.superadmin.username;
+  if (name === (superName || DEFAULT_ADMIN_USERNAME)) return true;
+  return (Array.isArray(adminCredentials.users) ? adminCredentials.users : []).some((u) => u && u.username === name);
+}
+function canSeeConversation(conv, username) {
+  if (!conv) return false;
+  if (conv.kind === 'project') return true;
+  return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(username);
+}
+function conversationPayload(conv, username) {
+  const msgs = readChatMessages(conv.id);
+  const last = msgs.length ? msgs[msgs.length - 1] : null;
+  const lastReadAt = (conv.reads && conv.reads[username]) || null;
+  const unreadCount = msgs.reduce(
+    (n, m) => n + ((!lastReadAt || m.createdAt > lastReadAt) && m.authorId !== username ? 1 : 0),
+    0
+  );
+  return {
+    id: conv.id,
+    kind: conv.kind,
+    ...(conv.projectKey ? { projectKey: conv.projectKey } : {}),
+    title: conv.title,
+    memberUsernames: conv.memberUsernames || [],
+    lastMessage: last,
+    unreadCount,
+    lastReadAt,
+    muted: false,
+  };
+}
+
+app.get('/api/chat/conversations', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const conversations = loadChatIndex()
+    .filter((c) => canSeeConversation(c, user.username))
+    .map((c) => conversationPayload(c, user.username))
+    .sort((a, b) => {
+      const at = (a.lastMessage && a.lastMessage.createdAt) || '';
+      const bt = (b.lastMessage && b.lastMessage.createdAt) || '';
+      return bt.localeCompare(at);
+    });
+  return res.json({ ok: true, conversations });
+});
+
+app.post('/api/chat/conversations', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const body = req.body || {};
+  const kind = body.kind === 'project' ? 'project' : (body.kind === 'direct' ? 'direct' : null);
+  if (!kind) return res.status(400).json({ ok: false, error: 'invalid_kind' });
+  const index = loadChatIndex();
+  let conv;
+  if (kind === 'direct') {
+    const member = typeof body.member === 'string' ? body.member.trim() : '';
+    if (!member) return res.status(400).json({ ok: false, error: 'member_required' });
+    if (member === user.username) return res.status(400).json({ ok: false, error: 'cannot_dm_self' });
+    if (!knownHubUsername(member)) return res.status(404).json({ ok: false, error: 'user_not_found' });
+    const pair = [user.username, member].sort();
+    const id = `dm_${chatSanitizeId(pair.join('__'))}`;
+    conv = index.find((c) => c.id === id);
+    if (!conv) {
+      conv = { id, kind, title: pair.join(' & '), memberUsernames: pair, createdAt: new Date().toISOString(), reads: {} };
+      index.push(conv);
+      saveChatIndex(index);
+    }
+  } else {
+    const projectKey = typeof body.projectKey === 'string' ? body.projectKey.trim() : '';
+    if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey_required' });
+    const id = `prj_${chatSanitizeId(projectKey)}`;
+    conv = index.find((c) => c.id === id);
+    if (!conv) {
+      conv = { id, kind, projectKey, title: `Project ${projectKey}`, memberUsernames: [user.username], createdAt: new Date().toISOString(), reads: {} };
+      index.push(conv);
+      saveChatIndex(index);
+    }
+  }
+  return res.json({ ok: true, conversation: conversationPayload(conv, user.username) });
+});
+
+app.get('/api/chat/conversations/:id/messages', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const conv = loadChatIndex().find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 200)) : 50;
+  const all = readChatMessages(conv.id);
+  let upper = all.length;
+  const before = typeof req.query.before === 'string' ? req.query.before.trim() : '';
+  if (before) {
+    const idx = all.findIndex((m) => m.id === before);
+    if (idx >= 0) upper = idx;
+  }
+  const start = Math.max(0, upper - limit);
+  return res.json({ ok: true, messages: all.slice(start, upper), hasMore: start > 0 });
+});
+
+app.post('/api/chat/conversations/:id/messages', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const conv = index.find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  const body = req.body || {};
+  const text = typeof body.body === 'string' ? body.body.trim() : '';
+  if (!text) return res.status(400).json({ ok: false, error: 'body_required' });
+  const message = {
+    id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
+    conversationId: conv.id,
+    authorId: user.username,
+    authorDisplayName: user.username,
+    kind: 'text',
+    body: text.slice(0, CHAT_BODY_MAX),
+    createdAt: new Date().toISOString(),
+  };
+  appendChatMessage(conv.id, message);
+  let indexDirty = false;
+  if (conv.kind === 'project' && !conv.memberUsernames.includes(user.username)) {
+    conv.memberUsernames.push(user.username); // author auto-joins the project room
+    indexDirty = true;
+  }
+  if (!conv.reads) conv.reads = {};
+  conv.reads[user.username] = message.createdAt; // your own message is read
+  conv.lastMessageAt = message.createdAt;
+  saveChatIndex(index);
+  void indexDirty;
+  // Bonus: instant delivery for clients on the P8 SSE stream (poll remains the source of truth).
+  for (const c of sseClients) {
+    if (c.user !== user.username && canSeeConversation(conv, c.user)) {
+      ssePush(c, 'chat', { conversationId: conv.id, message });
+    }
+  }
+  return res.json({ ok: true, ...message });
+});
+
+app.post('/api/chat/conversations/:id/read', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const conv = index.find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  if (!conv.reads) conv.reads = {};
+  conv.reads[user.username] = new Date().toISOString();
+  saveChatIndex(index);
+  return res.json({ ok: true });
+});
+
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
 const requireService2Access = requireServiceAccess('service2', '/service2');
 app.get('/service2', requireService2Access, (req, res) => res.redirect(301, '/service2/'));
