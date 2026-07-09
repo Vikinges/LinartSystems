@@ -439,6 +439,14 @@ function resolveFilesAccess(role, isSuperadmin, canViewFiles) {
   return Boolean(canViewFiles);
 }
 
+// Chat access defaults to ENABLED for managers (undefined -> true); admins always
+// on, blocked always off. Differs from file perms, which default off.
+function resolveChatAccess(role, isSuperadmin, canUseChat) {
+  if (isSuperadmin || role === USER_ROLE_ADMIN) return true;
+  if (role === USER_ROLE_BLOCKED) return false;
+  return canUseChat !== false;
+}
+
 function normalizeSessionUser(user) {
   if (!user || typeof user !== 'object') return null;
   const username = typeof user.username === 'string' ? user.username.trim() : '';
@@ -464,7 +472,8 @@ function normalizeSessionUser(user) {
     isSuperadmin,
     normalizeFilesAccess(user.canDeleteFiles, false)
   );
-  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles };
+  const canUseChat = resolveChatAccess(role, isSuperadmin, user.canUseChat);
+  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat };
 }
 
 function getNextPort() {
@@ -587,6 +596,7 @@ function buildAdminAuthToken(user) {
     f: normalized.canViewFiles ? 1 : 0,
     g: normalized.canGenerateLinks ? 1 : 0,
     d: normalized.canDeleteFiles ? 1 : 0,
+    c: normalized.canUseChat ? 1 : 0,
     s: Array.isArray(normalized.allowedServices) ? normalized.allowedServices : [],
     t: Date.now(),
   });
@@ -620,6 +630,8 @@ function parseAdminAuthToken(token) {
   const canViewFiles = normalizeFilesAccess(data.f, false);
   const canGenerateLinks = normalizeFilesAccess(data.g, false);
   const canDeleteFiles = normalizeFilesAccess(data.d, false);
+  // Legacy tokens have no `c`; treat absence as enabled (default-on for chat).
+  const canUseChat = data.c === 0 ? false : true;
   return normalizeSessionUser({
     username: String(data.u),
     isSuperadmin,
@@ -627,6 +639,7 @@ function parseAdminAuthToken(token) {
     canViewFiles,
     canGenerateLinks,
     canDeleteFiles,
+    canUseChat,
     allowedServices: Array.isArray(data.s) ? data.s : [],
   });
 }
@@ -1279,6 +1292,7 @@ function buildSessionUserFromStore(username) {
         canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
         canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
         canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
+        canUseChat: user.canUseChat,
         allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
       });
     }
@@ -1361,6 +1375,7 @@ function buildTokenResponse(user) {
       canViewFiles: user.canViewFiles,
       canGenerateLinks: user.canGenerateLinks,
       canDeleteFiles: user.canDeleteFiles,
+      canUseChat: user.canUseChat,
       allowedServices: user.allowedServices || [],
     },
   };
@@ -1419,6 +1434,7 @@ app.get('/api/auth/me', (req, res) => {
       canViewFiles: user.canViewFiles,
       canGenerateLinks: user.canGenerateLinks,
       canDeleteFiles: user.canDeleteFiles,
+      canUseChat: user.canUseChat,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -1960,6 +1976,7 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         canViewFiles: normalizeFilesAccess(u.canViewFiles, false),
         canGenerateLinks: normalizeFilesAccess(u.canGenerateLinks, false),
         canDeleteFiles: normalizeFilesAccess(u.canDeleteFiles, false),
+        canUseChat: u.canUseChat !== false,
       }))
     : [];
   res.json({ ok: true, users });
@@ -1979,6 +1996,7 @@ app.get('/admin/me', requireSuperadmin, (req, res) => {
       canViewFiles: user.canViewFiles,
       canGenerateLinks: user.canGenerateLinks,
       canDeleteFiles: user.canDeleteFiles,
+      canUseChat: user.canUseChat,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -1995,6 +2013,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const canViewFiles = resolveFilesAccess(role, false, rawFilesAccess);
   const canGenerateLinks = resolveFilesAccess(role, false, normalizeFilesAccess(body.canGenerateLinks, false));
   const canDeleteFiles = resolveFilesAccess(role, false, normalizeFilesAccess(body.canDeleteFiles, false));
+  const canUseChat = resolveChatAccess(role, false, body.canUseChat);
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -2008,7 +2027,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles };
+  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat };
   // appReviewProtected accounts are exempt from the account-deletion sweeper (Apple review account).
   if (body.appReviewProtected === true) newUser.appReviewProtected = true;
   adminCredentials.users.push(newUser);
@@ -2050,6 +2069,14 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   if (Object.prototype.hasOwnProperty.call(body, 'canDeleteFiles')) {
     user.canDeleteFiles = normalizeFilesAccess(body.canDeleteFiles, false);
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'canUseChat')) {
+    user.canUseChat = body.canUseChat !== false;
+  }
+  user.canUseChat = resolveChatAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    user.canUseChat
+  );
   user.canViewFiles = resolveFilesAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
     false,
@@ -2727,6 +2754,27 @@ function requireChatMember(req, res, next) {
   return next();
 }
 
+// Every /api/chat/* route requires an authenticated, chat-enabled user. Admins are
+// always enabled; managers honor their canUseChat flag (read live from the user store
+// so an admin's toggle applies at once); blocked users never pass.
+function userChatEnabled(user) {
+  if (!user) return false;
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
+  if (user.role === USER_ROLE_BLOCKED) return false;
+  const rec = (Array.isArray(adminCredentials.users) ? adminCredentials.users : [])
+    .find((u) => u && u.username === user.username);
+  if (rec) return rec.canUseChat !== false;
+  return user.canUseChat !== false;
+}
+
+app.use('/api/chat', (req, res, next) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (!userChatEnabled(user)) return res.status(403).json({ ok: false, error: 'chat_disabled' });
+  return next();
+});
+
 app.get('/api/chat/conversations', (req, res) => {
   setNoCache(res);
   const user = getSessionUser(req);
@@ -2927,6 +2975,44 @@ app.get('/api/chat/admin/conversations', requireChatAdmin, (req, res) => {
     };
   }).sort((a, b) => String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || '')));
   return res.json({ ok: true, conversations });
+});
+
+// Read any conversation's messages (bypasses membership) for the admin viewer.
+app.get('/api/chat/admin/conversations/:id/messages', requireChatAdmin, (req, res) => {
+  const conv = loadChatIndex().find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  const rawLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(rawLimit, 500)) : 200;
+  const all = readChatMessages(conv.id);
+  let upper = all.length;
+  const before = typeof req.query.before === 'string' ? req.query.before.trim() : '';
+  if (before) { const idx = all.findIndex((m) => m.id === before); if (idx >= 0) upper = idx; }
+  const start = Math.max(0, upper - limit);
+  return res.json({
+    ok: true,
+    conversation: {
+      id: conv.id, kind: conv.kind, title: conv.title,
+      ...(conv.projectKey ? { projectKey: conv.projectKey } : {}),
+      memberUsernames: conv.memberUsernames || [],
+    },
+    messages: all.slice(start, upper),
+    hasMore: start > 0,
+  });
+});
+
+// Serve any conversation's attachment (bypasses membership) for the admin viewer.
+app.get('/api/chat/admin/conversations/:id/attachments/:name', requireChatAdmin, (req, res) => {
+  const stored = chatSanitizeId(req.params.name);
+  if (!stored || stored.includes('..')) return res.status(400).json({ ok: false, error: 'bad_name' });
+  const dir = path.resolve(path.join(CHAT_ATTACH_DIR, chatSanitizeId(req.params.id)));
+  const filePath = path.resolve(path.join(dir, stored));
+  if (filePath !== path.join(dir, stored) || !filePath.startsWith(dir + path.sep)) {
+    return res.status(400).json({ ok: false, error: 'bad_path' });
+  }
+  if (!fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'not_found' });
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  return res.sendFile(filePath);
 });
 
 // Download one conversation (metadata + messages + attachments) as a .zip.

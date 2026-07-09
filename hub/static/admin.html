@@ -103,6 +103,26 @@
     .actions-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
     .actions-row .pw-input { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; flex: 1; min-width: 180px; }
     .is-hidden { display: none; }
+    .chat-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+    .chat-conv-list { display: flex; flex-direction: column; gap: 10px; }
+    .chat-conv-card { display: flex; gap: 14px; align-items: center; border: 1px solid #e6eef8; border-radius: 10px; padding: 14px; background: #fafcff; flex-wrap: wrap; }
+    .chat-conv-card .info { flex: 1; min-width: 220px; }
+    .chat-conv-card .info strong { display: flex; align-items: center; gap: 8px; }
+    .chat-kind { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .chat-kind.direct { background: #e3edff; color: #1d4fd7; }
+    .chat-kind.project { background: #e2f6e9; color: #1d7a3f; }
+    .chat-conv-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chat-viewer { margin-top: 16px; border: 1px solid #dbe2ee; border-radius: 10px; padding: 16px; background: #fff; }
+    .chat-viewer-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .chat-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow: auto; }
+    .chat-msg { border: 1px solid #eef2f8; border-radius: 8px; padding: 8px 10px; background: #fafcff; }
+    .chat-msg-head { font-size: 0.78rem; color: #556370; margin-bottom: 2px; display: flex; gap: 8px; }
+    .chat-msg-author { font-weight: 600; color: #33414e; }
+    .chat-msg-body { white-space: pre-wrap; word-break: break-word; }
+    .chat-att { margin-top: 6px; }
+    .chat-att img { max-width: 220px; max-height: 220px; border-radius: 8px; border: 1px solid #dbe2ee; display: block; margin-bottom: 4px; }
+    .chat-att audio { width: 260px; display: block; margin-bottom: 4px; }
+    .chat-att a { color: #2563eb; font-size: 0.85rem; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -325,6 +345,10 @@
               <input type="checkbox" id="newUserCanDeleteFiles">
               <span><span>Delete files</span><span class="perm-hint">Can permanently remove PDFs from the archive.</span></span>
             </label>
+            <label class="perm-label">
+              <input type="checkbox" id="newUserCanUseChat" checked>
+              <span><span>Use chat (LSC LED Chat)</span><span class="perm-hint">Can open the team chat, send messages and attachments.</span></span>
+            </label>
           </div>
         </div>
         <div id="newUserServicesSection" class="services-section" style="grid-column: 1 / -1;">
@@ -340,6 +364,18 @@
         </div>
       </form>
       <div class="hint">Users are handled by the hub only. The superadmin account remains "admin".</div>
+    </section>
+
+    <section>
+      <h2>LSC LED Chat</h2>
+      <div class="chat-toolbar">
+        <button type="button" id="chatRefresh" class="secondary">Refresh</button>
+        <a id="chatFullArchive" class="button" href="/api/chat/admin/archive">Download all (ZIP)</a>
+        <span id="chatAdminStatus" class="meta"></span>
+      </div>
+      <div id="chatConvList" class="chat-conv-list"></div>
+      <div id="chatViewer" class="chat-viewer is-hidden"></div>
+      <div class="hint">Admin view of every team conversation. You can read any chat, export it as a ZIP, or delete it. Control who may use chat per-user with the "Use chat" checkbox above.</div>
     </section>
 
     <section>
@@ -488,7 +524,7 @@
       return role === 'admin' || role === 'blocked';
     }
 
-    function syncServiceControls(allowAllInput, servicesBox, role, filesAccessInput, genLinksInput, delFilesInput) {
+    function syncServiceControls(allowAllInput, servicesBox, role, filesAccessInput, genLinksInput, delFilesInput, chatInput) {
       const disableServices = isServiceRoleRestricted(role);
       if (allowAllInput) {
         allowAllInput.disabled = disableServices;
@@ -514,6 +550,7 @@
       applyPermission(filesAccessInput);
       applyPermission(genLinksInput);
       applyPermission(delFilesInput);
+      applyPermission(chatInput);
     }
 
     let roleGroupSeq = 0;
@@ -573,6 +610,7 @@
       { key: 'canViewFiles', label: 'View files archive', hint: 'Sees all submitted PDFs in Files.' },
       { key: 'canGenerateLinks', label: 'Create sign links', hint: 'Can send documents to customers for signature.' },
       { key: 'canDeleteFiles', label: 'Delete files', hint: 'Can permanently remove PDFs from the archive.' },
+      { key: 'canUseChat', label: 'Use chat (LSC LED Chat)', hint: 'Can open the team chat, send messages and attachments.' },
     ];
     function summarizeUser(roleValue, user) {
       if (roleValue === 'admin') return 'Full access to everything.';
@@ -581,7 +619,8 @@
       if (user.canViewFiles) extras.push('views files archive');
       if (user.canGenerateLinks) extras.push('creates sign links');
       if (user.canDeleteFiles) extras.push('deletes files');
-      return extras.length ? `Creates report forms + ${extras.join(', ')}.` : 'Creates report forms only.';
+      const base = extras.length ? `Creates report forms + ${extras.join(', ')}.` : 'Creates report forms only.';
+      return user.canUseChat === false ? `${base} Chat: off.` : `${base} Chat: on.`;
     }
 
     function handleError(error) {
@@ -639,6 +678,7 @@
     const newUserFilesAccess = document.getElementById('newUserFilesAccess');
     const newUserCanGenerateLinks = document.getElementById('newUserCanGenerateLinks');
     const newUserCanDeleteFiles = document.getElementById('newUserCanDeleteFiles');
+    const newUserCanUseChat = document.getElementById('newUserCanUseChat');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const newUserSummary = document.getElementById('newUserSummary');
@@ -677,17 +717,18 @@
           canViewFiles: newUserFilesAccess && newUserFilesAccess.checked,
           canGenerateLinks: newUserCanGenerateLinks && newUserCanGenerateLinks.checked,
           canDeleteFiles: newUserCanDeleteFiles && newUserCanDeleteFiles.checked,
+          canUseChat: newUserCanUseChat ? newUserCanUseChat.checked : true,
         });
       }
       if (newUserPermSection) newUserPermSection.classList.toggle('is-hidden', current !== 'manager');
       if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager');
     }
-    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles].forEach((cb) => {
+    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat].forEach((cb) => {
       if (cb) cb.addEventListener('change', () => refreshNewUserSummary());
     });
     if (newUserRoles) {
       getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (role) => {
-        syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+        syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);
         refreshNewUserSummary(role);
       });
     }
@@ -1051,6 +1092,7 @@
         const filesAccessInput = permInputs.canViewFiles;
         const canGenerateLinksInput = permInputs.canGenerateLinks;
         const canDeleteFilesInput = permInputs.canDeleteFiles;
+        const canUseChatInput = permInputs.canUseChat;
         controls.appendChild(permSection);
 
         // Services
@@ -1083,23 +1125,24 @@
             canViewFiles: filesAccessInput.checked,
             canGenerateLinks: canGenerateLinksInput.checked,
             canDeleteFiles: canDeleteFilesInput.checked,
+            canUseChat: canUseChatInput.checked,
           });
           permSection.classList.toggle('is-hidden', currentRole !== 'manager');
           servicesSection.classList.toggle('is-hidden', currentRole !== 'manager');
         };
-        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput].forEach((cb) => {
+        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput].forEach((cb) => {
           cb.addEventListener('change', refreshSummary);
         });
         allowAllInput.addEventListener('change', () => {
-          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput);
         });
 
         const getRole = renderRoleOptions(roleBox, currentRole, (nextRole) => {
           currentRole = nextRole;
-          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
+          syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput);
           refreshSummary();
         });
-        syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
+        syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput);
         refreshSummary();
 
         // Actions: password + save + delete
@@ -1122,6 +1165,7 @@
             payload.canViewFiles = filesAccessInput.checked;
             payload.canGenerateLinks = canGenerateLinksInput.checked;
             payload.canDeleteFiles = canDeleteFilesInput.checked;
+            payload.canUseChat = canUseChatInput.checked;
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {
@@ -1171,10 +1215,10 @@
       if (!newUserServices) return;
       const selected = new Set();
       renderServiceCheckboxes(newUserServices, selected, false);
-      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+      syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);
       if (newUserAllowAll) {
         newUserAllowAll.addEventListener('change', () => {
-          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+          syncServiceControls(newUserAllowAll, newUserServices, getNewUserRole(), newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);
         });
       }
     }
@@ -1347,6 +1391,186 @@
       }
     }
 
+    const chatConvList = document.getElementById('chatConvList');
+    const chatViewer = document.getElementById('chatViewer');
+    const chatRefreshBtn = document.getElementById('chatRefresh');
+    const chatAdminStatus = document.getElementById('chatAdminStatus');
+
+    function chatFmtTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? iso : d.toLocaleString();
+    }
+
+    async function loadChatAdmin() {
+      if (!chatConvList) return;
+      try {
+        const data = await fetchJson('/api/chat/admin/conversations');
+        const convs = Array.isArray(data.conversations) ? data.conversations : [];
+        chatConvList.innerHTML = '';
+        if (chatAdminStatus) chatAdminStatus.textContent = convs.length + ' conversation(s)';
+        if (!convs.length) {
+          const empty = document.createElement('div');
+          empty.className = 'meta';
+          empty.textContent = 'No conversations yet.';
+          chatConvList.appendChild(empty);
+          return;
+        }
+        convs.forEach((conv) => chatConvList.appendChild(renderChatConvCard(conv)));
+      } catch (error) {
+        if (chatAdminStatus) chatAdminStatus.textContent = 'Failed to load chats.';
+        console.warn('chat admin load failed', error);
+      }
+    }
+
+    function renderChatConvCard(conv) {
+      const card = document.createElement('div');
+      card.className = 'chat-conv-card';
+      const info = document.createElement('div');
+      info.className = 'info';
+      const title = document.createElement('strong');
+      title.appendChild(document.createTextNode(conv.title || conv.id));
+      const kind = document.createElement('span');
+      kind.className = 'chat-kind ' + (conv.kind === 'project' ? 'project' : 'direct');
+      kind.textContent = conv.kind === 'project' ? 'Project' : 'Direct';
+      title.appendChild(kind);
+      info.appendChild(title);
+      const members = document.createElement('div');
+      members.className = 'meta';
+      members.textContent = 'Members: ' + ((conv.memberUsernames || []).join(', ') || '—');
+      info.appendChild(members);
+      const stats = document.createElement('div');
+      stats.className = 'meta';
+      stats.textContent = (conv.messageCount || 0) + ' messages · ' + (conv.attachmentCount || 0)
+        + ' attachments · last ' + (chatFmtTime(conv.lastMessageAt) || '—');
+      info.appendChild(stats);
+      card.appendChild(info);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'secondary';
+      viewBtn.textContent = 'View';
+      viewBtn.addEventListener('click', () => openChatViewer(conv));
+      actions.appendChild(viewBtn);
+
+      const zipLink = document.createElement('a');
+      zipLink.className = 'button';
+      zipLink.textContent = 'ZIP';
+      zipLink.href = '/api/chat/admin/conversations/' + encodeURIComponent(conv.id) + '/archive';
+      actions.appendChild(zipLink);
+
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'secondary';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('Delete conversation "' + (conv.title || conv.id) + '" with all messages and attachments?')) return;
+        try {
+          await fetchJson('/api/chat/admin/conversations/' + encodeURIComponent(conv.id), { method: 'DELETE' });
+          if (chatViewer) { chatViewer.classList.add('is-hidden'); chatViewer.innerHTML = ''; }
+          await loadChatAdmin();
+        } catch (error) { handleError(error); }
+      });
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+      return card;
+    }
+
+    async function openChatViewer(conv) {
+      if (!chatViewer) return;
+      chatViewer.classList.remove('is-hidden');
+      chatViewer.innerHTML = '<div class="meta">Loading…</div>';
+      chatViewer.scrollIntoView({ block: 'nearest' });
+      try {
+        const data = await fetchJson('/api/chat/admin/conversations/' + encodeURIComponent(conv.id) + '/messages?limit=500');
+        const msgs = Array.isArray(data.messages) ? data.messages : [];
+        chatViewer.innerHTML = '';
+        const header = document.createElement('div');
+        header.className = 'chat-viewer-header';
+        const h = document.createElement('strong');
+        h.textContent = conv.title || conv.id;
+        header.appendChild(h);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'secondary';
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', () => { chatViewer.classList.add('is-hidden'); chatViewer.innerHTML = ''; });
+        header.appendChild(closeBtn);
+        chatViewer.appendChild(header);
+
+        const list = document.createElement('div');
+        list.className = 'chat-msgs';
+        if (!msgs.length) {
+          const empty = document.createElement('div');
+          empty.className = 'meta';
+          empty.textContent = 'No messages.';
+          list.appendChild(empty);
+        }
+        msgs.forEach((m) => list.appendChild(renderChatMessage(conv, m)));
+        chatViewer.appendChild(list);
+        if (data.hasMore) {
+          const more = document.createElement('div');
+          more.className = 'hint';
+          more.textContent = 'Showing latest 500 messages.';
+          chatViewer.appendChild(more);
+        }
+      } catch (error) {
+        chatViewer.innerHTML = '';
+        handleError(error);
+      }
+    }
+
+    function renderChatMessage(conv, m) {
+      const el = document.createElement('div');
+      el.className = 'chat-msg';
+      const head = document.createElement('div');
+      head.className = 'chat-msg-head';
+      const author = document.createElement('span');
+      author.className = 'chat-msg-author';
+      author.textContent = m.authorDisplayName || m.authorId || '—';
+      const time = document.createElement('span');
+      time.textContent = chatFmtTime(m.createdAt);
+      head.appendChild(author);
+      head.appendChild(time);
+      el.appendChild(head);
+      if (m.body) {
+        const body = document.createElement('div');
+        body.className = 'chat-msg-body';
+        body.textContent = m.body;
+        el.appendChild(body);
+      }
+      if (m.attachment && m.attachment.file) {
+        const att = document.createElement('div');
+        att.className = 'chat-att';
+        const url = '/api/chat/admin/conversations/' + encodeURIComponent(conv.id)
+          + '/attachments/' + encodeURIComponent(m.attachment.file);
+        const mime = m.attachment.mime || '';
+        if (mime.indexOf('image/') === 0) {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = m.attachment.name || 'image';
+          att.appendChild(img);
+        } else if (mime.indexOf('audio/') === 0) {
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.src = url;
+          att.appendChild(audio);
+        }
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', m.attachment.name || 'file');
+        const kb = m.attachment.size ? ' (' + Math.round(m.attachment.size / 1024) + ' KB)' : '';
+        link.textContent = '⤓ ' + (m.attachment.name || 'file') + kb;
+        att.appendChild(link);
+        el.appendChild(att);
+      }
+      return el;
+    }
+
+    if (chatRefreshBtn) chatRefreshBtn.addEventListener('click', () => loadChatAdmin());
+
     async function loadAll() {
       try {
         const [services, config, usersResp] = await Promise.all([
@@ -1363,6 +1587,7 @@
         renderNewUserServices();
         renderUsers();
         renderSocialLinks();
+        loadChatAdmin().catch((e) => console.warn('chat admin', e));
         await loadCurrentUser();
         try {
           await loadLogs();
@@ -1388,6 +1613,7 @@
         const canViewFiles = role === 'admin' ? true : role === 'blocked' ? false : (newUserFilesAccess && newUserFilesAccess.checked);
         const canGenerateLinks = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanGenerateLinks && newUserCanGenerateLinks.checked);
         const canDeleteFiles = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanDeleteFiles && newUserCanDeleteFiles.checked);
+        const canUseChat = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanUseChat ? newUserCanUseChat.checked : true);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -1401,7 +1627,7 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, allowedServices: selectedServices })
           });
           newUserPasswordInput.value = '';
           if (newUserServices) {
@@ -1411,9 +1637,10 @@
           if (newUserFilesAccess) newUserFilesAccess.checked = false;
           if (newUserCanGenerateLinks) newUserCanGenerateLinks.checked = false;
           if (newUserCanDeleteFiles) newUserCanDeleteFiles.checked = false;
+          if (newUserCanUseChat) newUserCanUseChat.checked = true;
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
-              syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+              syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);
               refreshNewUserSummary(nextRole);
             });
           }
