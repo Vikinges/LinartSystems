@@ -334,6 +334,9 @@ function loadAdminCredentials() {
                   allowedServices: normalizeAllowedServices(user.allowedServices),
                   role: normalizeUserRole(user.role, USER_ROLE_MANAGER),
                   canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
+                  canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
+                  canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
+                  canUseChat: user.canUseChat !== false,
                 };
                 // Preserve account-lifecycle fields (Apple deletion flow) across reloads.
                 if (user.appReviewProtected === true) normalizedUser.appReviewProtected = true;
@@ -1120,6 +1123,14 @@ app.get('/status', (req, res) => {
   res.sendFile(path.join(__dirname, 'static', 'status.html'));
 });
 
+// Web chat client (LSC LED Chat). Requires a session; chat-access is enforced by
+// the /api/chat guard, and the page shows a friendly message on 403 chat_disabled.
+app.get('/chat', (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) return res.redirect('/');
+  res.sendFile(path.join(__dirname, 'static', 'chat.html'));
+});
+
 // Public legal/support pages (no auth) — required for Apple App Store review.
 app.get('/privacy', (req, res) => {
   res.sendFile(path.join(__dirname, 'static', 'privacy.html'));
@@ -1200,6 +1211,7 @@ app.get('/api/status', async (req, res) => {
             canViewFiles: user.canViewFiles,
             canGenerateLinks: user.canGenerateLinks,
             canDeleteFiles: user.canDeleteFiles,
+            canUseChat: user.canUseChat,
             allowedServices: user.allowedServices || [],
           }
         : null,
@@ -1251,6 +1263,7 @@ async function authenticateCredentials(usernameRaw, pass) {
           canViewFiles: normalizeFilesAccess(user.canViewFiles, false),
           canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
           canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
+          canUseChat: user.canUseChat,
           allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
         };
         break;

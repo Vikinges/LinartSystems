@@ -26,6 +26,7 @@
             <button id="logoutButton" class="link-button secondary" type="button" style="display:none;">Log out</button>
             <a id="adminLink" class="link-button secondary" href="/admin" style="display:none;">Admin</a>
             <a id="filesLink" class="link-button secondary" href="/files" style="display:none;">Files</a>
+            <a id="chatLink" class="link-button secondary" href="/chat" style="display:none;">Messages</a>
             <a class="link-button secondary" href="/status">Status</a>
           </div>
         </header>
@@ -97,6 +98,7 @@
   const currentUserBadge = document.getElementById('currentUserBadge');
   const adminLink = document.getElementById('adminLink');
   const filesLink = document.getElementById('filesLink');
+  const chatLink = document.getElementById('chatLink');
   const adminModalEl = document.getElementById('adminModal');
   const adminUsernameInput = document.getElementById('adminUsernameInput');
   const adminPasswordInput = document.getElementById('adminPasswordInput');
@@ -447,6 +449,8 @@
       if (logoutButton) logoutButton.style.display = user ? 'inline-flex' : 'none';
       if (adminLink) adminLink.style.display = isAdminRole ? 'inline-flex' : 'none';
       if (filesLink) filesLink.style.display = canViewFiles ? 'inline-flex' : 'none';
+      const canUseChat = user && !isBlocked && (user.isSuperadmin || role === 'admin' || user.canUseChat !== false);
+      if (chatLink) chatLink.style.display = canUseChat ? 'inline-flex' : 'none';
 
       servicesContainer.innerHTML = '';
       const filtered = data.hub && data.hub.filtered;

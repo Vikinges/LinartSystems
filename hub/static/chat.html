@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LSC LED Chat</title>
+  <style>
+    :root { font-family: Inter, "Segoe UI", Arial, sans-serif; color: #e7eef7; background: #0a0f1a; color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; height: 100vh; overflow: hidden; }
+    button { font: inherit; cursor: pointer; }
+    .chat-app { display: grid; grid-template-columns: 320px 1fr; height: 100vh; }
+    .sidebar { border-right: 1px solid #1c2740; display: flex; flex-direction: column; min-height: 0; background: #0b1220; }
+    .sidebar-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid #1c2740; }
+    .sidebar-head strong { flex: 1; font-size: 1.05rem; }
+    .sidebar-head .back { color: #8fb2ff; text-decoration: none; font-size: 0.85rem; white-space: nowrap; }
+    .btn { border: none; border-radius: 999px; padding: 7px 14px; font-weight: 600; font-size: 0.85rem; background: #2f6fed; color: #fff; }
+    .btn.secondary { background: #17233c; color: #cdd9ec; border: 1px solid #26365a; }
+    .conv-list { flex: 1; overflow-y: auto; min-height: 0; }
+    .conv-item { display: flex; gap: 10px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #131d33; cursor: pointer; }
+    .conv-item:hover { background: #101a2e; }
+    .conv-item.active { background: #14213a; }
+    .conv-avatar { width: 40px; height: 40px; border-radius: 50%; background: #22345c; color: #cfe0ff; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+    .conv-avatar.project { background: #1d4a30; color: #b7f0cd; }
+    .conv-main { flex: 1; min-width: 0; }
+    .conv-title { font-weight: 600; font-size: 0.92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-preview { color: #8595ad; font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conv-badge { background: #2f6fed; color: #fff; border-radius: 999px; font-size: 0.72rem; font-weight: 700; min-width: 20px; height: 20px; padding: 0 6px; display: flex; align-items: center; justify-content: center; }
+    .conv-empty, .msg-empty { color: #7c8aa5; padding: 20px 16px; font-size: 0.88rem; }
+    .main { display: flex; flex-direction: column; min-height: 0; min-width: 0; background: #0a0f1a; }
+    .main-empty { flex: 1; display: flex; align-items: center; justify-content: center; color: #6b7a95; }
+    .thread { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+    .thread-head { padding: 14px 18px; border-bottom: 1px solid #1c2740; display: flex; align-items: center; gap: 10px; }
+    .thread-head strong { font-size: 1rem; }
+    .thread-head .sub { color: #8595ad; font-size: 0.8rem; }
+    .thread-head .back-mobile { display: none; color: #8fb2ff; background: none; border: none; }
+    .messages { flex: 1; overflow-y: auto; min-height: 0; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+    .msg { max-width: 72%; padding: 8px 12px; border-radius: 14px; background: #16233c; align-self: flex-start; }
+    .msg.mine { align-self: flex-end; background: #2f5bd0; }
+    .msg-author { font-size: 0.74rem; color: #9fb4d6; margin-bottom: 2px; font-weight: 600; }
+    .msg.mine .msg-author { color: #d6e2ff; }
+    .msg-body { white-space: pre-wrap; word-break: break-word; font-size: 0.92rem; line-height: 1.35; }
+    .msg-time { font-size: 0.68rem; color: #8595ad; margin-top: 3px; text-align: right; }
+    .msg.mine .msg-time { color: #cdd9f5; }
+    .msg-att img { max-width: 240px; max-height: 240px; border-radius: 10px; display: block; margin-top: 4px; cursor: pointer; }
+    .msg-att audio { margin-top: 4px; max-width: 240px; }
+    .msg-att a { color: #bcd3ff; font-size: 0.85rem; display: inline-flex; gap: 6px; margin-top: 4px; text-decoration: none; }
+    .msg.mine .msg-att a { color: #eaf1ff; }
+    .composer { display: flex; gap: 8px; align-items: center; padding: 12px 14px; border-top: 1px solid #1c2740; }
+    .composer input[type=text] { flex: 1; padding: 11px 14px; border-radius: 999px; border: 1px solid #26365a; background: #0f1830; color: #e7eef7; font: inherit; }
+    .composer input[type=text]:focus { outline: none; border-color: #2f6fed; }
+    .attach-btn { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: #17233c; border: 1px solid #26365a; font-size: 1.1rem; position: relative; overflow: hidden; }
+    .attach-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .attach-preview { padding: 8px 14px; border-top: 1px solid #1c2740; display: flex; align-items: center; gap: 10px; color: #cdd9ec; font-size: 0.85rem; }
+    .attach-preview button { background: none; border: none; color: #ff9a9a; font-size: 1.1rem; }
+    .overlay { position: fixed; inset: 0; background: #0a0f1a; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; text-align: center; padding: 24px; z-index: 50; }
+    .overlay h2 { margin: 0; }
+    .overlay p { color: #93a2bd; max-width: 420px; }
+    .overlay a { color: #8fb2ff; }
+    .modal { position: fixed; inset: 0; background: rgba(4,8,16,0.72); display: flex; align-items: center; justify-content: center; z-index: 40; padding: 16px; }
+    .modal-card { background: #0e1730; border: 1px solid #26365a; border-radius: 14px; width: 380px; max-width: 100%; max-height: 80vh; display: flex; flex-direction: column; }
+    .modal-head { padding: 14px 16px; border-bottom: 1px solid #1c2740; display: flex; align-items: center; gap: 10px; }
+    .modal-head strong { flex: 1; }
+    .modal-head button { background: none; border: none; color: #93a2bd; font-size: 1.2rem; }
+    .member-list { overflow-y: auto; }
+    .member-item { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #131d33; }
+    .member-item:hover { background: #14213a; }
+    .member-role { color: #8595ad; font-size: 0.76rem; }
+    .is-hidden { display: none !important; }
+    @media (max-width: 720px) {
+      .chat-app { grid-template-columns: 1fr; }
+      .chat-app.viewing .sidebar { display: none; }
+      .chat-app:not(.viewing) .main { display: none; }
+      .thread-head .back-mobile { display: inline; }
+      .msg { max-width: 86%; }
+      .modal-card { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-app" id="app">
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <a href="/" class="back">&larr; Hub</a>
+        <strong>LSC LED Chat</strong>
+        <button class="btn" id="newChatBtn">+ New</button>
+      </div>
+      <div class="conv-list" id="convList"></div>
+    </aside>
+    <main class="main">
+      <div class="main-empty" id="mainEmpty">Select a conversation to start chatting.</div>
+      <div class="thread is-hidden" id="thread">
+        <div class="thread-head" id="threadHead"></div>
+        <div class="messages" id="messages"></div>
+        <div class="attach-preview is-hidden" id="attachPreview"></div>
+        <form class="composer" id="composer">
+          <label class="attach-btn" title="Attach a file">&#128206;<input type="file" id="fileInput"></label>
+          <input type="text" id="msgInput" placeholder="Message&hellip;" autocomplete="off">
+          <button type="submit" class="btn">Send</button>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <div class="modal is-hidden" id="pickerModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong>New direct message</strong>
+        <button type="button" id="pickerClose">&times;</button>
+      </div>
+      <div class="member-list" id="memberList"></div>
+    </div>
+  </div>
+
+  <div class="overlay is-hidden" id="disabledOverlay">
+    <h2>Chat is not available</h2>
+    <p id="disabledText">Your account does not have chat access. Ask an administrator to enable it.</p>
+    <a href="/">&larr; Back to hub</a>
+  </div>
+
+  <script>
+    const convListEl = document.getElementById('convList');
+    const messagesEl = document.getElementById('messages');
+    const threadEl = document.getElementById('thread');
+    const mainEmptyEl = document.getElementById('mainEmpty');
+    const threadHeadEl = document.getElementById('threadHead');
+    const composerEl = document.getElementById('composer');
+    const msgInput = document.getElementById('msgInput');
+    const fileInput = document.getElementById('fileInput');
+    const attachPreview = document.getElementById('attachPreview');
+    const appEl = document.getElementById('app');
+    const pickerModal = document.getElementById('pickerModal');
+    const memberList = document.getElementById('memberList');
+    const disabledOverlay = document.getElementById('disabledOverlay');
+
+    let me = null;
+    let currentConvId = null;
+    let convCache = [];
+    let lastMsgIds = new Set();
+
+    function showDisabled(text) {
+      if (text) document.getElementById('disabledText').textContent = text;
+      disabledOverlay.classList.remove('is-hidden');
+    }
+
+    async function api(path, opts) {
+      const res = await fetch(path, Object.assign({ credentials: 'same-origin' }, opts || {}));
+      if (res.status === 401) { window.location.href = '/'; throw new Error('unauthorized'); }
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 403 && data && data.error === 'chat_disabled') { showDisabled(); throw new Error('chat_disabled'); }
+      if (!res.ok || (data && data.ok === false)) throw new Error((data && data.error) || res.statusText);
+      return data;
+    }
+
+    function initials(name) {
+      const s = String(name || '?').trim();
+      const parts = s.split(/[\s_&-]+/).filter(Boolean);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return s.slice(0, 2).toUpperCase();
+    }
+    function fmtTime(iso) {
+      if (!iso) return '';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      return sameDay
+        ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    function convDisplayTitle(conv) {
+      if (conv.kind === 'direct' && Array.isArray(conv.memberUsernames)) {
+        const other = conv.memberUsernames.find((u) => u !== (me && me.username));
+        if (other) return other;
+      }
+      return conv.title || conv.id;
+    }
+
+    async function loadConversations() {
+      let data;
+      try { data = await api('/api/chat/conversations'); } catch (e) { return; }
+      convCache = Array.isArray(data.conversations) ? data.conversations : [];
+      renderConversations();
+    }
+
+    function renderConversations() {
+      convListEl.innerHTML = '';
+      if (!convCache.length) {
+        const empty = document.createElement('div');
+        empty.className = 'conv-empty';
+        empty.textContent = 'No conversations yet. Tap "+ New" to start one.';
+        convListEl.appendChild(empty);
+        return;
+      }
+      convCache.forEach((conv) => {
+        const item = document.createElement('div');
+        item.className = 'conv-item' + (conv.id === currentConvId ? ' active' : '');
+        const avatar = document.createElement('div');
+        avatar.className = 'conv-avatar' + (conv.kind === 'project' ? ' project' : '');
+        avatar.textContent = initials(convDisplayTitle(conv));
+        item.appendChild(avatar);
+        const main = document.createElement('div');
+        main.className = 'conv-main';
+        const title = document.createElement('div');
+        title.className = 'conv-title';
+        title.textContent = convDisplayTitle(conv);
+        main.appendChild(title);
+        const preview = document.createElement('div');
+        preview.className = 'conv-preview';
+        const lm = conv.lastMessage;
+        preview.textContent = lm
+          ? ((lm.authorId === (me && me.username) ? 'You: ' : '') + (lm.body || (lm.attachment ? '📎 ' + (lm.attachment.name || 'attachment') : '')))
+          : 'No messages yet';
+        main.appendChild(preview);
+        item.appendChild(main);
+        if (conv.unreadCount > 0 && conv.id !== currentConvId) {
+          const badge = document.createElement('div');
+          badge.className = 'conv-badge';
+          badge.textContent = conv.unreadCount > 99 ? '99+' : String(conv.unreadCount);
+          item.appendChild(badge);
+        }
+        item.addEventListener('click', () => selectConversation(conv.id));
+        convListEl.appendChild(item);
+      });
+    }
+
+    async function selectConversation(convId) {
+      currentConvId = convId;
+      lastMsgIds = new Set();
+      appEl.classList.add('viewing');
+      mainEmptyEl.classList.add('is-hidden');
+      threadEl.classList.remove('is-hidden');
+      renderConversations();
+      renderThreadHead();
+      messagesEl.innerHTML = '<div class="msg-empty">Loading…</div>';
+      await loadMessages(true);
+      try { await api('/api/chat/conversations/' + encodeURIComponent(convId) + '/read', { method: 'POST' }); } catch (e) {}
+      const conv = convCache.find((c) => c.id === convId);
+      if (conv) conv.unreadCount = 0;
+      renderConversations();
+    }
+
+    function renderThreadHead() {
+      const conv = convCache.find((c) => c.id === currentConvId);
+      threadHeadEl.innerHTML = '';
+      const back = document.createElement('button');
+      back.className = 'back-mobile';
+      back.textContent = '←';
+      back.addEventListener('click', () => { appEl.classList.remove('viewing'); });
+      threadHeadEl.appendChild(back);
+      const wrap = document.createElement('div');
+      const strong = document.createElement('strong');
+      strong.textContent = conv ? convDisplayTitle(conv) : '';
+      wrap.appendChild(strong);
+      if (conv && conv.kind === 'project') {
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        sub.textContent = 'Project room · ' + ((conv.memberUsernames || []).length) + ' members';
+        wrap.appendChild(sub);
+      }
+      threadHeadEl.appendChild(wrap);
+    }
+
+    async function loadMessages(scroll) {
+      if (!currentConvId) return;
+      let data;
+      try { data = await api('/api/chat/conversations/' + encodeURIComponent(currentConvId) + '/messages?limit=100'); }
+      catch (e) { return; }
+      const msgs = Array.isArray(data.messages) ? data.messages : [];
+      const newIds = new Set(msgs.map((m) => m.id));
+      // Only re-render if the set changed (avoids flicker on polling).
+      let changed = newIds.size !== lastMsgIds.size;
+      if (!changed) { for (const id of newIds) { if (!lastMsgIds.has(id)) { changed = true; break; } } }
+      if (!changed && !scroll) return;
+      lastMsgIds = newIds;
+      const nearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 120;
+      messagesEl.innerHTML = '';
+      if (!msgs.length) {
+        const empty = document.createElement('div');
+        empty.className = 'msg-empty';
+        empty.textContent = 'No messages yet. Say hello!';
+        messagesEl.appendChild(empty);
+        return;
+      }
+      msgs.forEach((m) => messagesEl.appendChild(renderMessage(m)));
+      if (scroll || nearBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function renderMessage(m) {
+      const mine = m.authorId === (me && me.username);
+      const el = document.createElement('div');
+      el.className = 'msg' + (mine ? ' mine' : '');
+      if (!mine) {
+        const author = document.createElement('div');
+        author.className = 'msg-author';
+        author.textContent = m.authorDisplayName || m.authorId || '';
+        el.appendChild(author);
+      }
+      if (m.body) {
+        const body = document.createElement('div');
+        body.className = 'msg-body';
+        body.textContent = m.body;
+        el.appendChild(body);
+      }
+      if (m.attachment && m.attachment.url) {
+        const att = document.createElement('div');
+        att.className = 'msg-att';
+        const mime = m.attachment.mime || '';
+        if (mime.indexOf('image/') === 0) {
+          const img = document.createElement('img');
+          img.src = m.attachment.url;
+          img.alt = m.attachment.name || 'image';
+          img.addEventListener('click', () => window.open(m.attachment.url, '_blank'));
+          att.appendChild(img);
+        } else if (mime.indexOf('audio/') === 0) {
+          const audio = document.createElement('audio');
+          audio.controls = true;
+          audio.src = m.attachment.url;
+          att.appendChild(audio);
+        } else {
+          const link = document.createElement('a');
+          link.href = m.attachment.url;
+          link.setAttribute('download', m.attachment.name || 'file');
+          link.textContent = '📎 ' + (m.attachment.name || 'file');
+          att.appendChild(link);
+        }
+        el.appendChild(att);
+      }
+      const time = document.createElement('div');
+      time.className = 'msg-time';
+      time.textContent = fmtTime(m.createdAt);
+      el.appendChild(time);
+      return el;
+    }
+
+    // Composer
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (f) {
+        attachPreview.innerHTML = '';
+        const label = document.createElement('span');
+        label.textContent = '📎 ' + f.name;
+        const clear = document.createElement('button');
+        clear.type = 'button';
+        clear.textContent = '×';
+        clear.addEventListener('click', () => { fileInput.value = ''; attachPreview.classList.add('is-hidden'); attachPreview.innerHTML = ''; });
+        attachPreview.appendChild(label);
+        attachPreview.appendChild(clear);
+        attachPreview.classList.remove('is-hidden');
+      } else {
+        attachPreview.classList.add('is-hidden');
+      }
+    });
+
+    composerEl.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentConvId) return;
+      const text = msgInput.value.trim();
+      const file = fileInput.files && fileInput.files[0];
+      if (!text && !file) return;
+      const url = '/api/chat/conversations/' + encodeURIComponent(currentConvId) + '/messages';
+      try {
+        if (file) {
+          const fd = new FormData();
+          if (text) fd.append('body', text);
+          fd.append('file', file);
+          await api(url, { method: 'POST', body: fd });
+        } else {
+          await api(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ body: text }) });
+        }
+        msgInput.value = '';
+        fileInput.value = '';
+        attachPreview.classList.add('is-hidden');
+        attachPreview.innerHTML = '';
+        await loadMessages(true);
+        await loadConversations();
+      } catch (err) {
+        if (err.message !== 'chat_disabled' && err.message !== 'unauthorized') alert('Could not send: ' + err.message);
+      }
+    });
+
+    // New-DM member picker
+    document.getElementById('newChatBtn').addEventListener('click', openPicker);
+    document.getElementById('pickerClose').addEventListener('click', () => pickerModal.classList.add('is-hidden'));
+    pickerModal.addEventListener('click', (e) => { if (e.target === pickerModal) pickerModal.classList.add('is-hidden'); });
+
+    async function openPicker() {
+      memberList.innerHTML = '<div class="conv-empty">Loading…</div>';
+      pickerModal.classList.remove('is-hidden');
+      let data;
+      try { data = await api('/api/chat/members'); } catch (e) { return; }
+      const members = Array.isArray(data.members) ? data.members : [];
+      memberList.innerHTML = '';
+      if (!members.length) {
+        memberList.innerHTML = '<div class="conv-empty">No other users to message.</div>';
+        return;
+      }
+      members.forEach((mem) => {
+        const item = document.createElement('div');
+        item.className = 'member-item';
+        const avatar = document.createElement('div');
+        avatar.className = 'conv-avatar';
+        avatar.textContent = initials(mem.username);
+        item.appendChild(avatar);
+        const wrap = document.createElement('div');
+        const name = document.createElement('div');
+        name.textContent = mem.username;
+        const role = document.createElement('div');
+        role.className = 'member-role';
+        role.textContent = mem.isSuperadmin ? 'admin' : (mem.role || '');
+        wrap.appendChild(name);
+        wrap.appendChild(role);
+        item.appendChild(wrap);
+        item.addEventListener('click', () => startDm(mem.username));
+        memberList.appendChild(item);
+      });
+    }
+
+    async function startDm(username) {
+      try {
+        const data = await api('/api/chat/conversations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'direct', member: username }),
+        });
+        pickerModal.classList.add('is-hidden');
+        await loadConversations();
+        if (data.conversation) selectConversation(data.conversation.id);
+      } catch (err) {
+        if (err.message !== 'chat_disabled') alert('Could not start chat: ' + err.message);
+      }
+    }
+
+    // Boot
+    async function boot() {
+      try {
+        const meResp = await api('/api/auth/me');
+        me = meResp.user || null;
+        if (me && me.canUseChat === false) { showDisabled(); return; }
+      } catch (e) { return; }
+      await loadConversations();
+      setInterval(loadConversations, 15000);
+      setInterval(() => { if (currentConvId) loadMessages(false); }, 8000);
+    }
+    boot();
+  </script>
+</body>
+</html>
