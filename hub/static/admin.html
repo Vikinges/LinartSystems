@@ -78,8 +78,31 @@
     .pill-danger { background: #fee2e2; color: #991b1b; }
     .meta.status-success { color: #166534; }
     .meta.status-error { color: #b91c1c; }
-    .role-options { display: flex; gap: 10px; flex-wrap: wrap; }
+    .role-options { display: flex; gap: 8px; flex-wrap: wrap; }
+    .role-option { display: flex; gap: 8px; align-items: flex-start; border: 1px solid #dbe2ee; border-radius: 10px; padding: 8px 10px; cursor: pointer; background: #fff; min-width: 170px; flex: 1; }
+    .role-option input { margin-top: 3px; }
+    .role-option .role-name { font-weight: 600; font-size: 0.9rem; display: block; }
+    .role-option .role-desc { color: #556370; font-size: 0.78rem; line-height: 1.3; display: block; }
+    .role-option.selected { border-color: #2f6fed; background: #eef4ff; }
+    .role-option.selected.role-blocked { border-color: #d64545; background: #fdeeee; }
+    .role-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+    .role-badge.admin { background: #e3edff; color: #1d4fd7; }
+    .role-badge.manager { background: #e2f6e9; color: #1d7a3f; }
+    .role-badge.blocked { background: #fde3e3; color: #c02929; }
+    .user-summary { color: #33414e; font-size: 0.85rem; margin: 4px 0 2px; }
+    .perm-label { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
+    .perm-label input { margin-top: 3px; }
+    .perm-label .perm-hint { display: block; color: #7a8794; font-size: 0.76rem; line-height: 1.25; }
+    .section-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8a96a4; margin: 10px 0 4px; }
     .role-options label.inline { flex-direction: row; align-items: center; gap: 6px; }
+    .user-card { display: flex; flex-direction: column; gap: 6px; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; background: #fafcff; }
+    .user-card .info strong { font-size: 1.05rem; display: flex; align-items: center; gap: 4px; }
+    .user-controls { display: flex; flex-direction: column; gap: 4px; }
+    .perm-section, .services-section { border-top: 1px solid #eef2f8; padding-top: 6px; margin-top: 4px; }
+    .perm-grid { display: flex; flex-direction: column; gap: 8px; }
+    .actions-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+    .actions-row .pw-input { padding: 8px 10px; border-radius: 8px; border: 1px solid #dbe2ee; font: inherit; flex: 1; min-width: 180px; }
+    .is-hidden { display: none; }
     @media (max-width: 760px) {
       body { padding: 16px; }
       .branding-card, .hero-card { flex-direction: column; }
@@ -282,29 +305,36 @@
           Password
           <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
         </label>
-        <div>
-          <div class="hint" style="margin-bottom:6px;">Permissions</div>
+        <div style="grid-column: 1 / -1;">
+          <div class="section-label">Role</div>
           <div id="newUserRoles" class="role-options"></div>
+          <div id="newUserSummary" class="user-summary"></div>
         </div>
-        <div style="display:flex; flex-direction:column; gap:8px;">
-          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
-            <input type="checkbox" id="newUserFilesAccess">
-            Files access
-          </label>
-          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
-            <input type="checkbox" id="newUserCanGenerateLinks">
-            Generate links
-          </label>
-          <label class="inline" style="gap:8px; flex-direction:row; align-items:center;">
-            <input type="checkbox" id="newUserCanDeleteFiles">
-            Delete files
-          </label>
+        <div id="newUserPermSection" class="perm-section" style="grid-column: 1 / -1;">
+          <div class="section-label">Optional extras — Engineer only</div>
+          <div class="perm-grid">
+            <label class="perm-label">
+              <input type="checkbox" id="newUserFilesAccess">
+              <span><span>View files archive</span><span class="perm-hint">Sees all submitted PDFs in Files.</span></span>
+            </label>
+            <label class="perm-label">
+              <input type="checkbox" id="newUserCanGenerateLinks">
+              <span><span>Create sign links</span><span class="perm-hint">Can send documents to customers for signature.</span></span>
+            </label>
+            <label class="perm-label">
+              <input type="checkbox" id="newUserCanDeleteFiles">
+              <span><span>Delete files</span><span class="perm-hint">Can permanently remove PDFs from the archive.</span></span>
+            </label>
+          </div>
         </div>
-        <label class="inline" style="gap:8px;">
-          <input type="checkbox" id="newUserAllowAll" checked>
-          Allow all services
-        </label>
-        <div id="newUserServices" class="service-checkboxes"></div>
+        <div id="newUserServicesSection" class="services-section" style="grid-column: 1 / -1;">
+          <div class="section-label">Services</div>
+          <label class="perm-label">
+            <input type="checkbox" id="newUserAllowAll" checked>
+            <span>Allow all services</span>
+          </label>
+          <div id="newUserServices" class="service-checkboxes"></div>
+        </div>
         <div class="form-actions">
           <button type="submit">Add user</button>
         </div>
@@ -438,9 +468,9 @@
     };
 
     const ROLE_OPTIONS = [
-      { value: 'admin', label: 'Admin' },
-      { value: 'manager', label: 'Manager' },
-      { value: 'blocked', label: 'No access' },
+      { value: 'admin', label: 'Admin', desc: 'Full access: all services, all files, user management.' },
+      { value: 'manager', label: 'Engineer', desc: 'Signs in and creates/submits report forms. Extra permissions below are optional.' },
+      { value: 'blocked', label: 'Blocked', desc: 'Cannot use any service. Pick this only to shut an account off.' },
     ];
     const ROLE_SET = new Set(ROLE_OPTIONS.map((role) => role.value));
 
@@ -486,36 +516,48 @@
       applyPermission(delFilesInput);
     }
 
+    let roleGroupSeq = 0;
     function renderRoleOptions(container, selectedRole, onChange) {
       if (!container) return () => normalizeRole(selectedRole);
       container.innerHTML = '';
+      const groupName = `role-group-${++roleGroupSeq}`;
       const inputs = new Map();
+      const wrappers = new Map();
       const setRole = (role) => {
         const next = normalizeRole(role);
         inputs.forEach((input, key) => {
           input.checked = key === next;
+          const wrap = wrappers.get(key);
+          if (wrap) {
+            wrap.classList.toggle('selected', key === next);
+            wrap.classList.toggle('role-blocked', key === 'blocked');
+          }
         });
         if (onChange) onChange(next);
       };
       ROLE_OPTIONS.forEach((option) => {
         const label = document.createElement('label');
-        label.className = 'inline';
+        label.className = 'role-option';
         const input = document.createElement('input');
-        input.type = 'checkbox';
+        input.type = 'radio';
+        input.name = groupName;
         input.dataset.role = option.value;
         label.appendChild(input);
-        label.appendChild(document.createTextNode(` ${option.label}`));
+        const textWrap = document.createElement('span');
+        const name = document.createElement('span');
+        name.className = 'role-name';
+        name.textContent = option.label;
+        const desc = document.createElement('span');
+        desc.className = 'role-desc';
+        desc.textContent = option.desc || '';
+        textWrap.appendChild(name);
+        textWrap.appendChild(desc);
+        label.appendChild(textWrap);
         container.appendChild(label);
         inputs.set(option.value, input);
+        wrappers.set(option.value, label);
         input.addEventListener('change', () => {
-          if (input.checked) {
-            setRole(option.value);
-            return;
-          }
-          const anyChecked = Array.from(inputs.values()).some((cb) => cb.checked);
-          if (!anyChecked) {
-            setRole(option.value);
-          }
+          if (input.checked) setRole(option.value);
         });
       });
       setRole(selectedRole);
@@ -525,6 +567,21 @@
         }
         return 'manager';
       };
+    }
+
+    const PERMISSION_DEFS = [
+      { key: 'canViewFiles', label: 'View files archive', hint: 'Sees all submitted PDFs in Files.' },
+      { key: 'canGenerateLinks', label: 'Create sign links', hint: 'Can send documents to customers for signature.' },
+      { key: 'canDeleteFiles', label: 'Delete files', hint: 'Can permanently remove PDFs from the archive.' },
+    ];
+    function summarizeUser(roleValue, user) {
+      if (roleValue === 'admin') return 'Full access to everything.';
+      if (roleValue === 'blocked') return 'Cannot use any service.';
+      const extras = [];
+      if (user.canViewFiles) extras.push('views files archive');
+      if (user.canGenerateLinks) extras.push('creates sign links');
+      if (user.canDeleteFiles) extras.push('deletes files');
+      return extras.length ? `Creates report forms + ${extras.join(', ')}.` : 'Creates report forms only.';
     }
 
     function handleError(error) {
@@ -584,6 +641,9 @@
     const newUserCanDeleteFiles = document.getElementById('newUserCanDeleteFiles');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
+    const newUserSummary = document.getElementById('newUserSummary');
+    const newUserPermSection = document.getElementById('newUserPermSection');
+    const newUserServicesSection = document.getElementById('newUserServicesSection');
     const uploadServiceForm = document.getElementById('uploadServiceForm');
     const serviceZipInput = document.getElementById('serviceZipInput');
     const serviceSearchInput = document.getElementById('serviceSearch');
@@ -610,9 +670,25 @@
     heroBlurInput.value = 8;
     heroBlurValue.textContent = '8';
     surfaceOpacityValue.textContent = surfaceOpacityInput.value + '%';
+    function refreshNewUserSummary(role) {
+      const current = normalizeRole(role || (getNewUserRole && getNewUserRole()));
+      if (newUserSummary) {
+        newUserSummary.textContent = summarizeUser(current, {
+          canViewFiles: newUserFilesAccess && newUserFilesAccess.checked,
+          canGenerateLinks: newUserCanGenerateLinks && newUserCanGenerateLinks.checked,
+          canDeleteFiles: newUserCanDeleteFiles && newUserCanDeleteFiles.checked,
+        });
+      }
+      if (newUserPermSection) newUserPermSection.classList.toggle('is-hidden', current !== 'manager');
+      if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager');
+    }
+    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles].forEach((cb) => {
+      if (cb) cb.addEventListener('change', () => refreshNewUserSummary());
+    });
     if (newUserRoles) {
       getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (role) => {
         syncServiceControls(newUserAllowAll, newUserServices, role, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+        refreshNewUserSummary(role);
       });
     }
 
@@ -910,96 +986,131 @@
       }
 
       filtered.forEach((user) => {
+        const roleValue = normalizeRole(user.role);
+
         const card = document.createElement('div');
-        card.className = 'service-card';
+        card.className = 'user-card';
+
+        // Header: username + role badge + plain-language summary
         const info = document.createElement('div');
         info.className = 'info';
         const title = document.createElement('strong');
-        title.textContent = user.username;
+        title.appendChild(document.createTextNode(user.username));
+        const badge = document.createElement('span');
+        badge.className = 'role-badge ' + roleValue;
+        badge.textContent = formatRoleLabel(roleValue);
+        title.appendChild(badge);
         info.appendChild(title);
-        const roleValue = normalizeRole(user.role);
-        const roleLabel = formatRoleLabel(roleValue);
-        const roleMeta = document.createElement('div');
-        roleMeta.className = 'meta';
-        roleMeta.textContent = 'Role: ' + roleLabel;
-        info.appendChild(roleMeta);
-        const filesMeta = document.createElement('div');
-        filesMeta.className = 'meta';
-        filesMeta.textContent = 'Files access: ' + (user.canViewFiles ? 'Yes' : 'No');
-        info.appendChild(filesMeta);
-        const allowed = roleValue === 'blocked'
-          ? 'No access'
-          : (Array.isArray(user.allowedServices) && user.allowedServices.length
-            ? user.allowedServices.join(', ')
-            : 'All services');
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-        meta.textContent = 'Allowed: ' + allowed;
-        info.appendChild(meta);
+        const summary = document.createElement('div');
+        summary.className = 'user-summary';
+        info.appendChild(summary);
         card.appendChild(info);
 
-        const actions = document.createElement('div');
-        actions.className = 'actions';
+        const controls = document.createElement('div');
+        controls.className = 'user-controls';
 
-        const filesAccessWrap = document.createElement('label');
-        filesAccessWrap.className = 'inline';
-        const filesAccessInput = document.createElement('input');
-        filesAccessInput.type = 'checkbox';
-        filesAccessInput.checked = Boolean(user.canViewFiles);
-        filesAccessWrap.appendChild(filesAccessInput);
-        filesAccessWrap.appendChild(document.createTextNode(' Files access'));
-        actions.appendChild(filesAccessWrap);
+        // Role selector
+        const roleLabelEl = document.createElement('div');
+        roleLabelEl.className = 'section-label';
+        roleLabelEl.textContent = 'Role';
+        controls.appendChild(roleLabelEl);
+        const roleBox = document.createElement('div');
+        roleBox.className = 'role-options';
+        controls.appendChild(roleBox);
 
-        const canGenerateLinksWrap = document.createElement('label');
-        canGenerateLinksWrap.className = 'inline';
-        const canGenerateLinksInput = document.createElement('input');
-        canGenerateLinksInput.type = 'checkbox';
-        canGenerateLinksInput.checked = Boolean(user.canGenerateLinks);
-        canGenerateLinksWrap.appendChild(canGenerateLinksInput);
-        canGenerateLinksWrap.appendChild(document.createTextNode(' Generate links'));
-        actions.appendChild(canGenerateLinksWrap);
+        // Optional extras (Engineer role only)
+        const permSection = document.createElement('div');
+        permSection.className = 'perm-section';
+        const permLabelEl = document.createElement('div');
+        permLabelEl.className = 'section-label';
+        permLabelEl.textContent = 'Optional extras — Engineer only';
+        permSection.appendChild(permLabelEl);
+        const permGrid = document.createElement('div');
+        permGrid.className = 'perm-grid';
+        permSection.appendChild(permGrid);
+        const permInputs = {};
+        PERMISSION_DEFS.forEach((def) => {
+          const lbl = document.createElement('label');
+          lbl.className = 'perm-label';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.checked = Boolean(user[def.key]);
+          const textWrap = document.createElement('span');
+          const name = document.createElement('span');
+          name.textContent = def.label;
+          const hint = document.createElement('span');
+          hint.className = 'perm-hint';
+          hint.textContent = def.hint;
+          textWrap.appendChild(name);
+          textWrap.appendChild(hint);
+          lbl.appendChild(input);
+          lbl.appendChild(textWrap);
+          permGrid.appendChild(lbl);
+          permInputs[def.key] = input;
+        });
+        const filesAccessInput = permInputs.canViewFiles;
+        const canGenerateLinksInput = permInputs.canGenerateLinks;
+        const canDeleteFilesInput = permInputs.canDeleteFiles;
+        controls.appendChild(permSection);
 
-        const canDeleteFilesWrap = document.createElement('label');
-        canDeleteFilesWrap.className = 'inline';
-        const canDeleteFilesInput = document.createElement('input');
-        canDeleteFilesInput.type = 'checkbox';
-        canDeleteFilesInput.checked = Boolean(user.canDeleteFiles);
-        canDeleteFilesWrap.appendChild(canDeleteFilesInput);
-        canDeleteFilesWrap.appendChild(document.createTextNode(' Delete files'));
-        actions.appendChild(canDeleteFilesWrap);
-
+        // Services
+        const servicesSection = document.createElement('div');
+        servicesSection.className = 'services-section';
+        const svcLabelEl = document.createElement('div');
+        svcLabelEl.className = 'section-label';
+        svcLabelEl.textContent = 'Services';
+        servicesSection.appendChild(svcLabelEl);
         const allowAllWrap = document.createElement('label');
-        allowAllWrap.className = 'inline';
+        allowAllWrap.className = 'perm-label';
         const allowAllInput = document.createElement('input');
         allowAllInput.type = 'checkbox';
         allowAllInput.checked = !user.allowedServices || !user.allowedServices.length;
         allowAllWrap.appendChild(allowAllInput);
         allowAllWrap.appendChild(document.createTextNode(' Allow all services'));
-        actions.appendChild(allowAllWrap);
-
+        servicesSection.appendChild(allowAllWrap);
         const servicesBox = document.createElement('div');
         servicesBox.className = 'service-checkboxes';
         renderServiceCheckboxes(servicesBox, new Set(user.allowedServices || []), allowAllInput.checked);
+        servicesSection.appendChild(servicesBox);
+        controls.appendChild(servicesSection);
+
+        // Live summary + section visibility
+        let currentRole = roleValue;
+        const refreshSummary = () => {
+          badge.className = 'role-badge ' + currentRole;
+          badge.textContent = formatRoleLabel(currentRole);
+          summary.textContent = summarizeUser(currentRole, {
+            canViewFiles: filesAccessInput.checked,
+            canGenerateLinks: canGenerateLinksInput.checked,
+            canDeleteFiles: canDeleteFilesInput.checked,
+          });
+          permSection.classList.toggle('is-hidden', currentRole !== 'manager');
+          servicesSection.classList.toggle('is-hidden', currentRole !== 'manager');
+        };
+        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput].forEach((cb) => {
+          cb.addEventListener('change', refreshSummary);
+        });
         allowAllInput.addEventListener('change', () => {
           syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
         });
-        actions.appendChild(servicesBox);
 
-        const roleBox = document.createElement('div');
-        roleBox.className = 'role-options';
-        let currentRole = roleValue;
         const getRole = renderRoleOptions(roleBox, currentRole, (nextRole) => {
           currentRole = nextRole;
           syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
+          refreshSummary();
         });
-        actions.insertBefore(roleBox, allowAllWrap);
         syncServiceControls(allowAllInput, servicesBox, currentRole, filesAccessInput, canGenerateLinksInput, canDeleteFilesInput);
+        refreshSummary();
 
+        // Actions: password + save + delete
+        const actionsRow = document.createElement('div');
+        actionsRow.className = 'actions-row';
         const passwordInput = document.createElement('input');
         passwordInput.type = 'password';
+        passwordInput.className = 'pw-input';
         passwordInput.placeholder = 'New password (optional)';
         passwordInput.minLength = 4;
-        actions.appendChild(passwordInput);
+        actionsRow.appendChild(passwordInput);
 
         const saveBtn = document.createElement('button');
         saveBtn.type = 'button';
@@ -1033,7 +1144,7 @@
             handleError(error);
           }
         });
-        actions.appendChild(saveBtn);
+        actionsRow.appendChild(saveBtn);
 
         const deleteBtn = document.createElement('button');
         deleteBtn.type = 'button';
@@ -1048,9 +1159,10 @@
             handleError(error);
           }
         });
-        actions.appendChild(deleteBtn);
+        actionsRow.appendChild(deleteBtn);
+        controls.appendChild(actionsRow);
 
-        card.appendChild(actions);
+        card.appendChild(controls);
         usersList.appendChild(card);
       });
     }
@@ -1302,8 +1414,10 @@
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
               syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles);
+              refreshNewUserSummary(nextRole);
             });
           }
+          refreshNewUserSummary('manager');
           await loadAll();
         } catch (error) {
           handleError(error);
