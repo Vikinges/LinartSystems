@@ -8,6 +8,7 @@ const session = require('express-session');
 const fs = require('fs');
 const { exec } = require('child_process');
 const multer = require('multer');
+const archiver = require('archiver');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const http2 = require('http2');
@@ -2660,6 +2661,72 @@ function conversationPayload(conv, username) {
   };
 }
 
+// --- P10-A: chat attachments (photos, audio, files) stored under CHAT_DIR/attachments/<convId>/ ---
+const CHAT_ATTACH_DIR = path.join(CHAT_DIR, 'attachments');
+const CHAT_ATTACH_MAX = 25 * 1024 * 1024; // 25 MB per attachment
+// Never accept these — active/scriptable content is an XSS/exec risk even for authed users.
+const CHAT_ATTACH_BLOCK_EXT = new Set([
+  '.exe', '.bat', '.cmd', '.com', '.msi', '.scr', '.sh', '.js', '.mjs', '.jar',
+  '.app', '.dll', '.ps1', '.svg', '.html', '.htm', '.xhtml',
+]);
+// Documents allowed by extension (images/audio are allowed by MIME family below).
+const CHAT_ATTACH_DOC_EXT = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.csv', '.txt',
+  '.rtf', '.json', '.log', '.pages', '.numbers', '.key', '.zip', '.heic',
+]);
+
+function chatAttachmentKind(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m === 'image/svg+xml') return 'file';
+  if (m.startsWith('image/')) return 'image';
+  if (m.startsWith('audio/')) return 'audio';
+  return 'file';
+}
+
+const chatUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.join(CHAT_ATTACH_DIR, chatSanitizeId(req.params.id));
+      try { fs.mkdirSync(dir, { recursive: true }); cb(null, dir); }
+      catch (err) { cb(err); }
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase().slice(0, 12);
+      cb(null, `${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}${ext}`);
+    },
+  }),
+  limits: { fileSize: CHAT_ATTACH_MAX },
+  fileFilter: (_req, file, cb) => {
+    const mime = String(file.mimetype || '').toLowerCase();
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (CHAT_ATTACH_BLOCK_EXT.has(ext) || mime === 'image/svg+xml') {
+      const err = new Error('This file type is not allowed in chat.');
+      err.code = 'UNSUPPORTED_FILE_TYPE';
+      return cb(err);
+    }
+    if (mime.startsWith('image/') || mime.startsWith('audio/')) return cb(null, true);
+    if (mime === 'application/pdf' || CHAT_ATTACH_DOC_EXT.has(ext)) return cb(null, true);
+    const err = new Error('Unsupported attachment type.');
+    err.code = 'UNSUPPORTED_FILE_TYPE';
+    return cb(err);
+  },
+});
+
+// Auth + membership guard that runs BEFORE multer, so rejected requests never write a file.
+function requireChatMember(req, res, next) {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const conv = index.find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  req.chatUser = user;
+  req.chatIndex = index;
+  req.chatConv = conv;
+  return next();
+}
+
 app.get('/api/chat/conversations', (req, res) => {
   setNoCache(res);
   const user = getSessionUser(req);
@@ -2731,37 +2798,43 @@ app.get('/api/chat/conversations/:id/messages', (req, res) => {
   return res.json({ ok: true, messages: all.slice(start, upper), hasMore: start > 0 });
 });
 
-app.post('/api/chat/conversations/:id/messages', (req, res) => {
-  setNoCache(res);
-  const user = getSessionUser(req);
-  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
-  const index = loadChatIndex();
-  const conv = index.find((c) => c.id === req.params.id);
-  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
-  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+// Accepts JSON `{ body }` (text) OR multipart/form-data with a `file` part
+// (photo/audio/document) plus an optional `body` caption. requireChatMember runs
+// first so unauthorized/non-member requests never reach multer (no orphan files).
+app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.single('file'), (req, res) => {
+  const user = req.chatUser;
+  const index = req.chatIndex;
+  const conv = req.chatConv;
   const body = req.body || {};
   const text = typeof body.body === 'string' ? body.body.trim() : '';
-  if (!text) return res.status(400).json({ ok: false, error: 'body_required' });
+  const file = req.file || null;
+  if (!text && !file) return res.status(400).json({ ok: false, error: 'body_or_file_required' });
   const message = {
     id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
     conversationId: conv.id,
     authorId: user.username,
     authorDisplayName: user.username,
-    kind: 'text',
+    kind: file ? chatAttachmentKind(file.mimetype) : 'text',
     body: text.slice(0, CHAT_BODY_MAX),
     createdAt: new Date().toISOString(),
   };
+  if (file) {
+    message.attachment = {
+      name: String(file.originalname || 'file').slice(0, 200),
+      file: file.filename,
+      mime: file.mimetype || 'application/octet-stream',
+      size: file.size,
+      url: `/api/chat/conversations/${conv.id}/attachments/${encodeURIComponent(file.filename)}`,
+    };
+  }
   appendChatMessage(conv.id, message);
-  let indexDirty = false;
   if (conv.kind === 'project' && !conv.memberUsernames.includes(user.username)) {
     conv.memberUsernames.push(user.username); // author auto-joins the project room
-    indexDirty = true;
   }
   if (!conv.reads) conv.reads = {};
   conv.reads[user.username] = message.createdAt; // your own message is read
   conv.lastMessageAt = message.createdAt;
   saveChatIndex(index);
-  void indexDirty;
   // Bonus: instant delivery for clients on the P8 SSE stream (poll remains the source of truth).
   for (const c of sseClients) {
     if (c.user !== user.username && canSeeConversation(conv, c.user)) {
@@ -2769,6 +2842,22 @@ app.post('/api/chat/conversations/:id/messages', (req, res) => {
     }
   }
   return res.json({ ok: true, ...message });
+});
+
+// Serve an attachment to conversation members only. Sandboxed + nosniff to
+// neutralize any scriptable payload that slipped past the upload allowlist.
+app.get('/api/chat/conversations/:id/attachments/:name', requireChatMember, (req, res) => {
+  const stored = chatSanitizeId(req.params.name);
+  if (!stored || stored.includes('..')) return res.status(400).json({ ok: false, error: 'bad_name' });
+  const dir = path.resolve(path.join(CHAT_ATTACH_DIR, chatSanitizeId(req.params.id)));
+  const filePath = path.resolve(path.join(dir, stored));
+  if (filePath !== path.join(dir, stored) || !filePath.startsWith(dir + path.sep)) {
+    return res.status(400).json({ ok: false, error: 'bad_path' });
+  }
+  if (!fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'not_found' });
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+  return res.sendFile(filePath);
 });
 
 app.post('/api/chat/conversations/:id/read', (req, res) => {
@@ -2783,6 +2872,105 @@ app.post('/api/chat/conversations/:id/read', (req, res) => {
   conv.reads[user.username] = new Date().toISOString();
   saveChatIndex(index);
   return res.json({ ok: true });
+});
+
+// P10-B: member directory for the DM username picker. Excludes the requester and
+// blocked accounts (they cannot use any service). Superadmin is always included.
+app.get('/api/chat/members', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const superName = (adminCredentials.superadmin && adminCredentials.superadmin.username) || DEFAULT_ADMIN_USERNAME;
+  const members = [];
+  if (superName) members.push({ username: superName, role: USER_ROLE_ADMIN, isSuperadmin: true });
+  for (const u of (Array.isArray(adminCredentials.users) ? adminCredentials.users : [])) {
+    if (!u || !u.username || u.username === superName) continue;
+    const role = normalizeUserRole(u.role, USER_ROLE_MANAGER);
+    if (role === USER_ROLE_BLOCKED) continue;
+    members.push({ username: u.username, role, isSuperadmin: false });
+  }
+  const list = members
+    .filter((m) => m.username !== user.username)
+    .sort((a, b) => a.username.localeCompare(b.username));
+  return res.json({ ok: true, members: list });
+});
+
+// --- P10-C: admin moderation (list / delete / zip export) — admin or superadmin only ---
+function requireChatAdmin(req, res, next) {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  if (!(user.isSuperadmin || user.role === USER_ROLE_ADMIN)) {
+    return res.status(403).json({ ok: false, error: 'forbidden' });
+  }
+  req.chatUser = user;
+  return next();
+}
+
+// Full inventory of every conversation (bypasses membership) for the moderation view.
+app.get('/api/chat/admin/conversations', requireChatAdmin, (req, res) => {
+  const conversations = loadChatIndex().map((c) => {
+    const msgs = readChatMessages(c.id);
+    const attachDir = path.join(CHAT_ATTACH_DIR, chatSanitizeId(c.id));
+    let attachmentCount = 0;
+    try { attachmentCount = fs.existsSync(attachDir) ? fs.readdirSync(attachDir).length : 0; } catch (e) { /* noop */ }
+    return {
+      id: c.id,
+      kind: c.kind,
+      ...(c.projectKey ? { projectKey: c.projectKey } : {}),
+      title: c.title,
+      memberUsernames: c.memberUsernames || [],
+      createdAt: c.createdAt || null,
+      lastMessageAt: c.lastMessageAt || (msgs.length ? msgs[msgs.length - 1].createdAt : null),
+      messageCount: msgs.length,
+      attachmentCount,
+    };
+  }).sort((a, b) => String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || '')));
+  return res.json({ ok: true, conversations });
+});
+
+// Download one conversation (metadata + messages + attachments) as a .zip.
+app.get('/api/chat/admin/conversations/:id/archive', requireChatAdmin, (req, res) => {
+  const conv = loadChatIndex().find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  const safeId = chatSanitizeId(conv.id);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="chat_${safeId}.zip"`);
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => { console.error('[hub] chat archive error', err.message); try { res.status(500).end(); } catch (e) { /* noop */ } });
+  archive.pipe(res);
+  archive.append(JSON.stringify(conv, null, 2), { name: 'conversation.json' });
+  const msgPath = chatMessagesPath(conv.id);
+  if (fs.existsSync(msgPath)) archive.file(msgPath, { name: 'messages.jsonl' });
+  const attachDir = path.join(CHAT_ATTACH_DIR, safeId);
+  if (fs.existsSync(attachDir)) archive.directory(attachDir, 'attachments');
+  archive.finalize();
+});
+
+// Download the entire chat store (all conversations + attachments) as one .zip.
+app.get('/api/chat/admin/archive', requireChatAdmin, (req, res) => {
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', 'attachment; filename="chat_archive.zip"');
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  archive.on('error', (err) => { console.error('[hub] chat archive error', err.message); try { res.status(500).end(); } catch (e) { /* noop */ } });
+  archive.pipe(res);
+  if (fs.existsSync(CHAT_DIR)) archive.directory(CHAT_DIR, false);
+  else archive.append('[]', { name: 'conversations.json' });
+  archive.finalize();
+});
+
+// Permanently delete a conversation: index entry + messages + attachments.
+app.delete('/api/chat/admin/conversations/:id', requireChatAdmin, (req, res) => {
+  const index = loadChatIndex();
+  const idx = index.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  const [removed] = index.splice(idx, 1);
+  saveChatIndex(index);
+  try { const p = chatMessagesPath(removed.id); if (fs.existsSync(p)) fs.unlinkSync(p); }
+  catch (e) { console.warn('[hub] chat msg unlink failed', e.message); }
+  try { const d = path.join(CHAT_ATTACH_DIR, chatSanitizeId(removed.id)); if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true }); }
+  catch (e) { console.warn('[hub] chat attach rm failed', e.message); }
+  return res.json({ ok: true, deleted: removed.id });
 });
 
 // Reverse-proxy route: expose service2 under /service2/ (auth required)
