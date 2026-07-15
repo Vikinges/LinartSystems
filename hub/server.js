@@ -719,6 +719,12 @@ function requireFilesAdminAccess(req, res, next) {
 }
 
 function attachHubProxyHeaders(req, _res, next) {
+  // Strip any client-supplied hub headers first so they can't be spoofed, then
+  // set them authoritatively from the authenticated session.
+  delete req.headers['x-hub-role'];
+  delete req.headers['x-hub-user'];
+  delete req.headers['x-hub-can-generate-links'];
+  delete req.headers['x-hub-can-delete-files'];
   const user = getSessionUser(req);
   if (user) {
     req.headers['x-hub-role'] = user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
@@ -726,6 +732,16 @@ function attachHubProxyHeaders(req, _res, next) {
     if (user.canGenerateLinks) req.headers['x-hub-can-generate-links'] = '1';
     if (user.canDeleteFiles) req.headers['x-hub-can-delete-files'] = '1';
   }
+  next();
+}
+
+// Delete any client-supplied hub headers without setting new ones. Applied to the
+// open dynamic service proxies so a caller can never spoof x-hub-* permissions.
+function stripClientHubHeaders(req, _res, next) {
+  delete req.headers['x-hub-role'];
+  delete req.headers['x-hub-user'];
+  delete req.headers['x-hub-can-generate-links'];
+  delete req.headers['x-hub-can-delete-files'];
   next();
 }
 
@@ -1036,7 +1052,7 @@ function registerProxies(app){
   // remove previous proxies by reloading express stack is non-trivial; for simplicity we will not remove old handlers in runtime
   const services = loadServices();
   services.forEach(s => {
-    app.use(s.prefix, createProxyMiddleware({ target: s.target, changeOrigin: true, pathRewrite: { ['^'+s.prefix]: '' }, logLevel: 'warn' }));
+    app.use(s.prefix, stripClientHubHeaders, createProxyMiddleware({ target: s.target, changeOrigin: true, pathRewrite: { ['^'+s.prefix]: '' }, logLevel: 'warn' }));
   });
 }
 
@@ -1053,6 +1069,17 @@ app.use('/service2/api/admin', requireDashboardAccess, attachHubProxyHeaders, cr
 // P4 approval: report review/status is admin/manager only; attach authoritative
 // x-hub-user / x-hub-role so service2 records who reviewed. Must precede registerProxies.
 app.use('/service2/api/reports', requireDashboardAccess, attachHubProxyHeaders, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+
+// Sign endpoints (service2 gates them on x-hub-can-generate-links). Registered
+// BEFORE registerProxies' open /service2 catch-all so the authoritative header is
+// attached: admin/superadmin and canGenerateLinks managers pass; others get 403,
+// and attachHubProxyHeaders strips any spoofed header first.
+app.use('/service2/api/sign', requireServiceAccess('service2', '/service2'), attachHubProxyHeaders, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },

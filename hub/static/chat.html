@@ -227,6 +227,8 @@
     async function selectConversation(convId) {
       currentConvId = convId;
       lastMsgIds = new Set();
+      // Reflect the open conversation in the URL so it can be deep-linked (?c=<id>).
+      try { history.replaceState(null, '', '?c=' + encodeURIComponent(convId)); } catch (e) {}
       appEl.classList.add('viewing');
       mainEmptyEl.classList.add('is-hidden');
       threadEl.classList.remove('is-hidden');
@@ -438,6 +440,9 @@
         if (me && me.canUseChat === false) { showDisabled(); return; }
       } catch (e) { return; }
       await loadConversations();
+      // Deep link: ?c=<conversationId> opens that conversation directly.
+      const deepId = new URLSearchParams(location.search).get('c');
+      if (deepId) selectConversation(deepId);
       setInterval(loadConversations, 15000);
       setInterval(() => { if (currentConvId) loadMessages(false); }, 8000);
     }
