@@ -1431,8 +1431,9 @@
       const title = document.createElement('strong');
       title.appendChild(document.createTextNode(conv.title || conv.id));
       const kind = document.createElement('span');
-      kind.className = 'chat-kind ' + (conv.kind === 'project' ? 'project' : 'direct');
-      kind.textContent = conv.kind === 'project' ? 'Project' : 'Direct';
+      const kindLabel = conv.kind === 'project' ? 'Project' : (conv.kind === 'group' ? 'Group' : 'Direct');
+      kind.className = 'chat-kind ' + (conv.kind === 'direct' ? 'direct' : 'project');
+      kind.textContent = kindLabel;
       title.appendChild(kind);
       info.appendChild(title);
       const members = document.createElement('div');

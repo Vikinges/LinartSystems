@@ -65,7 +65,19 @@
     .member-list { overflow-y: auto; }
     .member-item { display: flex; align-items: center; gap: 10px; padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #131d33; }
     .member-item:hover { background: #14213a; }
+    .member-item.selected { background: #16294a; }
+    .member-item .check { margin-left: auto; width: 20px; height: 20px; border-radius: 6px; border: 1px solid #33507e; display: flex; align-items: center; justify-content: center; color: #7fd6a3; font-size: 0.9rem; }
+    .member-item.selected .check { background: #1f7a44; border-color: #1f7a44; color: #fff; }
     .member-role { color: #8595ad; font-size: 0.76rem; }
+    .picker-tabs { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid #1c2740; }
+    .ptab { flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #26365a; background: #0f1830; color: #aebbd0; font-weight: 600; font-size: 0.85rem; }
+    .ptab.active { background: #2f6fed; border-color: #2f6fed; color: #fff; }
+    .group-name-input { margin: 12px 16px 6px; width: calc(100% - 32px); padding: 10px 12px; border-radius: 8px; border: 1px solid #26365a; background: #0f1830; color: #e7eef7; font: inherit; }
+    .group-name-input:focus { outline: none; border-color: #2f6fed; }
+    .group-hint { color: #8595ad; font-size: 0.8rem; padding: 4px 16px 8px; }
+    .group-actions { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid #1c2740; }
+    .group-count { color: #8595ad; font-size: 0.82rem; flex: 1; }
+    .thread-head .head-add { margin-left: auto; background: #17233c; border: 1px solid #26365a; color: #cdd9ec; border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; }
     .is-hidden { display: none !important; }
     @media (max-width: 720px) {
       .chat-app { grid-template-columns: 1fr; }
@@ -105,10 +117,37 @@
   <div class="modal is-hidden" id="pickerModal">
     <div class="modal-card">
       <div class="modal-head">
-        <strong>New direct message</strong>
+        <strong>New chat</strong>
         <button type="button" id="pickerClose">&times;</button>
       </div>
+      <div class="picker-tabs">
+        <button type="button" class="ptab active" data-mode="direct">Direct</button>
+        <button type="button" class="ptab" data-mode="group">Group / project</button>
+      </div>
       <div class="member-list" id="memberList"></div>
+      <div id="groupForm" class="is-hidden">
+        <input type="text" id="groupName" class="group-name-input" placeholder="Project name, e.g. 26-1505 Siemens" autocomplete="off">
+        <div class="group-hint">Pick colleagues who will see and post in this room:</div>
+        <div class="member-list" id="groupMemberList"></div>
+        <div class="group-actions">
+          <span id="groupCount" class="group-count">0 selected</span>
+          <button type="button" class="btn" id="groupCreate">Create room</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal is-hidden" id="addModal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <strong>Add people</strong>
+        <button type="button" id="addClose">&times;</button>
+      </div>
+      <div class="member-list" id="addMemberList"></div>
+      <div class="group-actions">
+        <span id="addCount" class="group-count">0 selected</span>
+        <button type="button" class="btn" id="addConfirm">Add</button>
+      </div>
     </div>
   </div>
 
@@ -131,7 +170,15 @@
     const appEl = document.getElementById('app');
     const pickerModal = document.getElementById('pickerModal');
     const memberList = document.getElementById('memberList');
+    const groupForm = document.getElementById('groupForm');
+    const groupName = document.getElementById('groupName');
+    const groupMemberList = document.getElementById('groupMemberList');
+    const groupCount = document.getElementById('groupCount');
+    const addModal = document.getElementById('addModal');
+    const addMemberList = document.getElementById('addMemberList');
+    const addCount = document.getElementById('addCount');
     const disabledOverlay = document.getElementById('disabledOverlay');
+    let addTargetConvId = null;
 
     let me = null;
     let currentConvId = null;
@@ -196,7 +243,7 @@
         const item = document.createElement('div');
         item.className = 'conv-item' + (conv.id === currentConvId ? ' active' : '');
         const avatar = document.createElement('div');
-        avatar.className = 'conv-avatar' + (conv.kind === 'project' ? ' project' : '');
+        avatar.className = 'conv-avatar' + (conv.kind === 'project' || conv.kind === 'group' ? ' project' : '');
         avatar.textContent = initials(convDisplayTitle(conv));
         item.appendChild(avatar);
         const main = document.createElement('div');
@@ -254,13 +301,22 @@
       const strong = document.createElement('strong');
       strong.textContent = conv ? convDisplayTitle(conv) : '';
       wrap.appendChild(strong);
-      if (conv && conv.kind === 'project') {
+      if (conv && (conv.kind === 'project' || conv.kind === 'group')) {
         const sub = document.createElement('div');
         sub.className = 'sub';
-        sub.textContent = 'Project room · ' + ((conv.memberUsernames || []).length) + ' members';
+        const label = conv.kind === 'group' ? 'Room' : 'Project room';
+        sub.textContent = label + ' · ' + ((conv.memberUsernames || []).length) + ' members';
         wrap.appendChild(sub);
       }
       threadHeadEl.appendChild(wrap);
+      // Owner (or admin) of a group can add more people.
+      if (conv && conv.kind === 'group' && (me && (conv.ownerUsername === me.username || me.isSuperadmin || me.role === 'admin'))) {
+        const addBtn = document.createElement('button');
+        addBtn.className = 'head-add';
+        addBtn.textContent = '+ Add people';
+        addBtn.addEventListener('click', () => openAddMembers(conv));
+        threadHeadEl.appendChild(addBtn);
+      }
     }
 
     async function loadMessages(scroll) {
@@ -381,42 +437,95 @@
       }
     });
 
-    // New-DM member picker
+    // New chat (Direct or Group) + add-members to a group
     document.getElementById('newChatBtn').addEventListener('click', openPicker);
     document.getElementById('pickerClose').addEventListener('click', () => pickerModal.classList.add('is-hidden'));
     pickerModal.addEventListener('click', (e) => { if (e.target === pickerModal) pickerModal.classList.add('is-hidden'); });
+    document.getElementById('addClose').addEventListener('click', () => addModal.classList.add('is-hidden'));
+    addModal.addEventListener('click', (e) => { if (e.target === addModal) addModal.classList.add('is-hidden'); });
 
+    document.querySelectorAll('.ptab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.ptab').forEach((t) => t.classList.remove('active'));
+        tab.classList.add('active');
+        const group = tab.dataset.mode === 'group';
+        memberList.classList.toggle('is-hidden', group);
+        groupForm.classList.toggle('is-hidden', !group);
+      });
+    });
+
+    function memberRow(mem) {
+      const item = document.createElement('div');
+      item.className = 'member-item';
+      const avatar = document.createElement('div');
+      avatar.className = 'conv-avatar';
+      avatar.textContent = initials(mem.username);
+      item.appendChild(avatar);
+      const wrap = document.createElement('div');
+      const name = document.createElement('div');
+      name.textContent = mem.username;
+      const role = document.createElement('div');
+      role.className = 'member-role';
+      role.textContent = mem.isSuperadmin ? 'admin' : (mem.role || '');
+      wrap.appendChild(name); wrap.appendChild(role);
+      item.appendChild(wrap);
+      return item;
+    }
+    // A multi-select row that toggles membership in `set` and updates `counter`.
+    function selectableRow(mem, set, counter) {
+      const row = memberRow(mem);
+      const check = document.createElement('div');
+      check.className = 'check';
+      row.appendChild(check);
+      row.addEventListener('click', () => {
+        if (set.has(mem.username)) { set.delete(mem.username); row.classList.remove('selected'); check.textContent = ''; }
+        else { set.add(mem.username); row.classList.add('selected'); check.textContent = '✓'; }
+        counter.textContent = set.size + ' selected';
+      });
+      return row;
+    }
+
+    const groupSelected = new Set();
     async function openPicker() {
+      document.querySelectorAll('.ptab').forEach((t) => t.classList.toggle('active', t.dataset.mode === 'direct'));
+      memberList.classList.remove('is-hidden');
+      groupForm.classList.add('is-hidden');
+      groupName.value = '';
+      groupSelected.clear(); groupCount.textContent = '0 selected';
       memberList.innerHTML = '<div class="conv-empty">Loading…</div>';
+      groupMemberList.innerHTML = '';
       pickerModal.classList.remove('is-hidden');
       let data;
       try { data = await api('/api/chat/members'); } catch (e) { return; }
       const members = Array.isArray(data.members) ? data.members : [];
       memberList.innerHTML = '';
       if (!members.length) {
-        memberList.innerHTML = '<div class="conv-empty">No other users to message.</div>';
+        memberList.innerHTML = '<div class="conv-empty">No other users available.</div>';
         return;
       }
       members.forEach((mem) => {
-        const item = document.createElement('div');
-        item.className = 'member-item';
-        const avatar = document.createElement('div');
-        avatar.className = 'conv-avatar';
-        avatar.textContent = initials(mem.username);
-        item.appendChild(avatar);
-        const wrap = document.createElement('div');
-        const name = document.createElement('div');
-        name.textContent = mem.username;
-        const role = document.createElement('div');
-        role.className = 'member-role';
-        role.textContent = mem.isSuperadmin ? 'admin' : (mem.role || '');
-        wrap.appendChild(name);
-        wrap.appendChild(role);
-        item.appendChild(wrap);
-        item.addEventListener('click', () => startDm(mem.username));
-        memberList.appendChild(item);
+        const dRow = memberRow(mem);
+        dRow.addEventListener('click', () => startDm(mem.username));
+        memberList.appendChild(dRow);
+        groupMemberList.appendChild(selectableRow(mem, groupSelected, groupCount));
       });
     }
+
+    document.getElementById('groupCreate').addEventListener('click', async () => {
+      const title = groupName.value.trim();
+      if (!title) { alert('Enter a room name (e.g. project code).'); groupName.focus(); return; }
+      try {
+        const data = await api('/api/chat/conversations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'group', title, members: Array.from(groupSelected) }),
+        });
+        pickerModal.classList.add('is-hidden');
+        await loadConversations();
+        if (data.conversation) selectConversation(data.conversation.id);
+      } catch (err) {
+        if (err.message !== 'chat_disabled') alert('Could not create room: ' + err.message);
+      }
+    });
 
     async function startDm(username) {
       try {
@@ -431,6 +540,35 @@
         if (err.message !== 'chat_disabled') alert('Could not start chat: ' + err.message);
       }
     }
+
+    const addSelected = new Set();
+    async function openAddMembers(conv) {
+      addTargetConvId = conv.id;
+      addSelected.clear(); addCount.textContent = '0 selected';
+      addMemberList.innerHTML = '<div class="conv-empty">Loading…</div>';
+      addModal.classList.remove('is-hidden');
+      let data;
+      try { data = await api('/api/chat/members'); } catch (e) { return; }
+      const existing = new Set(conv.memberUsernames || []);
+      const members = (Array.isArray(data.members) ? data.members : []).filter((m) => !existing.has(m.username));
+      addMemberList.innerHTML = '';
+      if (!members.length) { addMemberList.innerHTML = '<div class="conv-empty">Everyone is already in this room.</div>'; return; }
+      members.forEach((mem) => addMemberList.appendChild(selectableRow(mem, addSelected, addCount)));
+    }
+    document.getElementById('addConfirm').addEventListener('click', async () => {
+      if (!addTargetConvId || !addSelected.size) { addModal.classList.add('is-hidden'); return; }
+      try {
+        await api('/api/chat/conversations/' + encodeURIComponent(addTargetConvId) + '/members', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ members: Array.from(addSelected) }),
+        });
+        addModal.classList.add('is-hidden');
+        await loadConversations();
+        renderThreadHead();
+      } catch (err) {
+        if (err.message !== 'chat_disabled') alert('Could not add people: ' + err.message);
+      }
+    });
 
     // Boot
     async function boot() {

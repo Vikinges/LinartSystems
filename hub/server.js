@@ -2654,8 +2654,9 @@ app.post('/api/2fa/disable', (req, res) => {
 });
 
 // --- Team chat (P9 MVP): REST-only, flat JSON storage, clients poll ---
-// direct = 1:1 between hub users (members only); project = room per projectKey
-// (visible to every authenticated user, author auto-joins on post).
+// direct = 1:1 between hub users (members only); project = open room per projectKey
+// (visible to every authenticated user, author auto-joins on post); group = named,
+// invite-only room with a hand-picked member list (only members see/post).
 const CHAT_DIR = DATA_DIR ? path.join(DATA_DIR, 'chat') : path.join(__dirname, 'chat');
 const CHAT_INDEX_FILE = path.join(CHAT_DIR, 'conversations.json');
 const CHAT_BODY_MAX = 4000;
@@ -2719,6 +2720,7 @@ function conversationPayload(conv, username) {
     id: conv.id,
     kind: conv.kind,
     ...(conv.projectKey ? { projectKey: conv.projectKey } : {}),
+    ...(conv.ownerUsername ? { ownerUsername: conv.ownerUsername } : {}),
     title: conv.title,
     memberUsernames: conv.memberUsernames || [],
     lastMessage: last,
@@ -2835,7 +2837,7 @@ app.post('/api/chat/conversations', (req, res) => {
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
   const body = req.body || {};
-  const kind = body.kind === 'project' ? 'project' : (body.kind === 'direct' ? 'direct' : null);
+  const kind = ['project', 'direct', 'group'].includes(body.kind) ? body.kind : null;
   if (!kind) return res.status(400).json({ ok: false, error: 'invalid_kind' });
   const index = loadChatIndex();
   let conv;
@@ -2852,6 +2854,25 @@ app.post('/api/chat/conversations', (req, res) => {
       index.push(conv);
       saveChatIndex(index);
     }
+  } else if (kind === 'group') {
+    // Named, invite-only room (e.g. "26-1505 Siemens"): only listed members see it and can post.
+    const title = typeof body.title === 'string' ? body.title.trim() : '';
+    if (!title) return res.status(400).json({ ok: false, error: 'title_required' });
+    const rawMembers = Array.isArray(body.members) ? body.members : [];
+    const picked = [...new Set(rawMembers.map((m) => String(m || '').trim()).filter(Boolean))]
+      .filter((m) => m !== user.username);
+    for (const m of picked) {
+      if (!knownHubUsername(m)) return res.status(404).json({ ok: false, error: 'user_not_found', member: m });
+    }
+    const members = [user.username, ...picked];
+    const id = `grp_${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`;
+    conv = {
+      id, kind: 'group', title: title.slice(0, 120),
+      memberUsernames: members, ownerUsername: user.username,
+      createdAt: new Date().toISOString(), reads: {},
+    };
+    index.push(conv);
+    saveChatIndex(index);
   } else {
     const projectKey = typeof body.projectKey === 'string' ? body.projectKey.trim() : '';
     if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey_required' });
@@ -2864,6 +2885,30 @@ app.post('/api/chat/conversations', (req, res) => {
     }
   }
   return res.json({ ok: true, conversation: conversationPayload(conv, user.username) });
+});
+
+// Add members to a group (owner or admin only). Body: { members: [usernames] } or { member }.
+app.post('/api/chat/conversations/:id/members', requireChatMember, (req, res) => {
+  const user = req.chatUser;
+  const index = req.chatIndex;
+  const conv = req.chatConv;
+  if (conv.kind !== 'group') return res.status(400).json({ ok: false, error: 'not_a_group' });
+  const isOwner = conv.ownerUsername === user.username;
+  const isAdmin = user.isSuperadmin || user.role === USER_ROLE_ADMIN;
+  if (!isOwner && !isAdmin) return res.status(403).json({ ok: false, error: 'forbidden' });
+  const body = req.body || {};
+  const raw = Array.isArray(body.members) ? body.members : (body.member ? [body.member] : []);
+  const toAdd = [...new Set(raw.map((m) => String(m || '').trim()).filter(Boolean))];
+  for (const m of toAdd) {
+    if (!knownHubUsername(m)) return res.status(404).json({ ok: false, error: 'user_not_found', member: m });
+  }
+  if (!Array.isArray(conv.memberUsernames)) conv.memberUsernames = [];
+  let added = 0;
+  for (const m of toAdd) {
+    if (!conv.memberUsernames.includes(m)) { conv.memberUsernames.push(m); added++; }
+  }
+  if (added) saveChatIndex(index);
+  return res.json({ ok: true, added, conversation: conversationPayload(conv, user.username) });
 });
 
 app.get('/api/chat/conversations/:id/messages', (req, res) => {
