@@ -268,6 +268,7 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     status: normalizeReportStatus(meta.status),
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
+    photoCount: Array.isArray(meta.photoFiles) ? meta.photoFiles.length : 0,
     submittedBy: (function () {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
@@ -23097,10 +23098,21 @@ async function readFileDataResponse(type, filename) {
       } catch (err) { /* leave redacted */ }
     }
   }
+  const outFilename = meta.filename || filename;
+  const outType = meta.templateType || type;
+  const photos = Array.isArray(meta.photoFiles)
+    ? meta.photoFiles.map((p) => ({
+        field: p.field || null,
+        file: p.file || null,
+        mime: p.mime || null,
+        name: p.name || null,
+        url: `/api/files/${encodeURIComponent(outType)}/${encodeURIComponent(outFilename)}/photos/${encodeURIComponent(p.file)}`,
+      }))
+    : [];
   return {
     ok: true,
-    filename: meta.filename || filename,
-    type: meta.templateType || type,
+    filename: outFilename,
+    type: outType,
     templateSlug: meta.templateSlug || null,
     templateLabel: meta.templateLabel || null,
     submittedAt: meta.createdAt || null,
@@ -23109,6 +23121,7 @@ async function readFileDataResponse(type, filename) {
     signaturesRestored,
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
+    photos,
     fields: rb,
   };
 }
@@ -23128,6 +23141,23 @@ app.get(['/api/files/:type/:filename/data', '/service2/api/files/:type/:filename
     console.error('[server] Failed to read file data', err);
     return res.status(500).json({ ok: false, error: 'file_data_failed' });
   }
+});
+
+// Serve a persisted report photo by field-indexed filename (from meta.photoFiles).
+app.get(['/api/files/:type/:filename/photos/:name', '/service2/api/files/:type/:filename/photos/:name'], async (req, res) => {
+  const type = sanitizeFilename(req.params.type || '');
+  const filename = sanitizeFilename(req.params.filename || '');
+  const name = sanitizeFilename(req.params.name || '');
+  if (!type || !filename || !name) return res.status(400).json({ ok: false, error: 'invalid_request' });
+  const base = filename.replace(/\.pdf$/i, '');
+  const photosDir = path.join(OUTPUT_DIR, type, 'photos', base);
+  const filePath = safeResolvePath(photosDir, path.join(photosDir, name));
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'photo_not_found' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = ext === '.png' ? 'image/png' : (ext === '.webp' ? 'image/webp' : (ext === '.heic' ? 'image/heic' : 'image/jpeg'));
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  return res.sendFile(filePath);
 });
 
 // Convenience: no type in the path — search across output types (optional ?type= hint).
@@ -24417,6 +24447,35 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
         }
       }
       if (Object.keys(signatureFiles).length) metadata.signatureFiles = signatureFiles;
+    }
+
+    // Persist uploaded photos to disk, keyed by multipart field name. They are
+    // embedded into the PDF and otherwise dropped, so this lets the apps fetch the
+    // originals back (with per-field attribution) instead of scraping the PDF.
+    if (photoFiles.length) {
+      const photosBaseDir = path.join(path.dirname(outputMetaDir), 'photos');
+      const pdfBase = filename.replace(/\.pdf$/i, '');
+      const photoDir = path.join(photosBaseDir, pdfBase);
+      const photoManifest = [];
+      const perFieldIndex = {};
+      for (const pf of photoFiles) {
+        try {
+          if (!pf || !pf.buffer || !Buffer.isBuffer(pf.buffer)) continue;
+          const field = String(pf.fieldname || 'photo').replace(/[^a-zA-Z0-9_]/g, '_') || 'photo';
+          const mime = String(pf.mimetype || 'image/jpeg').toLowerCase();
+          const ext = mime.includes('png') ? 'png' : (mime.includes('webp') ? 'webp' : (mime.includes('heic') ? 'heic' : 'jpg'));
+          const idx = (perFieldIndex[field] = (perFieldIndex[field] || 0) + 1) - 1;
+          // sanitizeFilename is idempotent + collapses "__"→"_"; store the sanitized
+          // name so the serving route (which re-sanitizes :name) resolves the same file.
+          const photoFilename = sanitizeFilename(`${field}_${idx}.${ext}`);
+          await fs.promises.mkdir(photoDir, { recursive: true });
+          await fs.promises.writeFile(path.join(photoDir, photoFilename), pf.buffer);
+          photoManifest.push({ field, file: photoFilename, mime, size: pf.buffer.length, name: pf.originalname || null });
+        } catch (err) {
+          console.warn(`[server] failed to persist photo ${pf && pf.fieldname}: ${err.message}`);
+        }
+      }
+      if (photoManifest.length) metadata.photoFiles = photoManifest;
     }
 
     // F: an edit keeps the review trail of the report it replaces.
