@@ -266,6 +266,8 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     createdAtMs: createdAt ? Date.parse(createdAt) : 0,
     downloadPath: `download/${encodeURIComponent(templateType)}/${encodeURIComponent(filename)}`,
     status: normalizeReportStatus(meta.status),
+    remoteSigned: meta.remoteSigned === true,
+    remoteSignedAt: meta.remoteSignedAt || null,
     submittedBy: (function () {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
@@ -23105,6 +23107,8 @@ async function readFileDataResponse(type, filename) {
     clientReportId: rb.client_report_id || null,
     status: normalizeReportStatus(meta.status),
     signaturesRestored,
+    remoteSigned: meta.remoteSigned === true,
+    remoteSignedAt: meta.remoteSignedAt || null,
     fields: rb,
   };
 }
