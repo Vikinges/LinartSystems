@@ -22,6 +22,8 @@ const SIGNED_DIR = path.join(SIGN_ROOT, 'signed');
 const DB_PATH = process.env.SIGN_DB_PATH || path.join(SIGN_ROOT, 'sign.db');
 const PUBLIC_SIGN_BASE_URL = String(process.env.PUBLIC_SIGN_BASE_URL || '').replace(/\/$/, '');
 const INTERNAL_TOKEN = String(process.env.SIGN_INTERNAL_TOKEN || '').trim();
+// service2 base URL for the remote-sign completion callback (draw sig into report box).
+const SERVICE2_URL = String(process.env.SERVICE2_URL || 'http://service2:3001').replace(/\/$/, '');
 const DEFAULT_TTL_DAYS = Number(process.env.SIGN_TTL_DAYS || '7');
 const BASE_PATH = String(process.env.BASE_PATH || '').replace(/\/$/, '');
 
@@ -65,12 +67,18 @@ db.exec(`
 try {
   db.exec(`ALTER TABLE sign_jobs ADD COLUMN pin_hash TEXT`);
 } catch (_e) { /* column already exists */ }
+// Migration: carry the source report identity so the signature can be rendered
+// back into the report's customer-signature box (remote-sign rework).
+try { db.exec(`ALTER TABLE sign_jobs ADD COLUMN report_type TEXT`); } catch (_e) { /* exists */ }
+try { db.exec(`ALTER TABLE sign_jobs ADD COLUMN report_file TEXT`); } catch (_e) { /* exists */ }
 
 const stmtInsertJob = db.prepare(`
   INSERT INTO sign_jobs (
-    id, token_hash, pin_hash, created_at, expires_at, status, source_path, original_name
+    id, token_hash, pin_hash, created_at, expires_at, status, source_path, original_name,
+    report_type, report_file
   ) VALUES (
-    @id, @token_hash, @pin_hash, @created_at, @expires_at, @status, @source_path, @original_name
+    @id, @token_hash, @pin_hash, @created_at, @expires_at, @status, @source_path, @original_name,
+    @report_type, @report_file
   )
 `);
 const stmtFindByToken = db.prepare(`SELECT * FROM sign_jobs WHERE token_hash = ? LIMIT 1`);
@@ -351,6 +359,9 @@ app.get('/health', (req, res) => {
 app.post('/internal/jobs', requireInternal, (req, res) => {
   const storedPath = sanitizeRelativePath(req.body && req.body.storedPath);
   const originalName = req.body && typeof req.body.originalName === 'string' ? req.body.originalName.trim() : '';
+  // Optional source-report identity (lets us render the signature back into the report).
+  const reportType = req.body && typeof req.body.reportType === 'string' ? req.body.reportType.trim().slice(0, 80) : '';
+  const reportFile = req.body && typeof req.body.reportFile === 'string' ? req.body.reportFile.trim().slice(0, 200) : '';
   const ttlDaysRaw = Number(req.body && req.body.expiresInDays);
   let ttlDays = Number.isFinite(ttlDaysRaw) ? ttlDaysRaw : DEFAULT_TTL_DAYS || 7;
   ttlDays = Math.min(Math.max(ttlDays, 1), 7);
@@ -384,6 +395,8 @@ app.post('/internal/jobs', requireInternal, (req, res) => {
     status: 'pending',
     source_path: storedPath,
     original_name: originalName || null,
+    report_type: reportType || null,
+    report_file: reportFile || null,
   });
 
   return res.json({
@@ -719,9 +732,34 @@ app.post('/s/:token/submit', rateLimit, requirePin, async (req, res) => {
       audit_ua: String(req.headers['user-agent'] || '').slice(0, 240) || null,
     });
 
+    // If this job carries a source report, ask service2 to draw the signature into
+    // the report's customer_signature box and persist a *_remote-signed copy in Files.
+    // Best-effort: the appendix-page signed PDF above already exists as a fallback.
+    let remoteSignedFile = null;
+    if (job.report_type && job.report_file && INTERNAL_TOKEN) {
+      try {
+        const cbResp = await fetch(`${SERVICE2_URL}/internal/sign-completed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-token': INTERNAL_TOKEN },
+          body: JSON.stringify({
+            reportType: job.report_type,
+            reportFile: job.report_file,
+            signatureDataUrl: signatureData,
+            signedAt,
+          }),
+        });
+        const cbData = await cbResp.json().catch(() => ({}));
+        if (cbResp.ok && cbData && cbData.ok) remoteSignedFile = cbData.file || null;
+        else console.warn('[sign] sign-completed callback rejected:', cbData && cbData.error);
+      } catch (cbErr) {
+        console.warn('[sign] sign-completed callback failed:', cbErr.message);
+      }
+    }
+
     return res.json({
       ok: true,
       downloadUrl: `/s/${encodeURIComponent(token)}/download`,
+      remoteSignedFile,
     });
   } catch (err) {
     console.error('[sign] Failed to embed signature', err);

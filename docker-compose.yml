@@ -84,6 +84,8 @@ services:
       - SIGN_SHARED_DIR=/app/sign
       - PUBLIC_SIGN_BASE_URL=https://lsc-led.de/sign
       - BASE_PATH=/sign
+      # Remote-sign completion callback target (draw signature into the report box).
+      - SERVICE2_URL=${SERVICE2_URL:-http://service2:3001}
     volumes:
       - sign-data:/app/sign
 

@@ -7738,6 +7738,19 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const boxRect = { x: box.x, y: cursorY - signatureHeight, width: signatureWidth, height: signatureHeight };
 
+    // Record each signature box's geometry (even if empty) so a remote signature
+    // can later be drawn into the exact customer_signature box. Purely additive.
+    if (Array.isArray(options.signatureSlots)) {
+      options.signatureSlots.push({
+        acroName: box.acroName,
+        page: resolvePageNumber(),
+        x: Number(boxRect.x.toFixed(2)),
+        y: Number(boxRect.y.toFixed(2)),
+        width: Number(boxRect.width.toFixed(2)),
+        height: Number(boxRect.height.toFixed(2)),
+      });
+    }
+
     page.drawText(box.label, {
 
       x: boxRect.x,
@@ -23998,6 +24011,8 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     let signaturePlacements = [];
 
+    const signatureSlots = [];
+
     if (isDailyReport) {
 
       signaturePlacements = await drawDailyReportPage(
@@ -24095,6 +24110,8 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
           startY: clearedSignoff && Number.isFinite(clearedSignoff.startY) ? clearedSignoff.startY : undefined,
 
           employees: employeeSummary,
+
+          signatureSlots,
 
         },
 
@@ -24291,6 +24308,8 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
       imagePlacements,
 
       signaturePlacements,
+
+      signatureSlots,
 
       overflowText: overflowTextEntries.map((entry) => ({
 
@@ -24641,6 +24660,8 @@ app.post(['/api/sign/create', '/service2/api/sign/create'], requireGenerateLinks
       body: JSON.stringify({
         storedPath: `inbox/${inboxFile}`,
         originalName: file,
+        reportType: type,
+        reportFile: file,
         expiresInDays: Number(req.body && req.body.expiresInDays) || 7
       })
     });
@@ -24659,6 +24680,104 @@ app.post(['/api/sign/create', '/service2/api/sign/create'], requireGenerateLinks
   } catch (err) {
     console.error('[server] sign job error:', err);
     return res.status(500).json({ ok: false, error: err.message || 'Internal error' });
+  }
+});
+
+// Internal callback auth (service-sign -> service2), shared SIGN_INTERNAL_TOKEN.
+function requireInternalToken(req, res, next) {
+  const token = String(req.headers['x-internal-token'] || '');
+  if (!SIGN_INTERNAL_TOKEN || token !== SIGN_INTERNAL_TOKEN) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  return next();
+}
+
+// Remote-sign completion: the sign service posts the customer's signature here.
+// We draw it into the report's customer_signature box on the EXISTING PDF (no
+// re-render, so photos/layout are preserved), persist a *_remote-signed.pdf copy
+// alongside the original in the Files store, persist the signature image, and copy
+// the meta with remoteSigned flags + signatureFiles (so later edits keep it).
+app.post('/internal/sign-completed', requireInternalToken, async (req, res) => {
+  try {
+    const type = sanitizeFilename(req.body && req.body.reportType);
+    const file = sanitizeFilename(req.body && req.body.reportFile);
+    const signatureDataUrl = req.body && req.body.signatureDataUrl;
+    const signedAt = (req.body && typeof req.body.signedAt === 'string' && req.body.signedAt) || new Date().toISOString();
+    if (!type || !file) return res.status(400).json({ ok: false, error: 'missing reportType/reportFile' });
+    if (typeof signatureDataUrl !== 'string' || !signatureDataUrl.startsWith('data:image/')) {
+      return res.status(400).json({ ok: false, error: 'signatureDataUrl required' });
+    }
+    const pdfPath = buildPdfPath(type, file);
+    const metaPath = buildMetaPath(type, file);
+    if (!fs.existsSync(pdfPath)) return res.status(404).json({ ok: false, error: 'report_not_found' });
+    const decoded = decodeImageDataUrl(signatureDataUrl);
+    if (!decoded) return res.status(400).json({ ok: false, error: 'bad_signature' });
+
+    let meta = {};
+    try { meta = JSON.parse(fs.readFileSync(metaPath, 'utf8')); } catch (e) { meta = {}; }
+    const slots = Array.isArray(meta.signatureSlots) ? meta.signatureSlots : [];
+    const slot = slots.find((s) => s && /customer/i.test(String(s.acroName || '')));
+
+    const srcBytes = await fs.promises.readFile(pdfPath);
+    const pdfDoc = await PDFDocument.load(srcBytes);
+    const pages = pdfDoc.getPages();
+    const image = decoded.mimeType === 'image/png'
+      ? await pdfDoc.embedPng(decoded.buffer)
+      : await pdfDoc.embedJpg(decoded.buffer);
+
+    let placement = 'appendix';
+    if (slot && Number.isFinite(slot.page) && slot.page >= 1 && slot.page <= pages.length
+        && Number.isFinite(slot.x) && Number.isFinite(slot.y) && slot.width > 0 && slot.height > 0) {
+      const page = pages[slot.page - 1];
+      const availW = slot.width - 12;
+      const availH = slot.height - 12;
+      const scale = Math.min(availW / image.width, availH / image.height);
+      const w = image.width * scale;
+      const h = image.height * scale;
+      page.drawImage(image, { x: slot.x + 6 + (availW - w) / 2, y: slot.y + 6 + (availH - h) / 2, width: w, height: h });
+      placement = 'customer_box';
+    } else {
+      // Old reports have no recorded slot geometry — fall back to an appendix page.
+      const baseSize = pages.length ? pages[0].getSize() : { width: 595, height: 842 };
+      const page = pdfDoc.addPage([baseSize.width, baseSize.height]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      page.drawText('Customer signature (remote)', { x: 48, y: baseSize.height - 80, size: 18, font, color: rgb(0.1, 0.1, 0.1) });
+      const scale = Math.min((baseSize.width - 120) / image.width, 200 / image.height);
+      page.drawImage(image, { x: 48, y: baseSize.height - 300, width: image.width * scale, height: image.height * scale });
+      page.drawText(`Signed at: ${signedAt}`, { x: 48, y: baseSize.height - 320, size: 12, font, color: rgb(0.25, 0.25, 0.25) });
+    }
+
+    const signedBytes = await pdfDoc.save();
+    const base = file.replace(/\.pdf$/i, '');
+    const signedFile = `${base}_remote-signed.pdf`;
+    const signedPdfPath = buildPdfPath(type, signedFile);
+    fsExtra.ensureDirSync(path.dirname(signedPdfPath));
+    await fs.promises.writeFile(signedPdfPath, signedBytes);
+
+    // Persist the signature image so an edit-after-remote-sign keeps it.
+    const sigDir = path.join(OUTPUT_DIR, type, 'signatures');
+    fsExtra.ensureDirSync(sigDir);
+    const sigExt = decoded.mimeType === 'image/png' ? 'png' : 'jpg';
+    const sigFilename = `${signedFile.replace(/\.pdf$/i, '')}.customer_signature.${sigExt}`;
+    await fs.promises.writeFile(path.join(sigDir, sigFilename), decoded.buffer);
+
+    const newMeta = { ...meta };
+    newMeta.filename = signedFile;
+    newMeta.remoteSigned = true;
+    newMeta.remoteSignedAt = signedAt;
+    newMeta.remoteSignPlacement = placement;
+    newMeta.signatureFiles = Object.assign({}, meta.signatureFiles || {}, { customer_signature: sigFilename });
+    const newMetaPath = buildMetaPath(type, signedFile);
+    fsExtra.ensureDirSync(path.dirname(newMetaPath));
+    await fs.promises.writeFile(newMetaPath, JSON.stringify(newMeta, null, 2));
+
+    return res.json({
+      ok: true, type, file: signedFile, placement,
+      url: `/api/files/${encodeURIComponent(type)}/${encodeURIComponent(signedFile)}`,
+    });
+  } catch (err) {
+    console.error('[server] /internal/sign-completed failed', err);
+    return res.status(500).json({ ok: false, error: 'sign_completed_failed' });
   }
 });
 
