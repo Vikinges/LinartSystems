@@ -11350,7 +11350,9 @@ ${renderTextInput('customer_representative', 'Customer representative', { allowU
     </select>
   </div>
 </div>
-${renderTextInput('led_display_model', 'LED display model / batch')}
+<!-- led_display_model is derived from the picker above; kept as a hidden field so the
+     user does not re-enter the same value (was a visible duplicate). -->
+<input type="hidden" name="led_display_model" id="led-display-model-hidden" />
 <script>
 (function () {
   var CAT = ${JSON.stringify(ledCodeGroups())};
@@ -11724,6 +11726,65 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
           <datalist id="suggest-employee-name" data-suggest-list="employee_name"></datalist>
 
           <datalist id="suggest-employee-role" data-suggest-list="employee_role"></datalist>
+
+          <script>
+          (function () {
+            // Person autofill: picking a known name fills the paired role (on-site team)
+            // or company (engineer/customer) from that person's last form — so a worker
+            // only types their name and the rest is filled in. Never overwrites edits.
+            var PMAP = {};
+            function pkey(s) { return String(s || '').trim().toLowerCase(); }
+            function loadPeople() {
+              fetch('/api/people', { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                  if (!d || !d.ok || !Array.isArray(d.people)) return;
+                  d.people.forEach(function (p) { if (p && p.name) PMAP[pkey(p.name)] = p; });
+                })
+                .catch(function () {});
+            }
+            function setIfEmpty(el, val) {
+              if (el && val && !String(el.value || '').trim()) {
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }
+            function autofill(input) {
+              var p = PMAP[pkey(input.value)];
+              if (!p) return;
+              if (input.getAttribute('data-suggest-field') === 'employee_name') {
+                var box = input.closest('.employee-person-fields, .employee-name-dialog, tr') || input.parentElement;
+                var roleEl = box && box.querySelector('[data-suggest-field="employee_role"]');
+                if (p.role) setIfEmpty(roleEl, p.role);
+              } else if (input.name === 'engineer_name') {
+                if (p.company) setIfEmpty(document.querySelector('[name="engineer_company"]'), p.company);
+              } else if (input.name === 'customer_name' || input.name === 'customer_representative') {
+                if (p.company) setIfEmpty(document.querySelector('[name="customer_company"]'), p.company);
+              }
+            }
+            // The client is named once at the top (End customer name) — mirror it into the
+            // Signatures "Customer company" so it is not entered twice.
+            function syncCustomerCompany() {
+              var ecn = document.querySelector('[name="end_customer_name"]');
+              var cc = document.querySelector('[name="customer_company"]');
+              if (ecn && cc && String(ecn.value || '').trim()) setIfEmpty(cc, String(ecn.value).trim());
+            }
+            document.addEventListener('change', function (e) {
+              var t = e.target;
+              if (!t) return;
+              if (t.name === 'end_customer_name') { syncCustomerCompany(); return; }
+              if (t.tagName !== 'INPUT') return;
+              if (t.getAttribute('data-suggest-field') === 'employee_name'
+                  || t.name === 'engineer_name' || t.name === 'customer_name' || t.name === 'customer_representative') {
+                autofill(t);
+              }
+            }, true);
+            function boot() { loadPeople(); syncCustomerCompany(); }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+            else boot();
+          })();
+          </script>
 
         </section>
 
@@ -22970,27 +23031,29 @@ function recordPeople(body) {
   try {
     const store = loadPeopleStore();
     const now = new Date().toISOString();
-    const bump = (name, kind, role) => {
+    const bump = (name, kind, role, company) => {
       const key = personKey(name);
       if (!key || key.length < 2) return;
       const cur = store[key] || { name: String(name).trim(), kindCounts: {}, roles: {}, count: 0, lastSeen: null };
       cur.name = String(name).trim();
       cur.kindCounts[kind] = (cur.kindCounts[kind] || 0) + 1;
       const r = role ? String(role).trim() : '';
-      if (r) cur.roles[r] = (cur.roles[r] || 0) + 1;
+      if (r) { cur.roles[r] = (cur.roles[r] || 0) + 1; cur.lastRole = r; }
+      const co = company ? String(company).trim() : '';
+      if (co) cur.company = co; // remember the person's last-seen company for autofill
       cur.count += 1;
       cur.lastSeen = now;
       store[key] = cur;
     };
     const empSummary = collectEmployeeEntries(body);
     const employees = (empSummary && Array.isArray(empSummary.entries)) ? empSummary.entries : [];
-    for (const e of employees) { if (e && e.name) bump(e.name, 'internal', e.role); }
+    for (const e of employees) { if (e && e.name) bump(e.name, 'internal', e.role, null); }
     const eng = toSingleValue(body?.engineer_name);
-    if (eng) bump(eng, 'internal', null);
+    if (eng) bump(eng, 'internal', null, toSingleValue(body?.engineer_company));
     const cn = toSingleValue(body?.customer_name);
-    if (cn) bump(cn, 'customer', null);
+    if (cn) bump(cn, 'customer', null, toSingleValue(body?.customer_company));
     const cr = toSingleValue(body?.customer_representative);
-    if (cr) bump(cr, 'customer', null);
+    if (cr) bump(cr, 'customer', null, toSingleValue(body?.customer_company));
     savePeopleStore(store);
   } catch (e) { /* never block a submit on registry bookkeeping */ }
 }
@@ -23014,7 +23077,7 @@ app.get(['/api/people', '/service2/api/people'], (req, res) => {
   const kind = normalizeQueryLower(req.query.kind);
   const q = normalizeQueryLower(req.query.q);
   let people = Object.values(loadPeopleStore()).map((e) => ({
-    name: e.name, kind: personKind(e), role: personTopRole(e), count: e.count, lastSeen: e.lastSeen,
+    name: e.name, kind: personKind(e), role: e.lastRole || personTopRole(e), company: e.company || null, count: e.count, lastSeen: e.lastSeen,
   }));
   if (kind === 'internal' || kind === 'customer') people = people.filter((p) => p.kind === kind);
   if (q) people = people.filter((p) => p.name.toLowerCase().includes(q) || String(p.role || '').toLowerCase().includes(q));
