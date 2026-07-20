@@ -21308,6 +21308,14 @@ const uploadFields = upload.fields([
 
   { name: 'photo_installation', maxCount: 20 },
 
+  // iOS full-field submissions: LED inspection / control checkpoints / spare parts.
+  // Missing entries here make multer reject the whole submit with "Unexpected field".
+  { name: 'led_photos', maxCount: 20 },
+
+  { name: 'control_photos', maxCount: 20 },
+
+  { name: 'spares_photos', maxCount: 20 },
+
   // iOS sends signatures as raw binary PNG file parts (UIImage.pngData()),
   // not data-URL strings like the web form — accept both.
   { name: 'engineer_signature', maxCount: 1 },
@@ -21347,6 +21355,12 @@ function collectPhotoFiles(files) {
   append(files.photo_defects);
 
   append(files.photo_installation);
+
+  append(files.led_photos);
+
+  append(files.control_photos);
+
+  append(files.spares_photos);
 
   return photos;
 
