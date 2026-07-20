@@ -96,9 +96,23 @@ rate limit на все маршруты. Статусы задания: `pending
   и клиента, daily report (`project number`, `date`, `submitter`, текст).
 - Сотрудники: массив `employees[n][...]`; уникальность считается по `group`,
   fallback `name + role`.
-- Фото-поля: `photo_before`, `photo_after`, `photos`, `daily_photos`,
-  `photo_defects`, `photo_installation` (до 20 каждое). Лимиты: 128 MB/файл,
-  512 MB суммарно, максимум 64 файла, только JPEG/PNG.
+- Фото-поля (file parts, до 20 каждое): `photo_before`, `photo_after`, `photos`,
+  `photos[]`, `daily_photos`, `photo_defects`, `photo_installation`,
+  `led_photos`, `control_photos`, `spares_photos`.
+  Лимиты: 128 MB/файл, максимум 64 файла на запрос, только JPEG/PNG.
+- Подписи можно слать двумя способами: как **file part** `engineer_signature` /
+  `customer_signature` (raw binary PNG, до 1 каждой — так делает iOS) ИЛИ как
+  data-URL строку в обычном поле (так делает web-форма). Имена частей — ровно эти;
+  `submitter_signature` НЕ распознаётся.
+- **Единственный источник истины по именам частей — `UPLOAD_FIELD_LIMITS` в
+  `service2/server.js`.** При добавлении нового поля фото на клиенте его надо
+  добавить и туда (иначе часть будет проигнорирована).
+- С v0.54 неизвестные file parts **игнорируются** (с логом на сервере), а не
+  роняют весь сабмит: до этого один незнакомый part давал `400 Unexpected field`
+  и терял весь отчёт. Превышение лимита по количеству — обрезается, не ошибка.
+- Фото сохраняются на диск и возвращаются в `GET /api/files/:type/:file/data`
+  в массиве `photos[]` (`field`, `url`, `mime`, `name`) — можно тянуть оригиналы
+  по полям вместо извлечения из PDF.
 - Клиент ОБЯЗАН сжимать фото перед отправкой: JPEG, длинная сторона ≤ 1600 px
   (так делает web-клиент — поведение должно совпадать).
 - Успешный ответ: `{ "ok": true, "url": "/download/...pdf", ... }`; ошибка: `{ "ok": false, "error": "..." }`.
