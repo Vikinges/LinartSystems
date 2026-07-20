@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check service2/server.js)",
+      "Bash(node \"C:/Users/4k_i7/AppData/Local/Temp/claude/d--Code-containers-LinartSystems/d5493e6d-1795-4f9c-9537-14867f47dd42/scratchpad/test-decode.js\")",
+      "Bash(node -e ' *)",
+      "PowerShell(& \"C:\\\\Users\\\\4k_i7\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Code-containers-LinartSystems\\\\d5493e6d-1795-4f9c-9537-14867f47dd42\\\\scratchpad\\\\test-f.ps1\")",
+      "PowerShell(& \"C:\\\\Users\\\\4k_i7\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Code-containers-LinartSystems\\\\d5493e6d-1795-4f9c-9537-14867f47dd42\\\\scratchpad\\\\test-pdfgen.ps1\")",
+      "Bash(python -c ' *)",
+      "Bash(rm -f service2/out/service_report/pdf/filled-DbgEdit2-* service2/out/service_report/pdf/filled-MaxFill_* service2/out/service_report/pdf/filled-Mini_AG-* service2/out/service_report/meta/filled-DbgEdit2-* service2/out/service_report/meta/filled-MaxFill_* service2/out/service_report/meta/filled-Mini_AG-* service2/out/service_report/signatures/filled-MaxFill_*)",
+      "PowerShell(& \"C:\\\\Users\\\\4k_i7\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Code-containers-LinartSystems\\\\d5493e6d-1795-4f9c-9537-14867f47dd42\\\\scratchpad\\\\verify-fpdf-prod.ps1\")",
+      "Bash(git fetch *)",
+      "Bash(git rev-list *)",
+      "PowerShell(& \"C:\\\\Users\\\\4k_i7\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Code-containers-LinartSystems\\\\d5493e6d-1795-4f9c-9537-14867f47dd42\\\\scratchpad\\\\test-webdd.ps1\")",
+      "PowerShell(Start-Process \"https://lsc-led.de/service2/\")",
+      "PowerShell(& \"C:\\\\Users\\\\4k_i7\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\d--Code-containers-LinartSystems\\\\d5493e6d-1795-4f9c-9537-14867f47dd42\\\\scratchpad\\\\test-codedd.ps1\")"
+    ]
+  }
+}
