@@ -444,7 +444,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.53';
+const SERVICE2_VERSION = '0.54';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -1979,7 +1979,7 @@ function loadSuggestionStore() {
 
   }
 
-  // merge defaults so Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ ÐµÑÑ‚ÑŒ Ð´Ð°Ð¶Ðµ Ð±ÐµÐ· Ð¿Ñ€Ð¾ÑˆÐ»Ñ‹Ñ… Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð¾Ðº
+  // merge defaults so ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ´ÃÂ°ÃÂ¶ÃÂµ ÃÂ±ÃÂµÃÂ· ÃÂ¿Ã‘â‚¬ÃÂ¾Ã‘Ë†ÃÂ»Ã‘â€¹Ã‘â€¦ ÃÂ¾Ã‘â€šÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ¾ÃÂº
 
   for (const [field, values] of Object.entries(DEFAULT_SUGGESTIONS)) {
 
@@ -2105,7 +2105,7 @@ function recordSuggestionValue(fieldName, value) {
 
   let changed = updateBucket(suggestionStore.suggestions[canonical]);
 
-  // Ñ‚Ð°ÐºÐ¶Ðµ Ð´ÑƒÐ±Ð»Ð¸Ñ€ÑƒÐµÐ¼ Ð² ÑÑ‚Ð°Ñ€Ð¾Ðµ Ð¸Ð¼Ñ Ð¿Ð¾Ð»Ñ, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·Ð¾Ð²Ð°Ñ‚ÑŒ Ñ€Ð°Ð½ÐµÐµ ÑÐ¾Ñ…Ñ€Ð°Ð½Ñ‘Ð½Ð½Ñ‹Ðµ Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ñ
+  // Ã‘â€šÃÂ°ÃÂºÃÂ¶ÃÂµ ÃÂ´Ã‘Æ’ÃÂ±ÃÂ»ÃÂ¸Ã‘â‚¬Ã‘Æ’ÃÂµÃÂ¼ ÃÂ² Ã‘ÂÃ‘â€šÃÂ°Ã‘â‚¬ÃÂ¾ÃÂµ ÃÂ¸ÃÂ¼Ã‘Â ÃÂ¿ÃÂ¾ÃÂ»Ã‘Â, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ¸Ã‘ÂÃÂ¿ÃÂ¾ÃÂ»Ã‘Å’ÃÂ·ÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃ‘Å’ Ã‘â‚¬ÃÂ°ÃÂ½ÃÂµÃÂµ Ã‘ÂÃÂ¾Ã‘â€¦Ã‘â‚¬ÃÂ°ÃÂ½Ã‘â€˜ÃÂ½ÃÂ½Ã‘â€¹ÃÂµ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸Ã‘Â
 
   if (canonical !== fieldName) {
 
@@ -2151,7 +2151,7 @@ function recordSuggestionsFromSubmission(body) {
 
 
 
-  // Ð’Ñ‹Ñ‚Ð°ÑÐºÐ¸Ð²Ð°ÐµÐ¼ Ð¸Ð¼ÐµÐ½Ð°/Ñ€Ð¾Ð»Ð¸ ÑÐ¾Ñ‚Ñ€ÑƒÐ´Ð½Ð¸ÐºÐ¾Ð² Ð¸Ð· Ð¼Ð°ÑÑÐ¸Ð²Ð° employees[n][...]
+  // Ãâ€™Ã‘â€¹Ã‘â€šÃÂ°Ã‘ÂÃÂºÃÂ¸ÃÂ²ÃÂ°ÃÂµÃÂ¼ ÃÂ¸ÃÂ¼ÃÂµÃÂ½ÃÂ°/Ã‘â‚¬ÃÂ¾ÃÂ»ÃÂ¸ Ã‘ÂÃÂ¾Ã‘â€šÃ‘â‚¬Ã‘Æ’ÃÂ´ÃÂ½ÃÂ¸ÃÂºÃÂ¾ÃÂ² ÃÂ¸ÃÂ· ÃÂ¼ÃÂ°Ã‘ÂÃ‘ÂÃÂ¸ÃÂ²ÃÂ° employees[n][...]
 
   Object.keys(body || {}).forEach((key) => {
 
@@ -4548,7 +4548,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 
     : defaultBodyTopOffset(pageHeight);
 
-  // Ð¡Ñ‚Ð°Ñ€Ñ‚ Ñ€ÐµÐ½Ð´ÐµÑ€Ð°: Ñ‡ÑƒÑ‚ÑŒ Ð½Ð¸Ð¶Ðµ Ð»Ð¸Ð½Ð¸Ð¸ ÐºÐ¾Ð½Ñ‚ÐµÐ½Ñ‚Ð° (bodyTopOffset), Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð²Ð¸Ð·ÑƒÐ°Ð»ÑŒÐ½Ð¾ ÑÐ¾Ð²Ð¿Ð°ÑÑ‚ÑŒ Ñ Ð»Ð¸Ð½Ð¸ÐµÐ¹ Ð² Ð°Ð´Ð¼Ð¸Ð½ÐºÐµ.
+  // ÃÂ¡Ã‘â€šÃÂ°Ã‘â‚¬Ã‘â€š Ã‘â‚¬ÃÂµÃÂ½ÃÂ´ÃÂµÃ‘â‚¬ÃÂ°: Ã‘â€¡Ã‘Æ’Ã‘â€šÃ‘Å’ ÃÂ½ÃÂ¸ÃÂ¶ÃÂµ ÃÂ»ÃÂ¸ÃÂ½ÃÂ¸ÃÂ¸ ÃÂºÃÂ¾ÃÂ½Ã‘â€šÃÂµÃÂ½Ã‘â€šÃÂ° (bodyTopOffset), Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ²ÃÂ¸ÃÂ·Ã‘Æ’ÃÂ°ÃÂ»Ã‘Å’ÃÂ½ÃÂ¾ Ã‘ÂÃÂ¾ÃÂ²ÃÂ¿ÃÂ°Ã‘ÂÃ‘â€šÃ‘Å’ Ã‘Â ÃÂ»ÃÂ¸ÃÂ½ÃÂ¸ÃÂµÃÂ¹ ÃÂ² ÃÂ°ÃÂ´ÃÂ¼ÃÂ¸ÃÂ½ÃÂºÃÂµ.
 
   const marginTop = 12;
 
@@ -4556,7 +4556,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 
 
 
-  // ÐžÑ‡Ð¸Ñ‰Ð°ÐµÐ¼ Ñ‚ÐµÐ»Ð¾ Ð¿Ð¾Ð´ ÑˆÐ°Ð¿ÐºÐ¾Ð¹, Ð¾ÑÑ‚Ð°Ð²Ð»ÑÑ Ð²ÐµÑ€Ñ…Ð½ÑŽÑŽ Ñ‡Ð°ÑÑ‚ÑŒ (Ð»Ð¾Ð³Ð¾Ñ‚Ð¸Ð¿/Ñ…ÐµÐ´ÐµÑ€) Ð½ÐµÑ‚Ñ€Ð¾Ð½ÑƒÑ‚Ð¾Ð¹.
+  // ÃÅ¾Ã‘â€¡ÃÂ¸Ã‘â€°ÃÂ°ÃÂµÃÂ¼ Ã‘â€šÃÂµÃÂ»ÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ´ Ã‘Ë†ÃÂ°ÃÂ¿ÃÂºÃÂ¾ÃÂ¹, ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃ‘Â ÃÂ²ÃÂµÃ‘â‚¬Ã‘â€¦ÃÂ½Ã‘Å½Ã‘Å½ Ã‘â€¡ÃÂ°Ã‘ÂÃ‘â€šÃ‘Å’ (ÃÂ»ÃÂ¾ÃÂ³ÃÂ¾Ã‘â€šÃÂ¸ÃÂ¿/Ã‘â€¦ÃÂµÃÂ´ÃÂµÃ‘â‚¬) ÃÂ½ÃÂµÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂ½Ã‘Æ’Ã‘â€šÃÂ¾ÃÂ¹.
 
   targetPage.drawRectangle({
 
@@ -4839,7 +4839,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       if (item.value) {
 
-        page.drawText('âœ“', {
+        page.drawText('Ã¢Å“â€œ', {
 
           x: margin + 2,
 
@@ -5913,7 +5913,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   }
 
-  // ÐÐ°Ñ‡Ð¸Ð½Ð°ÐµÐ¼ Ñ€Ð¸ÑÐ¾Ð²Ð°Ñ‚ÑŒ Ð½Ð¸Ð¶Ðµ ÑˆÐ°Ð¿ÐºÐ¸: Ð°Ð´Ð¼Ð¸Ð½ÐºÐ° ÑÐ¾Ñ…Ñ€Ð°Ð½ÑÐµÑ‚ bodyTopOffset.
+  // ÃÂÃÂ°Ã‘â€¡ÃÂ¸ÃÂ½ÃÂ°ÃÂµÃÂ¼ Ã‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃ‘Å’ ÃÂ½ÃÂ¸ÃÂ¶ÃÂµ Ã‘Ë†ÃÂ°ÃÂ¿ÃÂºÃÂ¸: ÃÂ°ÃÂ´ÃÂ¼ÃÂ¸ÃÂ½ÃÂºÃÂ° Ã‘ÂÃÂ¾Ã‘â€¦Ã‘â‚¬ÃÂ°ÃÂ½Ã‘ÂÃÂµÃ‘â€š bodyTopOffset.
 
   const initialStartY =
 
@@ -5951,7 +5951,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     page = target;
 
-    // Ð”Ð»Ñ Ð¿ÐµÑ€Ð²Ð¾Ð¹ ÑÑ‚Ñ€Ð°Ð½Ð¸Ñ†Ñ‹ Ð¸ÑÐ¿Ð¾Ð»ÑŒÐ·ÑƒÐµÐ¼ Ð·Ð°Ð´Ð°Ð½Ð½Ñ‹Ð¹ Ð¾Ñ‚ÑÑ‚ÑƒÐ¿, Ð´Ð»Ñ ÑÐ»ÐµÐ´ÑƒÑŽÑ‰Ð¸Ñ… â€” Ð²ÐµÑÑŒ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹Ð¹ Ð²ÐµÑ€Ñ….
+    // Ãâ€ÃÂ»Ã‘Â ÃÂ¿ÃÂµÃ‘â‚¬ÃÂ²ÃÂ¾ÃÂ¹ Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ°ÃÂ½ÃÂ¸Ã‘â€ Ã‘â€¹ ÃÂ¸Ã‘ÂÃÂ¿ÃÂ¾ÃÂ»Ã‘Å’ÃÂ·Ã‘Æ’ÃÂµÃÂ¼ ÃÂ·ÃÂ°ÃÂ´ÃÂ°ÃÂ½ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ¾Ã‘â€šÃ‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿, ÃÂ´ÃÂ»Ã‘Â Ã‘ÂÃÂ»ÃÂµÃÂ´Ã‘Æ’Ã‘Å½Ã‘â€°ÃÂ¸Ã‘â€¦ Ã¢â‚¬â€ ÃÂ²ÃÂµÃ‘ÂÃ‘Å’ ÃÂ´ÃÂ¾Ã‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ²ÃÂµÃ‘â‚¬Ã‘â€¦.
 
     if (!firstPageDone && initialStartY !== null) {
 
@@ -6119,7 +6119,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     if (!employeeEntries.length) {
 
-      return; // Ð¿Ñ€Ð¾Ð¿ÑƒÑÐºÐ°ÐµÐ¼ ÑÐµÐºÑ†Ð¸ÑŽ, ÐµÑÐ»Ð¸ Ð½ÐµÑ‚ ÑÐ¾Ñ‚Ñ€ÑƒÐ´Ð½Ð¸ÐºÐ¾Ð²
+      return; // ÃÂ¿Ã‘â‚¬ÃÂ¾ÃÂ¿Ã‘Æ’Ã‘ÂÃÂºÃÂ°ÃÂµÃÂ¼ Ã‘ÂÃÂµÃÂºÃ‘â€ ÃÂ¸Ã‘Å½, ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ½ÃÂµÃ‘â€š Ã‘ÂÃÂ¾Ã‘â€šÃ‘â‚¬Ã‘Æ’ÃÂ´ÃÂ½ÃÂ¸ÃÂºÃÂ¾ÃÂ²
 
     }
 
@@ -6217,7 +6217,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (label.includes('>9h') && label.includes('45m')) {
 
-        // Break BEFORE the parenthesis ("≥45m" / "(>9h)") — never inside it.
+        // Break BEFORE the parenthesis ("â‰¥45m" / "(>9h)") â€” never inside it.
 
         return label.replace(/\s*\(/, '\n(');
 
@@ -7039,7 +7039,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // Ð¡Ð½Ð°Ñ‡Ð°Ð»Ð° Site information (Ð´Ð²Ðµ ÐºÐ¾Ð»Ð¾Ð½ÐºÐ¸)
+  // ÃÂ¡ÃÂ½ÃÂ°Ã‘â€¡ÃÂ°ÃÂ»ÃÂ° Site information (ÃÂ´ÃÂ²ÃÂµ ÃÂºÃÂ¾ÃÂ»ÃÂ¾ÃÂ½ÃÂºÃÂ¸)
 
   const siteInfoRows = [
 
@@ -7205,13 +7205,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // ÐÐµÐ±Ð¾Ð»ÑŒÑˆÐ¾Ð¹ Ð·Ð°Ð·Ð¾Ñ€ Ð¿Ð¾ÑÐ»Ðµ site info
+  // ÃÂÃÂµÃÂ±ÃÂ¾ÃÂ»Ã‘Å’Ã‘Ë†ÃÂ¾ÃÂ¹ ÃÂ·ÃÂ°ÃÂ·ÃÂ¾Ã‘â‚¬ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ site info
 
   cursorY -= 6;
 
 
 
-  // Ð—Ð°Ñ‚ÐµÐ¼ employees Ð¸ Ñ‡ÐµÐºÐ»Ð¸ÑÑ‚Ñ‹
+  // Ãâ€”ÃÂ°Ã‘â€šÃÂµÃÂ¼ employees ÃÂ¸ Ã‘â€¡ÃÂµÃÂºÃÂ»ÃÂ¸Ã‘ÂÃ‘â€šÃ‘â€¹
 
   renderEmployeesSection();
 
@@ -7243,7 +7243,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // Parts record â€” Ð² ÑÐ°Ð¼Ð¾Ð¼ ÐºÐ¾Ð½Ñ†Ðµ Ð¿ÐµÑ€ÐµÐ´ Sign-off details
+  // Parts record Ã¢â‚¬â€ ÃÂ² Ã‘ÂÃÂ°ÃÂ¼ÃÂ¾ÃÂ¼ ÃÂºÃÂ¾ÃÂ½Ã‘â€ ÃÂµ ÃÂ¿ÃÂµÃ‘â‚¬ÃÂµÃÂ´ Sign-off details
 
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
 
@@ -7561,7 +7561,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const signatureHeight = 180;
 
-  // Ð¢Ñ€ÐµÐ±ÑƒÐµÐ¼ Ð¼ÐµÑÑ‚Ð¾ Ð´Ð»Ñ Ð±Ð»Ð¾ÐºÐ° Ð´Ð°Ð½Ð½Ñ‹Ñ… + Ð¿Ð¾Ð´Ð¿Ð¸ÑÐµÐ¹, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð·Ð°Ð³Ð¾Ð»Ð¾Ð²ÐºÐ¸ Ð½Ðµ Ð¿Ñ€Ð¸Ð»Ð¸Ð¿Ð°Ð»Ð¸ Ðº Ð¿Ñ€ÐµÐ´Ñ‹Ð´ÑƒÑ‰ÐµÐ¹ Ñ‚Ð°Ð±Ð»Ð¸Ñ†Ðµ
+  // ÃÂ¢Ã‘â‚¬ÃÂµÃÂ±Ã‘Æ’ÃÂµÃÂ¼ ÃÂ¼ÃÂµÃ‘ÂÃ‘â€šÃÂ¾ ÃÂ´ÃÂ»Ã‘Â ÃÂ±ÃÂ»ÃÂ¾ÃÂºÃÂ° ÃÂ´ÃÂ°ÃÂ½ÃÂ½Ã‘â€¹Ã‘â€¦ + ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂµÃÂ¹, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ·ÃÂ°ÃÂ³ÃÂ¾ÃÂ»ÃÂ¾ÃÂ²ÃÂºÃÂ¸ ÃÂ½ÃÂµ ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ»ÃÂ¸ÃÂ¿ÃÂ°ÃÂ»ÃÂ¸ ÃÂº ÃÂ¿Ã‘â‚¬ÃÂµÃÂ´Ã‘â€¹ÃÂ´Ã‘Æ’Ã‘â€°ÃÂµÃÂ¹ Ã‘â€šÃÂ°ÃÂ±ÃÂ»ÃÂ¸Ã‘â€ ÃÂµ
 
   const combinedRequired = detailHeight * detailRows + signatureHeight + 140;
 
@@ -7709,7 +7709,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // ÐŸÐ¾Ð´Ð¿Ð¸ÑÐ¸ ÐºÑ€ÑƒÐ¿Ð½Ñ‹Ðµ, Ð½Ð¾ Ð·Ð°Ð½Ð¸Ð¼Ð°ÑŽÑ‚ Ð¼ÐµÐ½ÑŒÑˆÐµ Ð²Ñ‹ÑÐ¾Ñ‚Ñ‹.
+  // ÃÅ¸ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂ¸ ÃÂºÃ‘â‚¬Ã‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂµ, ÃÂ½ÃÂ¾ ÃÂ·ÃÂ°ÃÂ½ÃÂ¸ÃÂ¼ÃÂ°Ã‘Å½Ã‘â€š ÃÂ¼ÃÂµÃÂ½Ã‘Å’Ã‘Ë†ÃÂµ ÃÂ²Ã‘â€¹Ã‘ÂÃÂ¾Ã‘â€šÃ‘â€¹.
 
   const signatureHeading =
 
@@ -7768,7 +7768,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     });
 
-    // Ñ€Ð°Ð¼ÐºÑƒ ÑƒÐ±Ñ€Ð°Ð»Ð¸, Ð¾ÑÑ‚Ð°Ð²Ð»ÑÐµÐ¼ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ð¿Ð¾Ð´Ð¿Ð¸ÑÑŒ Ð¸ ÑÐ¾Ð´ÐµÑ€Ð¶Ð¸Ð¼Ð¾Ðµ
+    // Ã‘â‚¬ÃÂ°ÃÂ¼ÃÂºÃ‘Æ’ Ã‘Æ’ÃÂ±Ã‘â‚¬ÃÂ°ÃÂ»ÃÂ¸, ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃÂµÃÂ¼ Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃ‘Å’ ÃÂ¸ Ã‘ÂÃÂ¾ÃÂ´ÃÂµÃ‘â‚¬ÃÂ¶ÃÂ¸ÃÂ¼ÃÂ¾ÃÂµ
 
     if (entry) {
 
@@ -9647,7 +9647,7 @@ ${rows.join('\n')}
 
       }
 
-      /* ── Mobile‑mode signature overlay ── */
+      /* â”€â”€ Mobileâ€‘mode signature overlay â”€â”€ */
 
       body.mobile-mode .signature-overlay {
 
@@ -10139,7 +10139,7 @@ ${rows.join('\n')}
 
       }
 
-      /* ── Rotation lock popup ── */
+      /* â”€â”€ Rotation lock popup â”€â”€ */
 
       .rotation-lock-popup {
 
@@ -11730,7 +11730,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
           <script>
           (function () {
             // Person autofill: picking a known name fills the paired role (on-site team)
-            // or company (engineer/customer) from that person's last form — so a worker
+            // or company (engineer/customer) from that person's last form â€” so a worker
             // only types their name and the rest is filled in. Never overwrites edits.
             var PMAP = {};
             function pkey(s) { return String(s || '').trim().toLowerCase(); }
@@ -11763,7 +11763,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
                 if (p.company) setIfEmpty(document.querySelector('[name="customer_company"]'), p.company);
               }
             }
-            // The client is named once at the top (End customer name) — mirror it into the
+            // The client is named once at the top (End customer name) â€” mirror it into the
             // Signatures "Customer company" so it is not entered twice.
             function syncCustomerCompany() {
               var ecn = document.querySelector('[name="end_customer_name"]');
@@ -12516,7 +12516,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               '<div class="rotation-lock-popup__body">' +
 
-              '<h3 class="rotation-lock-popup__title">📱 Enable Rotation Lock</h3>' +
+              '<h3 class="rotation-lock-popup__title">ðŸ“± Enable Rotation Lock</h3>' +
 
               '<p class="rotation-lock-popup__text">' +
 
@@ -12828,7 +12828,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
 
-          // Ð—Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ Ð¿Ð¾ÑÐ»ÐµÐ´Ð½ÑŽÑŽ Ð¾Ñ‚ÐºÑ€Ñ‹Ñ‚ÑƒÑŽ ÑÑ‚Ñ€Ð¾ÐºÑƒ (Ð¾Ð±Ñ‹Ñ‡Ð½Ð¾ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ð´Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð½Ð°Ñ)
+          // Ãâ€”ÃÂ°ÃÂ¿ÃÂ¾ÃÂ»ÃÂ½Ã‘ÂÃÂµÃÂ¼ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµÃÂ´ÃÂ½Ã‘Å½Ã‘Å½ ÃÂ¾Ã‘â€šÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃ‘Æ’Ã‘Å½ Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂºÃ‘Æ’ (ÃÂ¾ÃÂ±Ã‘â€¹Ã‘â€¡ÃÂ½ÃÂ¾ Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ Ã‘â€¡Ã‘â€šÃÂ¾ ÃÂ´ÃÂ¾ÃÂ±ÃÂ°ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½ÃÂ°Ã‘Â)
 
           return rows.length ? rows[rows.length - 1] : null;
 
@@ -14926,7 +14926,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
 
-            meta.textContent = size + ' â€¢ ' + uploaded;
+            meta.textContent = size + ' Ã¢â‚¬Â¢ ' + uploaded;
 
             colInfo.appendChild(nameSpan);
 
@@ -20358,7 +20358,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-            // Ð»Ð¾ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð½Ð° Ð¾ÑÐ½Ð¾Ð²Ðµ ÑƒÐ¶Ðµ Ð²Ð²ÐµÐ´Ñ‘Ð½Ð½Ñ‹Ñ… Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ð¹ (Ð²ÐºÐ»ÑŽÑ‡Ð°Ñ Ð²Ð¾ÑÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½Ð½Ñ‹Ð¹ Ð´Ñ€Ð°Ñ„Ñ‚)
+            // ÃÂ»ÃÂ¾ÃÂºÃÂ°ÃÂ»Ã‘Å’ÃÂ½Ã‘â€¹ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ½ÃÂ° ÃÂ¾Ã‘ÂÃÂ½ÃÂ¾ÃÂ²ÃÂµ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ²ÃÂ²ÃÂµÃÂ´Ã‘â€˜ÃÂ½ÃÂ½Ã‘â€¹Ã‘â€¦ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂ¹ (ÃÂ²ÃÂºÃÂ»Ã‘Å½Ã‘â€¡ÃÂ°Ã‘Â ÃÂ²ÃÂ¾Ã‘ÂÃ‘ÂÃ‘â€šÃÂ°ÃÂ½ÃÂ¾ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ´Ã‘â‚¬ÃÂ°Ã‘â€žÃ‘â€š)
 
             const localSeeds = [];
 
@@ -20372,7 +20372,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               localSeeds.push(next);
 
-              // Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð»ÑÐµÐ¼ Ð½Ð° ÑÐµÑ€Ð²ÐµÑ€, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð±Ñ‹Ð»Ð¸ Ð¾Ð±Ñ‰Ð¸Ð¼Ð¸
+              // ÃÂ¾Ã‘â€šÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃÂµÃÂ¼ ÃÂ½ÃÂ° Ã‘ÂÃÂµÃ‘â‚¬ÃÂ²ÃÂµÃ‘â‚¬, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ±Ã‘â€¹ÃÂ»ÃÂ¸ ÃÂ¾ÃÂ±Ã‘â€°ÃÂ¸ÃÂ¼ÃÂ¸
 
               if (next.length >= ${MIN_SUGGESTION_LENGTH}) {
 
@@ -21292,37 +21292,56 @@ const templateUpload = multer({
 
 
 
-const uploadFields = upload.fields([
+// Known upload parts and how many of each we keep.
+// (led/control/spares_photos come from iOS full-field submissions; signatures arrive
+// as raw binary PNG parts from iOS and as data-URL strings from the web form.)
+const UPLOAD_FIELD_LIMITS = {
+  photo_before: 20,
+  photo_after: 20,
+  photos: 20,
+  'photos[]': 20,
+  daily_photos: 20,
+  photo_defects: 20,
+  photo_installation: 20,
+  led_photos: 20,
+  control_photos: 20,
+  spares_photos: 20,
+  engineer_signature: 1,
+  customer_signature: 1,
+};
 
-  { name: 'photo_before', maxCount: 20 },
+const uploadAnyParts = upload.any();
 
-  { name: 'photo_after', maxCount: 20 },
-
-  { name: 'photos', maxCount: 20 },
-
-  { name: 'photos[]', maxCount: 20 },
-
-  { name: 'daily_photos', maxCount: 20 },
-
-  { name: 'photo_defects', maxCount: 20 },
-
-  { name: 'photo_installation', maxCount: 20 },
-
-  // iOS full-field submissions: LED inspection / control checkpoints / spare parts.
-  // Missing entries here make multer reject the whole submit with "Unexpected field".
-  { name: 'led_photos', maxCount: 20 },
-
-  { name: 'control_photos', maxCount: 20 },
-
-  { name: 'spares_photos', maxCount: 20 },
-
-  // iOS sends signatures as raw binary PNG file parts (UIImage.pngData()),
-  // not data-URL strings like the web form — accept both.
-  { name: 'engineer_signature', maxCount: 1 },
-
-  { name: 'customer_signature', maxCount: 1 },
-
-]);
+// Accept any file part, then normalise req.files into the same
+// { fieldname: [file, ...] } shape multer's .fields() produces, dropping unknown
+// parts and trimming each field to its limit.
+// Why: with .fields() a single unrecognised part aborts the WHOLE submission with
+// "Unexpected field" â€” a new client-side field name once blocked real reports in
+// production. Unknown parts are now ignored (and logged) instead of failing the report.
+function uploadFields(req, res, cb) {
+  uploadAnyParts(req, res, (err) => {
+    if (err) return cb(err);
+    const list = Array.isArray(req.files) ? req.files : [];
+    const grouped = {};
+    const ignored = new Set();
+    for (const file of list) {
+      const name = file && file.fieldname;
+      if (!name) continue;
+      const limit = Object.prototype.hasOwnProperty.call(UPLOAD_FIELD_LIMITS, name)
+        ? UPLOAD_FIELD_LIMITS[name]
+        : 0;
+      if (!limit) { ignored.add(name); continue; }
+      const bucket = grouped[name] || (grouped[name] = []);
+      if (bucket.length < limit) bucket.push(file);
+      else ignored.add(`${name} (over limit ${limit})`);
+    }
+    if (ignored.size) {
+      console.warn('[server] ignored unexpected/extra upload parts:', Array.from(ignored).join(', '));
+    }
+    req.files = grouped;
+    return cb();
+  });
+}
 
 
 
@@ -22259,7 +22278,7 @@ app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {
 
   if (!recordSuggestionValue(fieldName, value)) {
 
-    // ÐÐ¸Ñ‡ÐµÐ³Ð¾ Ð½Ðµ Ð·Ð°Ð¿Ð¸ÑÐ°Ð»Ð¸ (Ð¿ÑƒÑÑ‚Ð¾Ðµ/ÐºÐ¾Ñ€Ð¾Ñ‚ÐºÐ¾Ðµ/Ð½ÐµÐ¸Ð·Ð²ÐµÑÑ‚Ð½Ð¾Ðµ Ð¿Ð¾Ð»Ðµ) â€” Ð½Ðµ ÑÑ‡Ð¸Ñ‚Ð°ÐµÐ¼ ÑÑ‚Ð¾ Ð¾ÑˆÐ¸Ð±ÐºÐ¾Ð¹
+    // ÃÂÃÂ¸Ã‘â€¡ÃÂµÃÂ³ÃÂ¾ ÃÂ½ÃÂµ ÃÂ·ÃÂ°ÃÂ¿ÃÂ¸Ã‘ÂÃÂ°ÃÂ»ÃÂ¸ (ÃÂ¿Ã‘Æ’Ã‘ÂÃ‘â€šÃÂ¾ÃÂµ/ÃÂºÃÂ¾Ã‘â‚¬ÃÂ¾Ã‘â€šÃÂºÃÂ¾ÃÂµ/ÃÂ½ÃÂµÃÂ¸ÃÂ·ÃÂ²ÃÂµÃ‘ÂÃ‘â€šÃÂ½ÃÂ¾ÃÂµ ÃÂ¿ÃÂ¾ÃÂ»ÃÂµ) Ã¢â‚¬â€ ÃÂ½ÃÂµ Ã‘ÂÃ‘â€¡ÃÂ¸Ã‘â€šÃÂ°ÃÂµÃÂ¼ Ã‘ÂÃ‘â€šÃÂ¾ ÃÂ¾Ã‘Ë†ÃÂ¸ÃÂ±ÃÂºÃÂ¾ÃÂ¹
 
     return res.json({ ok: true, skipped: true });
 
@@ -22671,7 +22690,7 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
 
 
-  // Ð£Ð´Ð°Ð»ÑÐµÐ¼ Ñ„Ð°Ð¹Ð», ÐµÑÐ»Ð¸ Ð¾Ð½ ÑÑƒÑ‰ÐµÑÑ‚Ð²ÑƒÐµÑ‚
+  // ÃÂ£ÃÂ´ÃÂ°ÃÂ»Ã‘ÂÃÂµÃÂ¼ Ã‘â€žÃÂ°ÃÂ¹ÃÂ», ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ¾ÃÂ½ Ã‘ÂÃ‘Æ’Ã‘â€°ÃÂµÃ‘ÂÃ‘â€šÃÂ²Ã‘Æ’ÃÂµÃ‘â€š
 
   try {
 
@@ -22693,13 +22712,13 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
 
 
-  // Ð£Ð´Ð°Ð»ÑÐµÐ¼ Ð·Ð°Ð¿Ð¸ÑÑŒ Ð¸Ð· Ð¼Ð°Ð½Ð¸Ñ„ÐµÑÑ‚Ð°
+  // ÃÂ£ÃÂ´ÃÂ°ÃÂ»Ã‘ÂÃÂµÃÂ¼ ÃÂ·ÃÂ°ÃÂ¿ÃÂ¸Ã‘ÂÃ‘Å’ ÃÂ¸ÃÂ· ÃÂ¼ÃÂ°ÃÂ½ÃÂ¸Ã‘â€žÃÂµÃ‘ÂÃ‘â€šÃÂ°
 
   templateManifest.templates = templateManifest.templates.filter((tpl) => tpl.id !== entry.id);
 
 
 
-  // Ð•ÑÐ»Ð¸ ÑƒÐ´Ð°Ð»Ð¸Ð»Ð¸ Ð°ÐºÑ‚Ð¸Ð²Ð½Ñ‹Ð¹ â€” Ð¿ÐµÑ€ÐµÐºÐ»ÑŽÑ‡Ð°ÐµÐ¼ÑÑ Ð½Ð° Ð¿ÐµÑ€Ð²Ñ‹Ð¹ Ð´Ð¾ÑÑ‚ÑƒÐ¿Ð½Ñ‹Ð¹ Ð¸Ð»Ð¸ builtin
+  // Ãâ€¢Ã‘ÂÃÂ»ÃÂ¸ Ã‘Æ’ÃÂ´ÃÂ°ÃÂ»ÃÂ¸ÃÂ»ÃÂ¸ ÃÂ°ÃÂºÃ‘â€šÃÂ¸ÃÂ²ÃÂ½Ã‘â€¹ÃÂ¹ Ã¢â‚¬â€ ÃÂ¿ÃÂµÃ‘â‚¬ÃÂµÃÂºÃÂ»Ã‘Å½Ã‘â€¡ÃÂ°ÃÂµÃÂ¼Ã‘ÂÃ‘Â ÃÂ½ÃÂ° ÃÂ¿ÃÂµÃ‘â‚¬ÃÂ²Ã‘â€¹ÃÂ¹ ÃÂ´ÃÂ¾Ã‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ¸ÃÂ»ÃÂ¸ builtin
 
   if (templateManifest.activeTemplateId === entry.id) {
 
@@ -23016,7 +23035,7 @@ app.get(['/api/calendar', '/service2/api/calendar'], async (req, res) => {
 });
 
 // --- LED model catalog: 2-step picker (series -> model) for "LED display model / batch" ---
-// (LED_CATALOG + parseLedModel are defined near the top of the file — the form template uses them.)
+// (LED_CATALOG + parseLedModel are defined near the top of the file â€” the form template uses them.)
 app.get(['/api/led-models', '/service2/api/led-models'], (req, res) => {
   const series = LED_CATALOG.map((s) => ({
     series: s.series,
@@ -23024,11 +23043,11 @@ app.get(['/api/led-models', '/service2/api/led-models'], (req, res) => {
     ...(s.version ? { version: s.version } : {}),
     models: s.models.map((m) => {
       const p = parseLedModel(m);
-      return { model: m, pitchMm: p.pitchMm, version: s.version || p.version, label: p.pitchMm != null ? `${m} · ${p.pitchMm} mm` : m };
+      return { model: m, pitchMm: p.pitchMm, version: s.version || p.version, label: p.pitchMm != null ? `${m} Â· ${p.pitchMm} mm` : m };
     }),
   }));
   // codes = the letter-designation grouping (LD-E / LD-FE / LD-FA / LD-EC / LD-D),
-  // repeats merged across series — preferred picker shape (type -> number).
+  // repeats merged across series â€” preferred picker shape (type -> number).
   res.json({ ok: true, codes: ledCodeGroups(), series });
 });
 
@@ -23123,7 +23142,7 @@ backfillPeopleIfEmpty();
 
 // --- Mobile app (P0): canonical form types + stored submission data ---
 
-// Canonical list of report/form types — single source of truth for the app
+// Canonical list of report/form types â€” single source of truth for the app
 // (removes the hardcoded mirror on iOS). available:false = recognised, not yet shippable.
 const FORM_TYPES = [
   { id: 'service_report', label: 'Service report', available: true },
@@ -23237,7 +23256,7 @@ app.get(['/api/files/:type/:filename/photos/:name', '/service2/api/files/:type/:
   return res.sendFile(filePath);
 });
 
-// Convenience: no type in the path — search across output types (optional ?type= hint).
+// Convenience: no type in the path â€” search across output types (optional ?type= hint).
 app.get(['/api/files/:filename/data', '/service2/api/files/:filename/data'], async (req, res) => {
   const filename = sanitizeFilename(req.params.filename || '');
   if (!filename) {
@@ -23257,7 +23276,7 @@ app.get(['/api/files/:filename/data', '/service2/api/files/:filename/data'], asy
   }
 });
 
-// --- Approval workflow (P4): review a report (admin/manager — gated at the hub) ---
+// --- Approval workflow (P4): review a report (admin/manager â€” gated at the hub) ---
 // State machine (defaults; confirm transitions with the app dev):
 //   start_review: submitted -> in_review
 //   approve:      submitted|in_review -> approved
@@ -23540,7 +23559,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
   const employeeSummary = collectEmployeeEntries(req.body || {});
 
-  // iOS path: signature arrived as a binary file part — normalize to a data URL
+  // iOS path: signature arrived as a binary file part â€” normalize to a data URL
   // so the rest of the pipeline (render, persist, restore) is format-agnostic.
   for (const sigName of ['engineer_signature', 'customer_signature']) {
     const part = req.files && Array.isArray(req.files[sigName]) ? req.files[sigName][0] : null;
@@ -23647,7 +23666,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
 
 
-  // Ð’ÑÐµÐ³Ð´Ð° Ð¿Ð¾Ð´Ñ…Ð²Ð°Ñ‚Ñ‹Ð²Ð°ÐµÐ¼ Ð¿Ð¾Ð´Ð¿Ð¸ÑÐ¸, Ð´Ð°Ð¶Ðµ ÐµÑÐ»Ð¸ Ð¿Ð¾Ð»Ñ Ð½Ðµ ÑÐ¾Ð²Ð¿Ð°Ð´Ð°ÑŽÑ‚ Ñ ÑˆÐ°Ð±Ð»Ð¾Ð½Ð¾Ð¼.
+  // Ãâ€™Ã‘ÂÃÂµÃÂ³ÃÂ´ÃÂ° ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂ¸, ÃÂ´ÃÂ°ÃÂ¶ÃÂµ ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ¿ÃÂ¾ÃÂ»Ã‘Â ÃÂ½ÃÂµ Ã‘ÂÃÂ¾ÃÂ²ÃÂ¿ÃÂ°ÃÂ´ÃÂ°Ã‘Å½Ã‘â€š Ã‘Â Ã‘Ë†ÃÂ°ÃÂ±ÃÂ»ÃÂ¾ÃÂ½ÃÂ¾ÃÂ¼.
 
   Object.entries(signatureInputs).forEach(([sigName, raw]) => {
 
@@ -24542,7 +24561,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
           const mime = String(pf.mimetype || 'image/jpeg').toLowerCase();
           const ext = mime.includes('png') ? 'png' : (mime.includes('webp') ? 'webp' : (mime.includes('heic') ? 'heic' : 'jpg'));
           const idx = (perFieldIndex[field] = (perFieldIndex[field] || 0) + 1) - 1;
-          // sanitizeFilename is idempotent + collapses "__"→"_"; store the sanitized
+          // sanitizeFilename is idempotent + collapses "__"â†’"_"; store the sanitized
           // name so the serving route (which re-sanitizes :name) resolves the same file.
           const photoFilename = sanitizeFilename(`${field}_${idx}.${ext}`);
           await fs.promises.mkdir(photoDir, { recursive: true });
@@ -24676,7 +24695,7 @@ app.post('/submit', rateLimitSubmit, (req, res, next) => {
 
     };
 
-    // F: edit replaces the previous revision — remove its pdf/meta/signatures.
+    // F: edit replaces the previous revision â€” remove its pdf/meta/signatures.
     if (editingPrevious && editingPrevious.filename) {
       successPayload.edited = true;
       if (editingPrevious.filename !== filename) {
@@ -24877,7 +24896,7 @@ app.post('/internal/sign-completed', requireInternalToken, async (req, res) => {
       page.drawImage(image, { x: slot.x + 6 + (availW - w) / 2, y: slot.y + 6 + (availH - h) / 2, width: w, height: h });
       placement = 'customer_box';
     } else {
-      // Old reports have no recorded slot geometry — fall back to an appendix page.
+      // Old reports have no recorded slot geometry â€” fall back to an appendix page.
       const baseSize = pages.length ? pages[0].getSize() : { width: 595, height: 842 };
       const page = pdfDoc.addPage([baseSize.width, baseSize.height]);
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
