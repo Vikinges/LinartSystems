@@ -9,3 +9,10 @@ secrets/
 service2/data/submissions.json
 service-sign/node_modules/
 service2/test-server.log
+
+# runtime data (service2/data is bind-mounted as the live data dir in prod —
+# tracking it lets a checkout overwrite/delete production state)
+service2/data/people.json
+
+# local editor/agent config
+.claude/
