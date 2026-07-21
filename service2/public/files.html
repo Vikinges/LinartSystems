@@ -193,7 +193,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 860px;
+      min-width: 720px;
     }
 
     .files-table:not(.is-admin) .col-select {
@@ -206,10 +206,40 @@
 
     th,
     td {
-      padding: 0.85rem;
+      padding: 0.55rem 0.7rem;
       text-align: left;
       border-bottom: 1px solid var(--border);
-      font-size: 0.95rem;
+      font-size: 0.9rem;
+      vertical-align: top;
+    }
+
+    /* File column: cap width and truncate long report names instead of letting
+       them stretch the table past the viewport (full name stays in the title tooltip). */
+    .files-table th:nth-child(8),
+    .files-table td:nth-child(8) {
+      max-width: 230px;
+    }
+
+    .file-link {
+      display: inline-block;
+      max-width: 230px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: bottom;
+    }
+
+    /* Created column: keep date and time on their own lines so the column stays
+       narrow and predictable rather than wrapping mid-timestamp. */
+    .cell-created {
+      white-space: nowrap;
+      line-height: 1.35;
+    }
+
+    .cell-created .cell-created-time {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-muted);
     }
 
     th {
@@ -251,8 +281,14 @@
     .row-actions {
       display: flex;
       flex-direction: column;
-      gap: 0.45rem;
-      align-items: flex-start;
+      gap: 0.4rem;
+      align-items: stretch;
+      min-width: 150px;
+    }
+
+    .row-actions .button {
+      padding: 0.35rem 0.6rem;
+      font-size: 0.82rem;
     }
 
     .row-ttl {
@@ -274,9 +310,9 @@
 
     .row-link-input {
       width: 100%;
-      min-width: 220px;
+      min-width: 150px;
       font: inherit;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       padding: 0.35rem 0.5rem;
       border: 1px solid var(--border);
       border-radius: 8px;
@@ -436,7 +472,7 @@
         return fetch(buildAppUrl(path), { ...options, headers });
       };
 
-      const APP_VERSION = '0.54';
+      const APP_VERSION = '0.56';
       const versionMetaEl = document.getElementById('version-meta');
       if (versionMetaEl) {
         versionMetaEl.textContent = `Version ${APP_VERSION}`;
@@ -482,6 +518,14 @@
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return value;
         return date.toLocaleString();
+      };
+
+      // Split date/time so the Created column can stack them on two lines and stay narrow.
+      const formatDateParts = (value) => {
+        if (!value) return { date: '-', time: '' };
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return { date: value, time: '' };
+        return { date: date.toLocaleDateString(), time: date.toLocaleTimeString() };
       };
 
       const setStatus = (message, isError = false) => {
@@ -596,25 +640,45 @@
           }
           row.appendChild(selectCell);
 
-          const cells = [
+          const cellsBefore = [
             file.templateType || '-',
             daily.projectNumber || '-',
             daily.reportDate || '-',
             daily.submitterName || '-',
-            formatDate(file.createdAt),
-            file.templateLabel || '-',
           ];
 
-          cells.forEach((value) => {
+          cellsBefore.forEach((value) => {
             const td = document.createElement('td');
             td.textContent = value || '-';
             row.appendChild(td);
           });
 
+          // Created — date on line 1, time on line 2 (keeps the column narrow).
+          const createdCell = document.createElement('td');
+          createdCell.className = 'cell-created';
+          const created = formatDateParts(file.createdAt);
+          if (created.time) {
+            const dateSpan = document.createElement('span');
+            dateSpan.textContent = created.date;
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'cell-created-time';
+            timeSpan.textContent = created.time;
+            createdCell.append(dateSpan, timeSpan);
+          } else {
+            createdCell.textContent = created.date;
+          }
+          row.appendChild(createdCell);
+
+          const templateCell = document.createElement('td');
+          templateCell.textContent = file.templateLabel || '-';
+          row.appendChild(templateCell);
+
           const linkCell = document.createElement('td');
           const link = document.createElement('a');
+          link.className = 'file-link';
           link.href = buildAppUrl(file.downloadPath || '');
           link.textContent = file.filename || 'Download';
+          link.title = file.filename || '';
           linkCell.appendChild(link);
           row.appendChild(linkCell);
 
