@@ -444,7 +444,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.54';
+const SERVICE2_VERSION = '0.55';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -21170,6 +21170,78 @@ function rateLimitSubmit(req, res, next) {
   return next();
 }
 
+// In-memory submit journal (admin-visible). Answers "what did the app actually send and
+// what happened to it?" without shell access to the container. Ring buffer, newest last.
+const SUBMIT_JOURNAL_MAX = 300;
+const submitJournal = [];
+function recordSubmit(entry) {
+  submitJournal.push(entry);
+  if (submitJournal.length > SUBMIT_JOURNAL_MAX) {
+    submitJournal.splice(0, submitJournal.length - SUBMIT_JOURNAL_MAX);
+  }
+}
+
+// First handler in the /submit chain: times the request, captures the response outcome
+// (by wrapping res.json), and records one journal row on 'finish' — including 429/400 that
+// short-circuit before the main handler. req.files is populated by uploadFields by then.
+function journalSubmit(req, res, next) {
+  const startedAt = Date.now();
+  const fwd = req.headers['x-forwarded-for'];
+  const ip = fwd ? String(fwd).split(',')[0].trim() : (req.ip || 'unknown');
+  const ua = String(req.headers['user-agent'] || '').slice(0, 200);
+  const hubUser = req.headers['x-hub-user'] || null;
+  let outcome = null;
+  const origJson = res.json.bind(res);
+  res.json = (body) => {
+    if (body && typeof body === 'object') {
+      outcome = {
+        ok: body.ok === true,
+        error: body.error || null,
+        filename: body.filename || null,
+        duplicate: body.duplicate === true,
+      };
+    }
+    return origJson(body);
+  };
+  res.on('finish', () => {
+    const fields = {};
+    let fileCount = 0;
+    let totalBytes = 0;
+    const files = req.files;
+    if (files && typeof files === 'object' && !Array.isArray(files)) {
+      for (const [name, arr] of Object.entries(files)) {
+        if (!Array.isArray(arr)) continue;
+        fields[name] = arr.length;
+        for (const f of arr) {
+          fileCount += 1;
+          if (f && typeof f.size === 'number' && Number.isFinite(f.size)) totalBytes += Math.max(0, f.size);
+          else if (f && f.buffer && Buffer.isBuffer(f.buffer)) totalBytes += f.buffer.length;
+        }
+      }
+    }
+    recordSubmit({
+      at: new Date(startedAt).toISOString(),
+      ip,
+      ua,
+      hubUser,
+      template: toSingleValue(req.body && (req.body.template_type || req.body.templateType)) || null,
+      clientReportId: normalizeClientReportId(
+        toSingleValue(req.body && (req.body.client_report_id || req.body.clientReportId))
+      ) || null,
+      fields,
+      fileCount,
+      totalBytes,
+      status: res.statusCode,
+      ok: outcome ? outcome.ok : (res.statusCode >= 200 && res.statusCode < 300),
+      error: outcome ? outcome.error : null,
+      filename: outcome ? outcome.filename : null,
+      duplicate: outcome ? outcome.duplicate : false,
+      durationMs: Date.now() - startedAt,
+    });
+  });
+  next();
+}
+
 // Serve assets both at root and under /service2 (for proxied paths)
 
 app.use('/service2', express.static(PUBLIC_DIR));
@@ -21177,6 +21249,32 @@ app.use('/service2', express.static(PUBLIC_DIR));
 app.use(express.static(PUBLIC_DIR));
 
 
+
+// Known upload parts and how many of each we keep.
+// (led/control/spares_photos come from iOS full-field submissions; signatures arrive
+// as raw binary PNG parts from iOS and as data-URL strings from the web form.)
+const UPLOAD_FIELD_LIMITS = {
+  photo_before: 20,
+  photo_after: 20,
+  photos: 20,
+  'photos[]': 20,
+  daily_photos: 20,
+  photo_defects: 20,
+  photo_installation: 20,
+  led_photos: 20,
+  control_photos: 20,
+  spares_photos: 20,
+  engineer_signature: 1,
+  customer_signature: 1,
+};
+
+// multer's global file-count cap. Derived from UPLOAD_FIELD_LIMITS (+ headroom) so it
+// never drifts below the sum of per-field limits again. A hardcoded 64 here used to
+// hard-fail full iOS reports (up to 4 photo fields x 20 = 80 parts) with LIMIT_FILE_COUNT
+// before the per-field trim logic in uploadFields() could run. Headroom lets a field that
+// arrives slightly over its limit be trimmed gracefully instead of aborting the whole submit.
+const MAX_UPLOAD_FILES =
+  Object.values(UPLOAD_FIELD_LIMITS).reduce((sum, n) => sum + n, 0) + 32;
 
 const upload = multer({
 
@@ -21186,7 +21284,7 @@ const upload = multer({
 
     fileSize: MAX_FILE_SIZE_BYTES,
 
-    files: 64,
+    files: MAX_UPLOAD_FILES,
 
   },
 
@@ -21291,24 +21389,6 @@ const templateUpload = multer({
 });
 
 
-
-// Known upload parts and how many of each we keep.
-// (led/control/spares_photos come from iOS full-field submissions; signatures arrive
-// as raw binary PNG parts from iOS and as data-URL strings from the web form.)
-const UPLOAD_FIELD_LIMITS = {
-  photo_before: 20,
-  photo_after: 20,
-  photos: 20,
-  'photos[]': 20,
-  daily_photos: 20,
-  photo_defects: 20,
-  photo_installation: 20,
-  led_photos: 20,
-  control_photos: 20,
-  spares_photos: 20,
-  engineer_signature: 1,
-  customer_signature: 1,
-};
 
 const uploadAnyParts = upload.any();
 
@@ -23458,7 +23538,19 @@ app.post(['/api/files/zip', '/service2/api/files/zip'], requireDeleteFiles, asyn
   archive.finalize();
 });
 
-app.post('/submit', rateLimitSubmit, (req, res, next) => {
+app.get('/admin/submit-log', requireFileAdmin, (req, res) => {
+  const parsed = parseInt(req.query.limit, 10);
+  const limit = Math.min(Number.isFinite(parsed) && parsed > 0 ? parsed : 100, SUBMIT_JOURNAL_MAX);
+  const items = submitJournal.slice(-limit).reverse();
+  res.json({
+    ok: true,
+    total: submitJournal.length,
+    maxUploadFiles: MAX_UPLOAD_FILES,
+    items,
+  });
+});
+
+app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
   uploadFields(req, res, (err) => {
 
