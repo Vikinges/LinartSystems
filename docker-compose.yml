@@ -50,6 +50,8 @@ services:
       - APNS_BUNDLE_ID=${APNS_BUNDLE_ID:-}
       - APNS_ENV=${APNS_ENV:-production}
       - APNS_KEY_P8_BASE64=${APNS_KEY_P8_BASE64:-}
+      # Shared secret for service2 -> hub internal notify (submit-failure push to admins).
+      - HUB_INTERNAL_TOKEN=${HUB_INTERNAL_TOKEN:-}
     volumes:
       - hub-data:/app/data
       - hub-uploads:/app/static/uploads
@@ -65,6 +67,9 @@ services:
       - SIGN_SERVICE_URL=${SIGN_SERVICE_URL:-http://service-sign:3002}
       - SIGN_INTERNAL_TOKEN=${SIGN_INTERNAL_TOKEN:-}
       - SIGN_SHARED_DIR=/app/sign
+      # service2 -> hub internal notify (submit-failure push). Both must match the hub's.
+      - HUB_URL=${HUB_URL:-http://hub:8080}
+      - HUB_INTERNAL_TOKEN=${HUB_INTERNAL_TOKEN:-}
     volumes:
       - ./service2/data:/app/data
       - ./service2/public/templates:/app/public/templates

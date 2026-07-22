@@ -92,6 +92,9 @@ const APNS_KEY_ID = process.env.APNS_KEY_ID || '';
 const APNS_TEAM_ID = process.env.APNS_TEAM_ID || '';
 const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID || '';
 const APNS_ENV = (process.env.APNS_ENV || 'production').toLowerCase() === 'sandbox' ? 'sandbox' : 'production';
+// Shared secret for service2 -> hub internal calls (e.g. submit-failure push). Feature is
+// disabled (endpoint 401s) until this is set in the stack env on both services.
+const HUB_INTERNAL_TOKEN = process.env.HUB_INTERNAL_TOKEN || '';
 const PUSH_DEVICES_FILE = process.env.HUB_PUSH_DEVICES_FILE
   ? path.resolve(process.env.HUB_PUSH_DEVICES_FILE)
   : (DATA_DIR ? path.join(DATA_DIR, 'push-devices.json') : path.join(__dirname, 'push-devices.json'));
@@ -2411,6 +2414,69 @@ async function sendPushToUser(username, payload, pushType) {
   if (dead.size) savePushDevices(devices.filter((d) => !dead.has(d.token)));
   return { ok: true, sent, total: mine.length, results };
 }
+
+// Usernames of admin/superadmin accounts (the people who manage feedback).
+function adminUsernames() {
+  const names = new Set();
+  const su = adminCredentials && adminCredentials.superadmin;
+  names.add((su && su.username) || DEFAULT_ADMIN_USERNAME);
+  if (adminCredentials && Array.isArray(adminCredentials.users)) {
+    for (const u of adminCredentials.users) {
+      if (u && typeof u.username === 'string'
+        && normalizeUserRole(u.role, USER_ROLE_MANAGER) === USER_ROLE_ADMIN) {
+        names.add(u.username.trim());
+      }
+    }
+  }
+  return names;
+}
+
+// Fan a push out to every admin's registered devices.
+async function sendPushToAdmins(payload, pushType) {
+  if (!apnsConfigured()) return { ok: false, error: 'apns_not_configured', sent: 0, total: 0 };
+  let sent = 0;
+  let total = 0;
+  const admins = adminUsernames();
+  for (const name of admins) {
+    const r = await sendPushToUser(name, payload, pushType);
+    sent += r.sent || 0;
+    total += r.total || 0;
+  }
+  return { ok: true, sent, total, admins: admins.size };
+}
+
+// Internal (service2 -> hub): a field engineer's report failed to publish. Notify admins
+// via APNs. Token-gated (not a user session); reached over the internal network, never a
+// browser. Not under /service2, so the open proxy catch-all doesn't shadow it.
+app.post('/internal/notify/submit-failure', async (req, res) => {
+  const token = String(req.headers['x-internal-token'] || '');
+  if (!HUB_INTERNAL_TOKEN || token !== HUB_INTERNAL_TOKEN) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  const b = req.body || {};
+  const ctx = (b.context && typeof b.context === 'object') ? b.context : {};
+  const who = String(b.username || ctx.username || 'An engineer').slice(0, 80);
+  const deviceBits = [ctx.deviceModel, ctx.appVersion || ctx.build].filter(Boolean).join(' · ');
+  console.log(`[hub] submit-failure push requested: feedback=${b.feedbackId || '?'} who=${who}`);
+  const payload = {
+    aps: {
+      alert: {
+        title: 'Report submission failed',
+        body: `${who} couldn't publish a report from the field${deviceBits ? ` (${deviceBits})` : ''}.`,
+      },
+      sound: 'default',
+    },
+    kind: 'submit_failure',
+    feedbackId: b.feedbackId || null,
+  };
+  try {
+    const result = await sendPushToAdmins(payload, 'alert');
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    console.warn('[hub] submit-failure push failed:', err && err.message);
+    return res.status(500).json({ ok: false, error: 'push_failed' });
+  }
+});
 
 app.post('/api/push/register', (req, res) => {
   setNoCache(res);

@@ -86,6 +86,10 @@ const PADDLE_OCR_URL = process.env.PADDLE_OCR_URL || '';
 const SIGN_SERVICE_URL = process.env.SIGN_SERVICE_URL || '';
 const SIGN_INTERNAL_TOKEN = process.env.SIGN_INTERNAL_TOKEN || '';
 const SIGN_SHARED_DIR = process.env.SIGN_SHARED_DIR || path.join(ROOT_DIR, 'sign');
+// service2 -> hub internal notify (submit-failure push to admins). Disabled unless both
+// are set in the stack env (matching HUB_INTERNAL_TOKEN on the hub).
+const HUB_URL = process.env.HUB_URL || 'http://hub:8080';
+const HUB_INTERNAL_TOKEN = process.env.HUB_INTERNAL_TOKEN || '';
 const SIGN_INBOX_DIR = path.join(SIGN_SHARED_DIR, 'inbox');
 const FILE_LIST_DEFAULT_LIMIT = 200;
 const FILE_LIST_MAX_LIMIT = 1000;
@@ -731,6 +735,28 @@ async function listFeedbackRows() {
   return rows;
 }
 
+// Fire-and-forget: tell the hub to push admins that a field submit failed. No-op unless
+// HUB_INTERNAL_TOKEN is configured. Never throws into the request path.
+async function notifyHubSubmitFailure(record) {
+  if (!HUB_INTERNAL_TOKEN) return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    await fetch(`${HUB_URL.replace(/\/$/, '')}/internal/notify/submit-failure`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-token': HUB_INTERNAL_TOKEN },
+      body: JSON.stringify({
+        feedbackId: record.id,
+        username: record.username,
+        context: record.context || {},
+      }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+  } catch (err) {
+    console.warn('[server] submit-failure hub notify failed:', err && err.message);
+  }
+}
+
 
 const PORT = parseInt(process.env.SERVICE2_PORT || process.env.PORT, 10) || 3001;
 
@@ -746,7 +772,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.63';
+const SERVICE2_VERSION = '0.64';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -23908,6 +23934,8 @@ app.post(['/api/feedback', '/service2/api/feedback'], (req, res) => {
       const record = { id, kind, message, context, username, createdAt, attachments, hasLogs, hasFormArchive };
       await fs.promises.writeFile(path.join(dir, 'feedback.json'), JSON.stringify(record, null, 2));
       console.log(`[server] feedback ${id} (${kind}) from ${username || 'anon'}${kind === 'submit_failure' ? ' — SUBMIT FAILURE' : ''}`);
+      // Alert admins about a failed field submission (fire-and-forget; never blocks intake).
+      if (kind === 'submit_failure') { notifyHubSubmitFailure(record); }
       return res.json({ ok: true, id, createdAt });
     } catch (e) {
       console.error('[server] feedback intake failed', e);
