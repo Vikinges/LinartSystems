@@ -746,7 +746,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.61';
+const SERVICE2_VERSION = '0.62';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -3896,7 +3896,43 @@ function collectEmployeeEntries(body) {
 
   const sources = [];
 
-  const rawEmployees = body.employees;
+  let rawEmployees = body.employees;
+
+  // iOS submits `employees` as a JSON string (multipart); the web form sends
+  // employees[n][...] which the urlencoded parser already expands to an array/object.
+  if (typeof rawEmployees === 'string' && rawEmployees.trim()) {
+    try { rawEmployees = JSON.parse(rawEmployees); } catch (e) { rawEmployees = null; }
+  }
+
+  // iOS shape is nested per employee: {name, role, days:[{date, arrival "HH:mm",
+  // departure "HH:mm", breakMinutes}]}. Flatten to one source per employee-day (the web's
+  // flat shape) tagged with a stable `group` so the day-rows collapse under one employee.
+  if (Array.isArray(rawEmployees) && rawEmployees.some((e) => e && Array.isArray(e.days))) {
+    const flat = [];
+    rawEmployees.forEach((emp, empIdx) => {
+      if (!emp || typeof emp !== 'object') return;
+      const group = `emp-${empIdx + 1}`;
+      const days = Array.isArray(emp.days) ? emp.days : null;
+      if (days && days.length) {
+        days.forEach((d) => {
+          if (!d || typeof d !== 'object') return;
+          const date = String(d.date || '').trim();
+          const arr = String(d.arrival || '').trim();
+          const dep = String(d.departure || '').trim();
+          flat.push({
+            name: emp.name,
+            role: emp.role,
+            group,
+            arrival: date && arr ? `${date}T${arr}` : arr,
+            departure: date && dep ? `${date}T${dep}` : dep,
+          });
+        });
+      } else {
+        flat.push({ name: emp.name, role: emp.role, group, arrival: emp.arrival, departure: emp.departure });
+      }
+    });
+    rawEmployees = flat;
+  }
 
   const appendSource = (value, indexHint) => {
 
@@ -6492,367 +6528,153 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
   const renderEmployeesSection = () => {
+    if (!employeeEntries.length) return;
 
-    const columnWidths = [
-
-      tableWidth * 0.05,
-
-      tableWidth * 0.2,
-
-      tableWidth * 0.16,
-
-      tableWidth * 0.16,
-
-      tableWidth * 0.15,
-
-      tableWidth * 0.28,
-
-    ];
-
-    const headerHeight = 18;
-
-    const rowBaseHeight = 36;
-
-    if (!employeeEntries.length) {
-
-      return; // ÃÂ¿Ã‘â‚¬ÃÂ¾ÃÂ¿Ã‘Æ’Ã‘ÂÃÂºÃÂ°ÃÂµÃÂ¼ Ã‘ÂÃÂµÃÂºÃ‘â€ ÃÂ¸Ã‘Å½, ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ½ÃÂµÃ‘â€š Ã‘ÂÃÂ¾Ã‘â€šÃ‘â‚¬Ã‘Æ’ÃÂ´ÃÂ½ÃÂ¸ÃÂºÃÂ¾ÃÂ²
-
-    }
-
-
-
-    const blockHeight = headerHeight + rowBaseHeight * employeeEntries.length + 20;
-
-    const sectionLabel = ensureBlock(blockHeight, 'On-site team (cont.)') ? 'On-site team (cont.)' : 'On-site team';
-
-    drawSectionTitle(sectionLabel);
-
-
-
-    const headers = ['#', 'Employee', 'Role', 'Arrival', 'Departure', 'Duration / break'];
-
-    const drawHeaderRow = () => {
-
-      let headerX = margin;
-
-      headers.forEach((label, index) => {
-
-        const width = columnWidths[index];
-
-        page.drawRectangle({
-
-          x: headerX,
-
-          y: cursorY - headerHeight,
-
-          width,
-
-          height: headerHeight,
-
-          color: rgb(0.92, 0.95, 0.99),
-
-          borderWidth: TABLE_BORDER_WIDTH,
-
-          borderColor: TABLE_BORDER_COLOR,
-
-        });
-
-        drawCenteredTextBlock(
-
-          page,
-
-          label,
-
-          font,
-
-          { x: headerX, y: cursorY - headerHeight, width, height: headerHeight },
-
-          {
-
-            align: 'center',
-
-            paddingX: 4,
-
-            paddingY: 2,
-
-            color: rgb(0.1, 0.1, 0.3),
-
-            fontSize: 9,
-
-            minFontSize: 8,
-
-            lineHeightMultiplier: 1.2,
-
-          },
-
-        );
-
-        headerX += width;
-
-      });
-
-      cursorY -= headerHeight;
-
+    // Compact, screenshot-parity team table: one block per employee (header with
+    // name/role + day/hour totals) then a per-day Date/Arrival/Departure/Break/Worked
+    // table, instead of repeating name/role/full datetimes on every day-row.
+    const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dayParts = (s) => {
+      const str = String(s || '');
+      const d = str.match(/(\d{4})-(\d{2})-(\d{2})/);
+      const t = str.match(/(\d{1,2}):(\d{2})/);
+      return {
+        date: d ? { y: +d[1], m: +d[2], day: +d[3] } : null,
+        time: t ? `${String(+t[1]).padStart(2, '0')}:${t[2]}` : '',
+      };
+    };
+    const dateLabel = (dt) => {
+      if (!dt || !dt.date) return '--';
+      const { y, m, day } = dt.date;
+      const wd = WEEKDAYS[new Date(y, m - 1, day).getDay()];
+      return `${wd} ${String(day).padStart(2, '0')}.${String(m).padStart(2, '0')}.`;
     };
 
-
-
-    drawHeaderRow();
-
-
-
-    const formatBreakLabelForPdf = (label) => {
-
-      if (!label) return '';
-
-      if (label.includes('6-9h') && label.includes('2x15m')) {
-
-        return label.replace('6-9h, ', '6-9h,\n');
-
+    // Group day-entries by employee (groupId falls back to name+role).
+    const groups = [];
+    const byKey = new Map();
+    employeeEntries.forEach((entry) => {
+      const key = entry.groupId || `${entry.name || ''}|${entry.role || ''}`;
+      let g = byKey.get(key);
+      if (!g) {
+        g = { name: entry.name || '--', role: entry.role || '', days: [], minutes: 0 };
+        byKey.set(key, g);
+        groups.push(g);
       }
-
-      if (label.includes('>9h') && label.includes('45m')) {
-
-        // Break BEFORE the parenthesis ("â‰¥45m" / "(>9h)") â€” never inside it.
-
-        return label.replace(/\s*\(/, '\n(');
-
-      }
-
-      if (label.includes('No mandatory break')) {
-
-        return label.replace('No mandatory break', 'No mandatory break\n');
-
-      }
-
-      return label;
-
-    };
-
-
-
-    employeeEntries.forEach((entry, index) => {
-
-      const durationLabel = entry.durationLabel || formatEmployeeDuration(entry.durationMinutes);
-
-      const breakLabel = breaksEnabled ? entry.breakLabel || '' : '';
-
-      const durationCell = breakLabel
-
-        ? `${durationLabel}\n${formatBreakLabelForPdf(breakLabel)}`
-
-        : durationLabel;
-
-      const cells = [
-
-        String(index + 1),
-
-        entry.name || '--',
-
-        entry.role || '--',
-
-        entry.arrivalDisplay || entry.arrival || '--',
-
-        entry.departureDisplay || entry.departure || '--',
-
-        durationCell,
-
-      ];
-
-      const measurements = cells.map((value, idx) =>
-
-        layoutMultilineText(value, font, Math.max(4, columnWidths[idx] - 8), {
-
-          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
-
-          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
-
-          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-
-        }),
-
-      );
-
-      const rowHeight = Math.max(
-
-        rowBaseHeight,
-
-        ...measurements.map((measurement) => Math.ceil(measurement.totalHeight + 22)),
-
-      );
-
-      if (ensureSpace(rowHeight + 8)) {
-
-        drawSectionTitle('On-site team (cont.)');
-
-        drawHeaderRow();
-
-      }
-
-      let cellX = margin;
-
-      measurements.forEach((measurement, idx) => {
-
-        const cellWidth = columnWidths[idx];
-
-        page.drawRectangle({
-
-          x: cellX,
-
-          y: cursorY - rowHeight,
-
-          width: cellWidth,
-
-          height: rowHeight,
-
-          color: rgb(1, 1, 1),
-
-          borderWidth: TABLE_BORDER_WIDTH,
-
-          borderColor: TABLE_BORDER_COLOR,
-
-        });
-
-        drawCenteredTextBlock(
-
-          page,
-
-          cells[idx],
-
-          font,
-
-          { x: cellX, y: cursorY - rowHeight, width: cellWidth, height: rowHeight },
-
-          {
-
-            align: 'center',
-
-            paddingX: 6,
-
-            paddingY: 8,
-
-            color: textColor,
-
-            fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
-
-            minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
-
-            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-
-            precomputed: measurement,
-
-          },
-
-        );
-
-        cellX += cellWidth;
-
-      });
-
-      cursorY -= rowHeight;
-
+      g.days.push(entry);
+      g.minutes += Number(entry.durationMinutes || 0);
     });
 
+    const cols = [
+      { key: 'date', label: 'Date', w: tableWidth * 0.28, align: 'left' },
+      { key: 'arr', label: 'Arrival', w: tableWidth * 0.16, align: 'center' },
+      { key: 'dep', label: 'Departure', w: tableWidth * 0.16, align: 'center' },
+      { key: 'brk', label: 'Break', w: tableWidth * 0.16, align: 'center' },
+      { key: 'work', label: 'Worked', w: tableWidth * 0.24, align: 'center' },
+    ];
+    const groupHeaderH = 20;
+    const colHeaderH = 16;
+    const dayRowH = 18;
 
+    const drawColHeader = () => {
+      let x = margin;
+      cols.forEach((c) => {
+        page.drawRectangle({
+          x, y: cursorY - colHeaderH, width: c.w, height: colHeaderH,
+          color: rgb(0.92, 0.95, 0.99), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+        });
+        drawCenteredTextBlock(page, c.label, font,
+          { x, y: cursorY - colHeaderH, width: c.w, height: colHeaderH },
+          { align: c.align, paddingX: 6, paddingY: 2, color: rgb(0.1, 0.1, 0.3), fontSize: 8.5, minFontSize: 8, lineHeightMultiplier: 1.15 });
+        x += c.w;
+      });
+      cursorY -= colHeaderH;
+    };
 
-    cursorY -= 14;
+    const drawGroupHeader = (g) => {
+      page.drawRectangle({
+        x: margin, y: cursorY - groupHeaderH, width: tableWidth, height: groupHeaderH,
+        color: rgb(0.96, 0.97, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+      });
+      const left = g.role ? `${g.name}  ·  ${g.role}` : g.name;
+      const right = `${g.days.length} ${g.days.length === 1 ? 'day' : 'days'} · ${formatEmployeeDuration(g.minutes)}`;
+      page.drawText(left, { x: margin + 6, y: cursorY - groupHeaderH + 6, size: 10, font, color: headingColor });
+      let rightW = 0;
+      try { rightW = font.widthOfTextAtSize(right, 9); } catch (e) { rightW = right.length * 5; }
+      page.drawText(right, { x: margin + tableWidth - rightW - 6, y: cursorY - groupHeaderH + 6, size: 9, font, color: textColor });
+      cursorY -= groupHeaderH;
+    };
 
-    const durationSummary = employeeEntries.length
+    const label = ensureBlock(groupHeaderH + colHeaderH + dayRowH + 12, 'On-site team (cont.)')
+      ? 'On-site team (cont.)' : 'On-site team';
+    drawSectionTitle(label);
 
-      ? formatEmployeeDuration(employeeTotalMinutes)
+    groups.forEach((g) => {
+      // Keep the group header + its column header + one day-row together.
+      if (ensureSpace(groupHeaderH + colHeaderH + dayRowH + 6)) {
+        drawSectionTitle('On-site team (cont.)');
+      }
+      drawGroupHeader(g);
+      drawColHeader();
 
-      : '0m';
+      g.days.forEach((entry) => {
+        if (ensureSpace(dayRowH + 4)) {
+          drawSectionTitle('On-site team (cont.)');
+          drawGroupHeader(g);
+          drawColHeader();
+        }
+        const arr = dayParts(entry.arrival);
+        const dep = dayParts(entry.departure);
+        const brk = !breaksEnabled ? '—'
+          : entry.breakCode === 'UNKNOWN' ? 'pending'
+          : entry.breakRequiredMinutes ? formatEmployeeDuration(entry.breakRequiredMinutes)
+          : '—';
+        const rowVals = {
+          date: dateLabel(arr),
+          arr: arr.time || '--',
+          dep: dep.time || '--',
+          brk,
+          work: entry.durationLabel || formatEmployeeDuration(entry.durationMinutes),
+        };
+        let x = margin;
+        cols.forEach((c) => {
+          page.drawRectangle({
+            x, y: cursorY - dayRowH, width: c.w, height: dayRowH,
+            color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+          });
+          drawCenteredTextBlock(page, String(rowVals[c.key]), font,
+            { x, y: cursorY - dayRowH, width: c.w, height: dayRowH },
+            { align: c.align, paddingX: 6, paddingY: 3, color: textColor, fontSize: 9, minFontSize: 8, lineHeightMultiplier: 1.1 });
+          x += c.w;
+        });
+        cursorY -= dayRowH;
+      });
 
+      cursorY -= 8;
+    });
+
+    cursorY -= 6;
+    const durationSummary = formatEmployeeDuration(employeeTotalMinutes);
     const knownBreakCount =
-
-      (employeeBreakStats.MIN45 || 0) +
-
-      (employeeBreakStats.MIN30 || 0) +
-
-      (employeeBreakStats.NONE || 0);
-
-    const breakMinutesLabel =
-
-      employeeEntries.length === 0
-
-          ? 'pending'
-
-          : knownBreakCount > 0
-
-            ? employeeTotalBreakMinutes
-
-              ? formatEmployeeDuration(employeeTotalBreakMinutes)
-
-              : '0m'
-
-            : employeeBreakStats.UNKNOWN > 0
-
-              ? 'pending'
-
-              : '0m';
-
-    const breakDetails =
-
-      knownBreakCount > 0
-
-          ? formatBreakStatsSummary(employeeBreakStats)
-
-          : employeeBreakStats.UNKNOWN > 0
-
-            ? `${employeeBreakStats.UNKNOWN} pending`
-
-            : '';
-
+      (employeeBreakStats.MIN45 || 0) + (employeeBreakStats.MIN30 || 0) + (employeeBreakStats.NONE || 0);
+    const breakMinutesLabel = knownBreakCount > 0
+      ? (employeeTotalBreakMinutes ? formatEmployeeDuration(employeeTotalBreakMinutes) : '0m')
+      : (employeeBreakStats.UNKNOWN > 0 ? 'pending' : '0m');
+    const breakDetails = knownBreakCount > 0
+      ? formatBreakStatsSummary(employeeBreakStats)
+      : (employeeBreakStats.UNKNOWN > 0 ? `${employeeBreakStats.UNKNOWN} pending` : '');
     page.drawText(
-
-      `Total recorded time: ${durationSummary} across ${employeeCount} ${employeeCount === 1 ? 'employee' : 'employees'
-
-      }.`,
-
-      {
-
-        x: margin,
-
-        y: cursorY,
-
-        size: 10,
-
-        font,
-
-        color: textColor,
-
-      },
-
-    );
-
+      `Total recorded time: ${durationSummary} across ${employeeCount} ${employeeCount === 1 ? 'employee' : 'employees'}.`,
+      { x: margin, y: cursorY, size: 10, font, color: textColor });
     cursorY -= 16;
-
     if (breaksEnabled) {
       page.drawText(
-
         `Mandated breaks: ${breakMinutesLabel}${breakDetails ? ` (${breakDetails})` : ''}.`,
-
-        {
-
-          x: margin,
-
-          y: cursorY,
-
-          size: 10,
-
-          font,
-
-          color: textColor,
-
-        },
-
-      );
-
+        { x: margin, y: cursorY, size: 10, font, color: textColor });
       cursorY -= 26;
     } else {
       cursorY -= 10;
     }
-
   };
 
 
