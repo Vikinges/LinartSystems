@@ -283,6 +283,8 @@ async function listOutputTypes() {
     const entries = await fs.promises.readdir(OUTPUT_DIR, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isDirectory())
+      // Skip dotdirs like .trash so soft-deleted reports never surface in listings.
+      .filter((entry) => !entry.name.startsWith('.'))
       .map((entry) => entry.name)
       .sort((a, b) => a.localeCompare(b));
   } catch (err) {
@@ -429,6 +431,244 @@ function collectFileSelections(body) {
   return results;
 }
 
+// --- Trash / soft-delete (recycle bin with retention) ---------------------------
+// Layout: out/.trash/<type>/<base>/{pdf,meta,photos,signatures,daily}/ + trash.json.
+// A soft delete MOVES the report's files here (never a destructive unlink); restore
+// moves them back; a daily sweep purges entries past retentionDays.
+const TRASH_DIR = path.join(OUTPUT_DIR, '.trash');
+const TRASH_SETTINGS_PATH = path.join(TRASH_DIR, 'settings.json');
+const TRASH_RETENTION_DEFAULT_DAYS = 30;
+const TRASH_RETENTION_MIN_DAYS = 1;
+const TRASH_RETENTION_MAX_DAYS = 3650;
+
+function reportBaseName(filename) {
+  return String(filename || '').replace(/\.pdf$/i, '');
+}
+
+function trashFolderFor(type, base) {
+  const safeType = sanitizeFilename(type);
+  const safeBase = sanitizeFilename(base);
+  if (!safeType || !safeBase) return null;
+  const baseDir = path.join(TRASH_DIR, safeType);
+  return safeResolvePath(baseDir, path.join(baseDir, safeBase));
+}
+
+async function getTrashSettings() {
+  try {
+    const raw = await fs.promises.readFile(TRASH_SETTINGS_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    let days = parseInt(parsed && parsed.retentionDays, 10);
+    if (!Number.isFinite(days)) days = TRASH_RETENTION_DEFAULT_DAYS;
+    days = Math.max(TRASH_RETENTION_MIN_DAYS, Math.min(TRASH_RETENTION_MAX_DAYS, days));
+    return { retentionDays: days };
+  } catch (err) {
+    return { retentionDays: TRASH_RETENTION_DEFAULT_DAYS };
+  }
+}
+
+async function setTrashSettings(retentionDays) {
+  let days = parseInt(retentionDays, 10);
+  if (!Number.isFinite(days)) days = TRASH_RETENTION_DEFAULT_DAYS;
+  days = Math.max(TRASH_RETENTION_MIN_DAYS, Math.min(TRASH_RETENTION_MAX_DAYS, days));
+  await fsExtra.ensureDir(TRASH_DIR);
+  await fs.promises.writeFile(TRASH_SETTINGS_PATH, JSON.stringify({ retentionDays: days }, null, 2));
+  return { retentionDays: days };
+}
+
+// Move a report and all its sidecars into the trash folder. Returns the trash record
+// or null if the report doesn't exist. deletedBy is the acting user (from x-hub-user).
+async function trashReport(type, filename, deletedBy) {
+  const safeType = sanitizeFilename(type);
+  const base = reportBaseName(sanitizeFilename(filename));
+  if (!safeType || !base) return null;
+
+  const pdfPath = buildPdfPath(safeType, `${base}.pdf`);
+  const metaPath = buildMetaPath(safeType, `${base}.pdf`);
+  const pdfExists = pdfPath && fs.existsSync(pdfPath);
+  const metaExists = metaPath && fs.existsSync(metaPath);
+  if (!pdfExists && !metaExists) return null;
+
+  let meta = {};
+  if (metaExists) {
+    try { meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8')); } catch (e) { meta = {}; }
+  }
+
+  const folder = trashFolderFor(safeType, base);
+  if (!folder) return null;
+  await fsExtra.ensureDir(folder);
+
+  const pdfFilename = pdfExists ? path.basename(pdfPath) : `${base}.pdf`;
+  if (pdfExists) {
+    await fsExtra.move(pdfPath, path.join(folder, 'pdf', pdfFilename), { overwrite: true });
+  }
+  if (metaExists) {
+    await fsExtra.move(metaPath, path.join(folder, 'meta', `${base}.json`), { overwrite: true });
+  }
+
+  // Photos live in out/<type>/photos/<base>/ (whole directory).
+  const photosSrc = path.join(OUTPUT_DIR, safeType, 'photos', base);
+  if (fs.existsSync(photosSrc)) {
+    await fsExtra.move(photosSrc, path.join(folder, 'photos'), { overwrite: true });
+  }
+
+  // Signature sidecars are out/<type>/signatures/<base>*.{png,jpg} (incl. *_remote-signed.*).
+  const sigDir = path.join(OUTPUT_DIR, safeType, 'signatures');
+  const movedSignatures = [];
+  if (fs.existsSync(sigDir)) {
+    let sigNames = [];
+    try { sigNames = await fs.promises.readdir(sigDir); } catch (e) { sigNames = []; }
+    for (const name of sigNames) {
+      if (name.startsWith(base)) {
+        await fsExtra.move(path.join(sigDir, name), path.join(folder, 'signatures', name), { overwrite: true });
+        movedSignatures.push(name);
+      }
+    }
+  }
+
+  // Daily reports keep a second copy at meta.dailyReportPath (relative to OUTPUT_DIR).
+  let dailyRelPath = null;
+  if (meta && meta.dailyReportPath) {
+    const dailyAbs = safeResolvePath(OUTPUT_DIR, path.join(OUTPUT_DIR, meta.dailyReportPath));
+    if (dailyAbs && fs.existsSync(dailyAbs)) {
+      dailyRelPath = path.relative(OUTPUT_DIR, dailyAbs).split(path.sep).join('/');
+      await fsExtra.move(dailyAbs, path.join(folder, 'daily', path.basename(dailyAbs)), { overwrite: true });
+    }
+  }
+
+  const settings = await getTrashSettings();
+  const deletedAt = new Date().toISOString();
+  const expiresAt = new Date(Date.parse(deletedAt) + settings.retentionDays * 86400000).toISOString();
+  const record = {
+    type: safeType,
+    filename: pdfFilename,
+    base,
+    deletedAt,
+    deletedBy: deletedBy || null,
+    expiresAt,
+    retentionDays: settings.retentionDays,
+    pdfFilename,
+    hasMeta: metaExists,
+    signatures: movedSignatures,
+    dailyRelPath,
+  };
+  await fs.promises.writeFile(path.join(folder, 'trash.json'), JSON.stringify(record, null, 2));
+  return record;
+}
+
+// Move a trashed report back to its live locations. Returns the restored filename or null.
+async function restoreReport(type, base) {
+  const safeType = sanitizeFilename(type);
+  const safeBase = reportBaseName(sanitizeFilename(base));
+  const folder = trashFolderFor(safeType, safeBase);
+  if (!folder || !fs.existsSync(folder)) return null;
+
+  let record = {};
+  try { record = JSON.parse(await fs.promises.readFile(path.join(folder, 'trash.json'), 'utf8')); } catch (e) { record = {}; }
+  const pdfFilename = record.pdfFilename || `${safeBase}.pdf`;
+
+  const trashPdf = path.join(folder, 'pdf', pdfFilename);
+  if (fs.existsSync(trashPdf)) {
+    const dest = buildPdfPath(safeType, pdfFilename);
+    if (dest) { await fsExtra.ensureDir(path.dirname(dest)); await fsExtra.move(trashPdf, dest, { overwrite: true }); }
+  }
+  const trashMeta = path.join(folder, 'meta', `${safeBase}.json`);
+  if (fs.existsSync(trashMeta)) {
+    const dest = buildMetaPath(safeType, pdfFilename);
+    if (dest) { await fsExtra.ensureDir(path.dirname(dest)); await fsExtra.move(trashMeta, dest, { overwrite: true }); }
+  }
+  const trashPhotos = path.join(folder, 'photos');
+  if (fs.existsSync(trashPhotos)) {
+    await fsExtra.move(trashPhotos, path.join(OUTPUT_DIR, safeType, 'photos', safeBase), { overwrite: true });
+  }
+  const trashSigs = path.join(folder, 'signatures');
+  if (fs.existsSync(trashSigs)) {
+    const destSigDir = path.join(OUTPUT_DIR, safeType, 'signatures');
+    await fsExtra.ensureDir(destSigDir);
+    for (const name of await fs.promises.readdir(trashSigs)) {
+      await fsExtra.move(path.join(trashSigs, name), path.join(destSigDir, name), { overwrite: true });
+    }
+  }
+  if (record.dailyRelPath) {
+    const destDaily = safeResolvePath(OUTPUT_DIR, path.join(OUTPUT_DIR, record.dailyRelPath));
+    const trashDaily = path.join(folder, 'daily', path.basename(record.dailyRelPath));
+    if (destDaily && fs.existsSync(trashDaily)) {
+      await fsExtra.ensureDir(path.dirname(destDaily));
+      await fsExtra.move(trashDaily, destDaily, { overwrite: true });
+    }
+  }
+
+  await fsExtra.remove(folder);
+  return pdfFilename;
+}
+
+async function purgeTrashReport(type, base) {
+  const safeType = sanitizeFilename(type);
+  const safeBase = reportBaseName(sanitizeFilename(base));
+  const folder = trashFolderFor(safeType, safeBase);
+  if (!folder || !fs.existsSync(folder)) return false;
+  await fsExtra.remove(folder);
+  return true;
+}
+
+// Build listing cards for every trashed report (reuses buildFileListEntry + trash meta).
+async function listTrashEntries() {
+  const out = [];
+  let typeDirs = [];
+  try {
+    typeDirs = (await fs.promises.readdir(TRASH_DIR, { withFileTypes: true }))
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch (e) { return out; }
+
+  for (const type of typeDirs) {
+    const typePath = path.join(TRASH_DIR, type);
+    let bases = [];
+    try {
+      bases = (await fs.promises.readdir(typePath, { withFileTypes: true }))
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+    } catch (e) { continue; }
+    for (const base of bases) {
+      const folder = path.join(typePath, base);
+      let record = {};
+      try { record = JSON.parse(await fs.promises.readFile(path.join(folder, 'trash.json'), 'utf8')); } catch (e) { record = {}; }
+      let meta = {};
+      try { meta = JSON.parse(await fs.promises.readFile(path.join(folder, 'meta', `${base}.json`), 'utf8')); } catch (e) { meta = {}; }
+      const card = buildFileListEntry(meta, type, record.filename || `${base}.pdf`) || {
+        templateType: type,
+        filename: record.filename || `${base}.pdf`,
+        templateLabel: null,
+        createdAt: null,
+        summary: {},
+        dailyReport: null,
+      };
+      out.push({
+        ...card,
+        deletedAt: record.deletedAt || null,
+        deletedBy: record.deletedBy || null,
+        expiresAt: record.expiresAt || null,
+      });
+    }
+  }
+  out.sort((a, b) => Date.parse(b.deletedAt || 0) - Date.parse(a.deletedAt || 0));
+  return out;
+}
+
+// Permanently purge trashed reports whose expiresAt has passed. Runs on a daily timer.
+async function sweepTrash() {
+  const now = Date.now();
+  let purged = 0;
+  const entries = await listTrashEntries();
+  for (const entry of entries) {
+    if (entry.expiresAt && Date.parse(entry.expiresAt) <= now) {
+      const ok = await purgeTrashReport(entry.templateType, reportBaseName(entry.filename));
+      if (ok) purged += 1;
+    }
+  }
+  if (purged) console.log(`[server] trash sweep purged ${purged} expired report(s)`);
+  return purged;
+}
+
 
 const PORT = parseInt(process.env.SERVICE2_PORT || process.env.PORT, 10) || 3001;
 
@@ -444,7 +684,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.59';
+const SERVICE2_VERSION = '0.60';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -23624,6 +23864,95 @@ app.post(['/api/files/delete', '/service2/api/files/delete'], requireDeleteFiles
   return res.json({ ok: true, deleted, missing, errors });
 });
 
+// --- Trash / soft-delete endpoints (contract agreed with iOS in issue #1) ---------
+// Literal /trash routes are registered before the :type/:filename param routes so
+// e.g. GET /api/files/trash is never captured by a param pattern.
+
+// List trashed reports (read-only; hub gates who can reach it).
+app.get(['/api/files/trash', '/service2/api/files/trash'], async (req, res) => {
+  try {
+    const files = await listTrashEntries();
+    const settings = await getTrashSettings();
+    return res.json({ ok: true, files, total: files.length, retentionDays: settings.retentionDays });
+  } catch (err) {
+    console.error('[server] trash list failed', err);
+    return res.status(500).json({ ok: false, error: 'trash_list_failed' });
+  }
+});
+
+// Retention settings.
+app.get(['/api/files/trash/settings', '/service2/api/files/trash/settings'], async (req, res) => {
+  const settings = await getTrashSettings();
+  return res.json({ ok: true, ...settings });
+});
+
+app.put(['/api/files/trash/settings', '/service2/api/files/trash/settings'], requireDeleteFiles, async (req, res) => {
+  try {
+    const settings = await setTrashSettings(req.body && req.body.retentionDays);
+    return res.json({ ok: true, ...settings });
+  } catch (err) {
+    console.error('[server] trash settings update failed', err);
+    return res.status(500).json({ ok: false, error: 'trash_settings_failed' });
+  }
+});
+
+// Empty the whole trash (permanent).
+app.post(['/api/files/trash/empty', '/service2/api/files/trash/empty'], requireDeleteFiles, async (req, res) => {
+  try {
+    const entries = await listTrashEntries();
+    let purged = 0;
+    for (const entry of entries) {
+      const ok = await purgeTrashReport(entry.templateType, reportBaseName(entry.filename));
+      if (ok) purged += 1;
+    }
+    return res.json({ ok: true, purged });
+  } catch (err) {
+    console.error('[server] trash empty failed', err);
+    return res.status(500).json({ ok: false, error: 'trash_empty_failed' });
+  }
+});
+
+// Soft-delete a single report into the trash.
+app.post(['/api/files/:type/:filename/trash', '/service2/api/files/:type/:filename/trash'], requireDeleteFiles, async (req, res) => {
+  try {
+    const deletedBy = req.headers['x-hub-user'] || (req.body && req.body.deletedBy) || null;
+    const record = await trashReport(req.params.type, req.params.filename, deletedBy);
+    if (!record) return res.status(404).json({ ok: false, error: 'file_not_found' });
+    return res.json({ ok: true, trashed: record });
+  } catch (err) {
+    console.error('[server] trash move failed', err);
+    return res.status(500).json({ ok: false, error: 'trash_failed' });
+  }
+});
+
+// Restore a trashed report to the live listing.
+app.post(['/api/files/:type/:filename/restore', '/service2/api/files/:type/:filename/restore'], requireDeleteFiles, async (req, res) => {
+  try {
+    const restored = await restoreReport(req.params.type, req.params.filename);
+    if (!restored) return res.status(404).json({ ok: false, error: 'trash_entry_not_found' });
+    const type = sanitizeFilename(req.params.type);
+    return res.json({
+      ok: true,
+      restored: { type, filename: restored, url: `/api/files/${encodeURIComponent(type)}/${encodeURIComponent(restored)}` },
+    });
+  } catch (err) {
+    console.error('[server] trash restore failed', err);
+    return res.status(500).json({ ok: false, error: 'restore_failed' });
+  }
+});
+
+// Permanently purge a single trashed report.
+app.delete(['/api/files/:type/:filename/purge', '/service2/api/files/:type/:filename/purge'], requireDeleteFiles, async (req, res) => {
+  try {
+    const ok = await purgeTrashReport(req.params.type, req.params.filename);
+    if (!ok) return res.status(404).json({ ok: false, error: 'trash_entry_not_found' });
+    return res.json({ ok: true, purged: 1 });
+  } catch (err) {
+    console.error('[server] trash purge failed', err);
+    return res.status(500).json({ ok: false, error: 'purge_failed' });
+  }
+});
+
 app.post(['/api/files/zip', '/service2/api/files/zip'], requireDeleteFiles, async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
@@ -25305,6 +25634,12 @@ function start() {
     console.log(`[server] Using template: ${templatePath}`);
 
   });
+
+  // Trash retention sweep: once shortly after boot, then daily. Purges soft-deleted
+  // reports past their expiresAt. unref() so the timer never keeps the process alive.
+  const runSweep = () => { sweepTrash().catch((err) => console.warn('[server] trash sweep failed:', err && err.message)); };
+  setTimeout(runSweep, 60 * 1000).unref();
+  setInterval(runSweep, 24 * 60 * 60 * 1000).unref();
 
   return server;
 

@@ -1086,6 +1086,25 @@ app.use('/service2/api/sign', requireServiceAccess('service2', '/service2'), att
   logLevel: 'warn'
 }));
 
+// Trash / soft-delete (issue #1): recycle bin for report files. Same admin gate as the
+// hard-delete route. Registered BEFORE registerProxies' open /service2 catch-all so the
+// authoritative x-hub-* headers are attached (deletedBy from x-hub-user; service2
+// re-checks x-hub-can-delete-files) and a caller can't reach it unauthenticated. Literal
+// /trash* routes precede the :type/:filename param routes so they aren't captured by them.
+const service2TrashProxy = createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+});
+app.get('/service2/api/files/trash/settings', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.put('/service2/api/files/trash/settings', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/trash/empty', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.get('/service2/api/files/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/:type/:filename/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/:type/:filename/restore', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.delete('/service2/api/files/:type/:filename/purge', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+
 // register once on startup
 registerProxies(app);
 
