@@ -735,25 +735,29 @@ async function listFeedbackRows() {
   return rows;
 }
 
-// Fire-and-forget: tell the hub to push admins that a field submit failed. No-op unless
-// HUB_INTERNAL_TOKEN is configured. Never throws into the request path.
-async function notifyHubSubmitFailure(record) {
+// Fire-and-forget: tell the hub about a new feedback item so it lands in the admin-only
+// chat feed (and, for submit_failure, pushes admins). No-op unless HUB_INTERNAL_TOKEN is
+// configured. Never throws into the request path.
+async function notifyHubFeedback(record) {
   if (!HUB_INTERNAL_TOKEN) return;
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 4000);
-    await fetch(`${HUB_URL.replace(/\/$/, '')}/internal/notify/submit-failure`, {
+    await fetch(`${HUB_URL.replace(/\/$/, '')}/internal/notify/feedback`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-token': HUB_INTERNAL_TOKEN },
       body: JSON.stringify({
         feedbackId: record.id,
+        kind: record.kind,
         username: record.username,
+        message: record.message,
         context: record.context || {},
+        attachmentCount: Array.isArray(record.attachments) ? record.attachments.length : 0,
       }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timer));
   } catch (err) {
-    console.warn('[server] submit-failure hub notify failed:', err && err.message);
+    console.warn('[server] feedback hub notify failed:', err && err.message);
   }
 }
 
@@ -772,7 +776,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.64';
+const SERVICE2_VERSION = '0.65';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -23934,8 +23938,9 @@ app.post(['/api/feedback', '/service2/api/feedback'], (req, res) => {
       const record = { id, kind, message, context, username, createdAt, attachments, hasLogs, hasFormArchive };
       await fs.promises.writeFile(path.join(dir, 'feedback.json'), JSON.stringify(record, null, 2));
       console.log(`[server] feedback ${id} (${kind}) from ${username || 'anon'}${kind === 'submit_failure' ? ' — SUBMIT FAILURE' : ''}`);
-      // Alert admins about a failed field submission (fire-and-forget; never blocks intake).
-      if (kind === 'submit_failure') { notifyHubSubmitFailure(record); }
+      // Surface every report in the admin-only chat feed (submit_failure also pushes).
+      // Fire-and-forget; never blocks or fails intake.
+      notifyHubFeedback(record);
       return res.json({ ok: true, id, createdAt });
     } catch (e) {
       console.error('[server] feedback intake failed', e);

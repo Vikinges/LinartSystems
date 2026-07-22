@@ -2445,10 +2445,11 @@ async function sendPushToAdmins(payload, pushType) {
   return { ok: true, sent, total, admins: admins.size };
 }
 
-// Internal (service2 -> hub): a field engineer's report failed to publish. Notify admins
-// via APNs. Token-gated (not a user session); reached over the internal network, never a
-// browser. Not under /service2, so the open proxy catch-all doesn't shadow it.
-app.post('/internal/notify/submit-failure', async (req, res) => {
+// Internal (service2 -> hub): a new in-app feedback item arrived. Drop it into the
+// admin-only chat feed; for submit_failure also push admins via APNs. Token-gated (not a
+// user session); reached over the internal network, never a browser. Not under /service2,
+// so the open proxy catch-all doesn't shadow it.
+app.post('/internal/notify/feedback', async (req, res) => {
   const token = String(req.headers['x-internal-token'] || '');
   if (!HUB_INTERNAL_TOKEN || token !== HUB_INTERNAL_TOKEN) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -2456,26 +2457,41 @@ app.post('/internal/notify/submit-failure', async (req, res) => {
   const b = req.body || {};
   const ctx = (b.context && typeof b.context === 'object') ? b.context : {};
   const who = String(b.username || ctx.username || 'An engineer').slice(0, 80);
-  const deviceBits = [ctx.deviceModel, ctx.appVersion || ctx.build].filter(Boolean).join(' · ');
-  console.log(`[hub] submit-failure push requested: feedback=${b.feedbackId || '?'} who=${who}`);
-  const payload = {
-    aps: {
-      alert: {
-        title: 'Report submission failed',
-        body: `${who} couldn't publish a report from the field${deviceBits ? ` (${deviceBits})` : ''}.`,
+
+  // Always surface it in the admin-only Feedback & reports chat feed.
+  const chatPosted = postFeedbackToChat({
+    id: b.feedbackId,
+    kind: b.kind,
+    username: b.username,
+    message: b.message,
+    context: ctx,
+    attachmentCount: b.attachmentCount,
+  });
+
+  // submit_failure means an engineer couldn't publish from the field → also push admins.
+  let push = { skipped: true };
+  if (b.kind === 'submit_failure') {
+    const deviceBits = [ctx.deviceModel, ctx.appVersion || ctx.build].filter(Boolean).join(' · ');
+    console.log(`[hub] submit-failure push requested: feedback=${b.feedbackId || '?'} who=${who}`);
+    const payload = {
+      aps: {
+        alert: {
+          title: 'Report submission failed',
+          body: `${who} couldn't publish a report from the field${deviceBits ? ` (${deviceBits})` : ''}.`,
+        },
+        sound: 'default',
       },
-      sound: 'default',
-    },
-    kind: 'submit_failure',
-    feedbackId: b.feedbackId || null,
-  };
-  try {
-    const result = await sendPushToAdmins(payload, 'alert');
-    return res.json({ ok: true, ...result });
-  } catch (err) {
-    console.warn('[hub] submit-failure push failed:', err && err.message);
-    return res.status(500).json({ ok: false, error: 'push_failed' });
+      kind: 'submit_failure',
+      feedbackId: b.feedbackId || null,
+    };
+    try {
+      push = await sendPushToAdmins(payload, 'alert');
+    } catch (err) {
+      console.warn('[hub] submit-failure push failed:', err && err.message);
+      push = { ok: false, error: 'push_failed' };
+    }
   }
+  return res.json({ ok: true, chatPosted, push });
 });
 
 app.post('/api/push/register', (req, res) => {
@@ -2807,10 +2823,77 @@ function knownHubUsername(name) {
   if (name === (superName || DEFAULT_ADMIN_USERNAME)) return true;
   return (Array.isArray(adminCredentials.users) ? adminCredentials.users : []).some((u) => u && u.username === name);
 }
+function isAdminUsername(name) {
+  return !!name && adminUsernames().has(name);
+}
 function canSeeConversation(conv, username) {
   if (!conv) return false;
+  // Admin-only rooms (e.g. the Feedback & reports feed) are visible to every admin,
+  // regardless of explicit membership, and to no one else.
+  if (conv.adminOnly) return isAdminUsername(username);
   if (conv.kind === 'project') return true;
   return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(username);
+}
+
+// Admin-only chat feed that in-app feedback (bug / idea / submit_failure) lands in, so
+// admins read reports right inside LSC LED Chat. Created lazily on the first report.
+const FEEDBACK_CONV_ID = 'feedback-reports';
+const FEEDBACK_KIND_LABEL = { submit_failure: 'Submit failure', bug: 'Bug', idea: 'Idea' };
+function ensureFeedbackConversation() {
+  const index = loadChatIndex();
+  let conv = index.find((c) => c.id === FEEDBACK_CONV_ID);
+  if (!conv) {
+    conv = {
+      id: FEEDBACK_CONV_ID,
+      kind: 'group',
+      adminOnly: true,
+      title: '📋 Feedback & reports',
+      memberUsernames: [],
+      reads: {},
+      createdAt: new Date().toISOString(),
+    };
+    index.push(conv);
+    saveChatIndex(index);
+  }
+  return conv;
+}
+// Post a feedback item into the admin-only feed as a message "from" the reporting user.
+function postFeedbackToChat(record) {
+  try {
+    ensureFeedbackConversation();
+    const ctx = (record && record.context && typeof record.context === 'object') ? record.context : {};
+    const author = String(record.username || ctx.username || 'unknown');
+    const label = FEEDBACK_KIND_LABEL[record.kind] || record.kind || 'Feedback';
+    const deviceBits = [ctx.deviceModel, ctx.appVersion || ctx.build].filter(Boolean).join(' · ');
+    const lines = [`[${label}]${deviceBits ? ` ${deviceBits}` : ''}`];
+    if (record.message) lines.push(String(record.message));
+    const extras = [];
+    if (record.attachmentCount) extras.push(`${record.attachmentCount} attachment(s)`);
+    if (ctx.error) extras.push(`error: ${ctx.error}`);
+    if (record.id) extras.push(`id ${record.id}`);
+    if (extras.length) lines.push('— ' + extras.join(' · '));
+    const message = {
+      id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
+      conversationId: FEEDBACK_CONV_ID,
+      authorId: author,
+      authorDisplayName: author,
+      kind: 'text',
+      body: lines.join('\n').slice(0, CHAT_BODY_MAX),
+      createdAt: new Date().toISOString(),
+      feedback: { id: record.id || null, kind: record.kind || null },
+    };
+    appendChatMessage(FEEDBACK_CONV_ID, message);
+    const index = loadChatIndex();
+    const conv = index.find((c) => c.id === FEEDBACK_CONV_ID);
+    if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
+    for (const c of sseClients) {
+      if (isAdminUsername(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
+    }
+    return true;
+  } catch (err) {
+    console.warn('[hub] postFeedbackToChat failed:', err && err.message);
+    return false;
+  }
 }
 function conversationPayload(conv, username) {
   const msgs = readChatMessages(conv.id);

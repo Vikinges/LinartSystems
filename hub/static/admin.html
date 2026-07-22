@@ -122,6 +122,9 @@
     .chat-att { margin-top: 6px; }
     .chat-att img { max-width: 220px; max-height: 220px; border-radius: 8px; border: 1px solid #dbe2ee; display: block; margin-bottom: 4px; }
     .chat-att audio { width: 260px; display: block; margin-bottom: 4px; }
+    .chat-kind.warn { background: #fde8e4; color: #b3341f; }
+    .fb-message { white-space: pre-wrap; word-break: break-word; background: #f7f9fc; border: 1px solid #eef2f8; border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
+    .fb-context { white-space: pre; overflow: auto; max-height: 260px; background: #0f1b2d; color: #dbe6f5; border-radius: 8px; padding: 10px 12px; font-size: 0.78rem; margin: 8px 0; }
     .chat-att a { color: #2563eb; font-size: 0.85rem; }
     @media (max-width: 760px) {
       body { padding: 16px; }
@@ -376,6 +379,23 @@
       <div id="chatConvList" class="chat-conv-list"></div>
       <div id="chatViewer" class="chat-viewer is-hidden"></div>
       <div class="hint">Admin view of every team conversation. You can read any chat, export it as a ZIP, or delete it. Control who may use chat per-user with the "Use chat" checkbox above.</div>
+    </section>
+
+    <section>
+      <h2>Feedback &amp; reports</h2>
+      <div class="chat-toolbar">
+        <button type="button" id="fbRefresh" class="secondary">Refresh</button>
+        <select id="fbKindFilter" class="secondary">
+          <option value="">All types</option>
+          <option value="submit_failure">Submit failures</option>
+          <option value="bug">Bug reports</option>
+          <option value="idea">Ideas</option>
+        </select>
+        <span id="fbAdminStatus" class="meta"></span>
+      </div>
+      <div id="fbList" class="chat-conv-list"></div>
+      <div id="fbViewer" class="chat-viewer is-hidden"></div>
+      <div class="hint">In-app messages from field users — bug reports, improvement ideas, and automatic diagnostics when a report fails to publish. Admin-only. Each shows who sent it, their device, the message and any attachments / logs / draft archive.</div>
     </section>
 
     <section>
@@ -1396,6 +1416,161 @@
     const chatRefreshBtn = document.getElementById('chatRefresh');
     const chatAdminStatus = document.getElementById('chatAdminStatus');
 
+    // --- Feedback & reports (in-app bug/idea/submit_failure) ---
+    const fbList = document.getElementById('fbList');
+    const fbViewer = document.getElementById('fbViewer');
+    const fbRefreshBtn = document.getElementById('fbRefresh');
+    const fbKindFilter = document.getElementById('fbKindFilter');
+    const fbAdminStatus = document.getElementById('fbAdminStatus');
+    const FB_KIND_LABEL = { submit_failure: 'Submit failure', bug: 'Bug', idea: 'Idea' };
+
+    async function loadFeedbackAdmin() {
+      if (!fbList) return;
+      try {
+        const data = await fetchJson('/service2/api/feedback/admin/list');
+        let items = Array.isArray(data.items) ? data.items : [];
+        const filter = fbKindFilter ? fbKindFilter.value : '';
+        if (filter) items = items.filter((it) => it.kind === filter);
+        fbList.innerHTML = '';
+        if (fbAdminStatus) fbAdminStatus.textContent = items.length + ' item(s)';
+        if (!items.length) {
+          const empty = document.createElement('div');
+          empty.className = 'meta';
+          empty.textContent = 'No feedback yet.';
+          fbList.appendChild(empty);
+          return;
+        }
+        items.forEach((it) => fbList.appendChild(renderFeedbackCard(it)));
+      } catch (error) {
+        if (fbAdminStatus) fbAdminStatus.textContent = 'Failed to load feedback.';
+        console.warn('feedback admin load failed', error);
+      }
+    }
+
+    function renderFeedbackCard(item) {
+      const card = document.createElement('div');
+      card.className = 'chat-conv-card';
+      const info = document.createElement('div');
+      info.className = 'info';
+      const title = document.createElement('strong');
+      title.appendChild(document.createTextNode(item.username || 'unknown'));
+      const kind = document.createElement('span');
+      const kindClass = item.kind === 'submit_failure' ? 'warn' : (item.kind === 'idea' ? 'project' : 'direct');
+      kind.className = 'chat-kind ' + kindClass;
+      kind.textContent = FB_KIND_LABEL[item.kind] || item.kind || '—';
+      title.appendChild(kind);
+      info.appendChild(title);
+      const msg = document.createElement('div');
+      msg.className = 'meta';
+      msg.textContent = item.message || '(no message)';
+      info.appendChild(msg);
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      const bits = [];
+      if (item.device) bits.push(item.device);
+      if (item.appBuild) bits.push('build ' + item.appBuild);
+      if (item.attachmentCount) bits.push(item.attachmentCount + ' attachment(s)');
+      const when = chatFmtTime(item.createdAt);
+      if (when) bits.push(when);
+      meta.textContent = bits.join(' · ') || '—';
+      info.appendChild(meta);
+      card.appendChild(info);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      const viewBtn = document.createElement('button');
+      viewBtn.type = 'button';
+      viewBtn.className = 'secondary';
+      viewBtn.textContent = 'Open';
+      viewBtn.addEventListener('click', () => openFeedbackViewer(item.id));
+      actions.appendChild(viewBtn);
+      const delBtn = document.createElement('button');
+      delBtn.type = 'button';
+      delBtn.className = 'secondary';
+      delBtn.textContent = 'Delete';
+      delBtn.addEventListener('click', async () => {
+        if (!confirm('Delete this feedback item?')) return;
+        try {
+          await fetchJson('/service2/api/feedback/admin/' + encodeURIComponent(item.id), { method: 'DELETE' });
+          if (fbViewer) { fbViewer.classList.add('is-hidden'); fbViewer.innerHTML = ''; }
+          await loadFeedbackAdmin();
+        } catch (error) { handleError(error); }
+      });
+      actions.appendChild(delBtn);
+      card.appendChild(actions);
+      return card;
+    }
+
+    async function openFeedbackViewer(id) {
+      if (!fbViewer) return;
+      fbViewer.classList.remove('is-hidden');
+      fbViewer.innerHTML = '<div class="meta">Loading…</div>';
+      fbViewer.scrollIntoView({ block: 'nearest' });
+      try {
+        const data = await fetchJson('/service2/api/feedback/admin/' + encodeURIComponent(id));
+        const fb = data.feedback || {};
+        fbViewer.innerHTML = '';
+        const header = document.createElement('div');
+        header.className = 'chat-viewer-header';
+        const h = document.createElement('strong');
+        h.textContent = (FB_KIND_LABEL[fb.kind] || fb.kind || 'Feedback') + ' — ' + (fb.username || 'unknown');
+        header.appendChild(h);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'secondary';
+        closeBtn.textContent = 'Close';
+        closeBtn.addEventListener('click', () => { fbViewer.classList.add('is-hidden'); fbViewer.innerHTML = ''; });
+        header.appendChild(closeBtn);
+        fbViewer.appendChild(header);
+
+        const when = chatFmtTime(fb.createdAt);
+        if (when) {
+          const row = document.createElement('div');
+          row.className = 'meta';
+          row.textContent = 'When: ' + when;
+          fbViewer.appendChild(row);
+        }
+        const msgBox = document.createElement('div');
+        msgBox.className = 'fb-message';
+        msgBox.textContent = fb.message || '(no message)';
+        fbViewer.appendChild(msgBox);
+
+        const ctx = fb.context || {};
+        if (ctx && Object.keys(ctx).length) {
+          const pre = document.createElement('pre');
+          pre.className = 'fb-context';
+          pre.textContent = JSON.stringify(ctx, null, 2);
+          fbViewer.appendChild(pre);
+        }
+
+        const links = document.createElement('div');
+        links.className = 'actions';
+        (fb.attachments || []).forEach((a, i) => {
+          const link = document.createElement('a');
+          link.className = 'button';
+          link.href = '/service2' + a.url;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.textContent = '⤓ ' + (a.name || ('attachment ' + (i + 1)));
+          links.appendChild(link);
+        });
+        if (fb.logsUrl) {
+          const l = document.createElement('a');
+          l.className = 'button'; l.href = '/service2' + fb.logsUrl; l.target = '_blank'; l.rel = 'noopener';
+          l.textContent = '⤓ logs'; links.appendChild(l);
+        }
+        if (fb.formArchiveUrl) {
+          const l = document.createElement('a');
+          l.className = 'button'; l.href = '/service2' + fb.formArchiveUrl; l.target = '_blank'; l.rel = 'noopener';
+          l.textContent = '⤓ form archive'; links.appendChild(l);
+        }
+        if (links.children.length) fbViewer.appendChild(links);
+      } catch (error) {
+        fbViewer.innerHTML = '<div class="meta">Failed to load feedback.</div>';
+        console.warn('feedback detail failed', error);
+      }
+    }
+
     function chatFmtTime(iso) {
       if (!iso) return '';
       const d = new Date(iso);
@@ -1571,6 +1746,8 @@
     }
 
     if (chatRefreshBtn) chatRefreshBtn.addEventListener('click', () => loadChatAdmin());
+    if (fbRefreshBtn) fbRefreshBtn.addEventListener('click', () => loadFeedbackAdmin());
+    if (fbKindFilter) fbKindFilter.addEventListener('change', () => loadFeedbackAdmin());
 
     async function loadAll() {
       try {
@@ -1589,6 +1766,7 @@
         renderUsers();
         renderSocialLinks();
         loadChatAdmin().catch((e) => console.warn('chat admin', e));
+        loadFeedbackAdmin().catch((e) => console.warn('feedback admin', e));
         await loadCurrentUser();
         try {
           await loadLogs();
