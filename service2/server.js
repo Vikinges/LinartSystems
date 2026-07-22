@@ -444,7 +444,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.58';
+const SERVICE2_VERSION = '0.59';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -6922,6 +6922,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       { label: 'Root cause', value: toSingleValue(body?.root_cause) || '' },
 
       { label: 'Recommendations', value: toSingleValue(body?.recommendations) || '' },
+
+      // signoff_summary = the app's "Summary" field in the Sign-off section; the closing
+      // summary of the visit. Rendered here (not via fields.json/AcroForm) so it lands in
+      // the Service summary block matching the app's local preview/export.
+      { label: 'Summary', value: toSingleValue(body?.signoff_summary) || '' },
 
     ].filter((field) => field.value && String(field.value).trim());
 
