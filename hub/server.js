@@ -1105,6 +1105,25 @@ app.post('/service2/api/files/:type/:filename/trash', requireFilesAdminAccess, a
 app.post('/service2/api/files/:type/:filename/restore', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.delete('/service2/api/files/:type/:filename/purge', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 
+// In-app feedback / diagnostics (issue #1). Intake is any authenticated service2 user
+// (same gate as report submit); management is admin/superadmin only. Registered before
+// registerProxies' open /service2 catch-all so the authoritative x-hub-user is attached
+// (records who reported) and admin routes can't be reached unauthenticated. Literal
+// /admin/list precedes the /admin/:id param routes.
+const service2FeedbackProxy = createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+});
+app.post('/service2/api/feedback', requireServiceAccess('service2', '/service2'), attachHubProxyHeaders, service2FeedbackProxy);
+app.get('/service2/api/feedback/admin/list', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+app.get('/service2/api/feedback/admin/:id/attachments/:name', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+app.get('/service2/api/feedback/admin/:id/logs', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+app.get('/service2/api/feedback/admin/:id/form_archive', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+app.get('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+app.delete('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
+
 // register once on startup
 registerProxies(app);
 

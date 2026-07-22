@@ -669,6 +669,68 @@ async function sweepTrash() {
   return purged;
 }
 
+// --- In-app feedback + diagnostics (bug / idea / submit_failure) ------------------
+// Storage: out/.feedback/<id>/{feedback.json, attachments/*, logs.txt, form_archive.json}.
+// Intake is any authenticated app user (gated at the hub); management is admin-only.
+const FEEDBACK_DIR = path.join(OUTPUT_DIR, '.feedback');
+const FEEDBACK_KINDS = new Set(['bug', 'idea', 'submit_failure']);
+const FEEDBACK_MAX_MESSAGE = 20000;
+const FEEDBACK_MAX_ATTACHMENTS = 10;
+
+function isValidFeedbackId(id) {
+  return typeof id === 'string' && /^fb_[a-z0-9]{4,}$/.test(id);
+}
+function feedbackDirFor(id) {
+  if (!isValidFeedbackId(id)) return null;
+  return safeResolvePath(FEEDBACK_DIR, path.join(FEEDBACK_DIR, id));
+}
+function newFeedbackId() {
+  return `fb_${Date.now().toString(36)}${crypto.randomBytes(5).toString('hex')}`;
+}
+function safeParseJson(str) {
+  if (typeof str !== 'string' || !str.trim()) return null;
+  try { return JSON.parse(str); } catch (e) { return null; }
+}
+function feedbackAttachmentExt(mime) {
+  const m = String(mime || '').toLowerCase();
+  if (m === 'image/png') return 'png';
+  if (m === 'image/jpeg' || m === 'image/jpg') return 'jpg';
+  if (m === 'image/webp') return 'webp';
+  if (m === 'image/heic') return 'heic';
+  if (m === 'application/pdf') return 'pdf';
+  if (m === 'application/json') return 'json';
+  if (m.startsWith('text/')) return 'txt';
+  return 'bin';
+}
+
+// Build the admin list rows (compact) from every stored feedback.json.
+async function listFeedbackRows() {
+  let ids = [];
+  try {
+    ids = (await fs.promises.readdir(FEEDBACK_DIR, { withFileTypes: true }))
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch (e) { return []; }
+  const rows = [];
+  for (const id of ids) {
+    let rec = null;
+    try { rec = JSON.parse(await fs.promises.readFile(path.join(FEEDBACK_DIR, id, 'feedback.json'), 'utf8')); } catch (e) { continue; }
+    const ctx = rec.context || {};
+    rows.push({
+      id: rec.id || id,
+      kind: rec.kind || null,
+      username: rec.username || ctx.username || null,
+      createdAt: rec.createdAt || null,
+      message: String(rec.message || '').slice(0, 200),
+      device: ctx.deviceModel || null,
+      appBuild: ctx.build || ctx.appVersion || null,
+      attachmentCount: Array.isArray(rec.attachments) ? rec.attachments.length : 0,
+    });
+  }
+  rows.sort((a, b) => Date.parse(b.createdAt || 0) - Date.parse(a.createdAt || 0));
+  return rows;
+}
+
 
 const PORT = parseInt(process.env.SERVICE2_PORT || process.env.PORT, 10) || 3001;
 
@@ -684,7 +746,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.60';
+const SERVICE2_VERSION = '0.61';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -23950,6 +24012,150 @@ app.delete(['/api/files/:type/:filename/purge', '/service2/api/files/:type/:file
   } catch (err) {
     console.error('[server] trash purge failed', err);
     return res.status(500).json({ ok: false, error: 'purge_failed' });
+  }
+});
+
+// --- Feedback / diagnostics endpoints (contract agreed with iOS in issue #1) -------
+// Accepts images/PDF/text/json parts; unknown/oversized handled gracefully.
+const feedbackUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 12 },
+  fileFilter: (req, file, cb) => {
+    const m = String(file.mimetype || '').toLowerCase();
+    const ok = m.startsWith('image/') || m === 'application/pdf' || m.startsWith('text/') || m === 'application/json';
+    if (!ok) { const e = new Error('Unsupported feedback attachment type.'); e.statusCode = 400; return cb(e); }
+    return cb(null, true);
+  },
+}).any();
+
+// Intake: any authenticated app user (the hub gates auth; service2 records x-hub-user).
+app.post(['/api/feedback', '/service2/api/feedback'], (req, res) => {
+  feedbackUpload(req, res, async (err) => {
+    if (err) {
+      const code = err.statusCode || (err.code === 'LIMIT_FILE_SIZE' ? 413 : 400);
+      return res.status(code).json({ ok: false, error: err.message || 'upload_failed' });
+    }
+    try {
+      const kind = String(toSingleValue(req.body?.kind) || '').trim().toLowerCase();
+      if (!FEEDBACK_KINDS.has(kind)) return res.status(400).json({ ok: false, error: 'invalid_kind' });
+      const message = String(toSingleValue(req.body?.message) || '').slice(0, FEEDBACK_MAX_MESSAGE);
+      const context = safeParseJson(toSingleValue(req.body?.context)) || {};
+      const username = req.headers['x-hub-user'] || context.username || null;
+
+      const id = newFeedbackId();
+      const dir = feedbackDirFor(id);
+      if (!dir) return res.status(500).json({ ok: false, error: 'feedback_id_failed' });
+      await fsExtra.ensureDir(dir);
+
+      const files = Array.isArray(req.files) ? req.files : [];
+      const attachments = [];
+      let hasLogs = false, hasFormArchive = false;
+      for (const f of files) {
+        if (!f || !f.buffer || !Buffer.isBuffer(f.buffer)) continue;
+        const field = String(f.fieldname || '');
+        if (field === 'logs') {
+          await fs.promises.writeFile(path.join(dir, 'logs.txt'), f.buffer);
+          hasLogs = true;
+        } else if (field === 'form_archive') {
+          await fs.promises.writeFile(path.join(dir, 'form_archive.json'), f.buffer);
+          hasFormArchive = true;
+        } else {
+          if (attachments.length >= FEEDBACK_MAX_ATTACHMENTS) continue;
+          const name = sanitizeFilename(`attachment_${attachments.length}.${feedbackAttachmentExt(f.mimetype)}`);
+          await fsExtra.ensureDir(path.join(dir, 'attachments'));
+          await fs.promises.writeFile(path.join(dir, 'attachments', name), f.buffer);
+          attachments.push({ file: name, mime: f.mimetype || null, size: f.buffer.length, name: f.originalname || null });
+        }
+      }
+
+      const createdAt = new Date().toISOString();
+      const record = { id, kind, message, context, username, createdAt, attachments, hasLogs, hasFormArchive };
+      await fs.promises.writeFile(path.join(dir, 'feedback.json'), JSON.stringify(record, null, 2));
+      console.log(`[server] feedback ${id} (${kind}) from ${username || 'anon'}${kind === 'submit_failure' ? ' — SUBMIT FAILURE' : ''}`);
+      return res.json({ ok: true, id, createdAt });
+    } catch (e) {
+      console.error('[server] feedback intake failed', e);
+      return res.status(500).json({ ok: false, error: 'feedback_failed' });
+    }
+  });
+});
+
+// Admin list (compact rows). requireFileAdmin = role admin or admin token (hub gates too).
+app.get(['/api/feedback/admin/list', '/service2/api/feedback/admin/list'], requireFileAdmin, async (req, res) => {
+  try {
+    const items = await listFeedbackRows();
+    return res.json({ ok: true, items, total: items.length });
+  } catch (e) {
+    console.error('[server] feedback list failed', e);
+    return res.status(500).json({ ok: false, error: 'feedback_list_failed' });
+  }
+});
+
+// Serve a feedback attachment (path-guarded).
+app.get(['/api/feedback/admin/:id/attachments/:name', '/service2/api/feedback/admin/:id/attachments/:name'], requireFileAdmin, (req, res) => {
+  const dir = feedbackDirFor(req.params.id);
+  if (!dir) return res.status(400).json({ ok: false, error: 'invalid_id' });
+  const attachDir = path.join(dir, 'attachments');
+  const filePath = safeResolvePath(attachDir, path.join(attachDir, sanitizeFilename(req.params.name || '')));
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'attachment_not_found' });
+  const ext = path.extname(filePath).toLowerCase();
+  const mime = ext === '.png' ? 'image/png'
+    : (ext === '.jpg' ? 'image/jpeg'
+    : (ext === '.webp' ? 'image/webp'
+    : (ext === '.heic' ? 'image/heic'
+    : (ext === '.pdf' ? 'application/pdf'
+    : (ext === '.json' ? 'application/json' : 'application/octet-stream')))));
+  res.setHeader('Content-Type', mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  // dotfiles:'allow' — the path lives under out/.feedback/ and sendFile ignores dotdirs by default.
+  return res.sendFile(filePath, { dotfiles: 'allow' });
+});
+
+// Serve the diagnostic logs / form archive of a feedback item.
+app.get(['/api/feedback/admin/:id/logs', '/service2/api/feedback/admin/:id/logs'], requireFileAdmin, (req, res) => {
+  const dir = feedbackDirFor(req.params.id);
+  const filePath = dir ? path.join(dir, 'logs.txt') : null;
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'logs_not_found' });
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  return res.sendFile(filePath, { dotfiles: 'allow' });
+});
+app.get(['/api/feedback/admin/:id/form_archive', '/service2/api/feedback/admin/:id/form_archive'], requireFileAdmin, (req, res) => {
+  const dir = feedbackDirFor(req.params.id);
+  const filePath = dir ? path.join(dir, 'form_archive.json') : null;
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'form_archive_not_found' });
+  res.setHeader('Content-Type', 'application/json');
+  return res.sendFile(filePath, { dotfiles: 'allow' });
+});
+
+// Full detail (context + attachment/log URLs).
+app.get(['/api/feedback/admin/:id', '/service2/api/feedback/admin/:id'], requireFileAdmin, async (req, res) => {
+  const dir = feedbackDirFor(req.params.id);
+  if (!dir || !fs.existsSync(path.join(dir, 'feedback.json'))) return res.status(404).json({ ok: false, error: 'feedback_not_found' });
+  try {
+    const rec = JSON.parse(await fs.promises.readFile(path.join(dir, 'feedback.json'), 'utf8'));
+    const idEnc = encodeURIComponent(rec.id);
+    rec.attachments = (Array.isArray(rec.attachments) ? rec.attachments : []).map((a) => ({
+      ...a,
+      url: `/api/feedback/admin/${idEnc}/attachments/${encodeURIComponent(a.file)}`,
+    }));
+    rec.logsUrl = rec.hasLogs ? `/api/feedback/admin/${idEnc}/logs` : null;
+    rec.formArchiveUrl = rec.hasFormArchive ? `/api/feedback/admin/${idEnc}/form_archive` : null;
+    return res.json({ ok: true, feedback: rec });
+  } catch (e) {
+    console.error('[server] feedback detail failed', e);
+    return res.status(500).json({ ok: false, error: 'feedback_detail_failed' });
+  }
+});
+
+app.delete(['/api/feedback/admin/:id', '/service2/api/feedback/admin/:id'], requireFileAdmin, async (req, res) => {
+  const dir = feedbackDirFor(req.params.id);
+  if (!dir || !fs.existsSync(dir)) return res.status(404).json({ ok: false, error: 'feedback_not_found' });
+  try {
+    await fsExtra.remove(dir);
+    return res.json({ ok: true, deleted: req.params.id });
+  } catch (e) {
+    console.error('[server] feedback delete failed', e);
+    return res.status(500).json({ ok: false, error: 'feedback_delete_failed' });
   }
 });
 
