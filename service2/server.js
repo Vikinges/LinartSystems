@@ -444,7 +444,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.56';
+const SERVICE2_VERSION = '0.57';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -5870,6 +5870,100 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
     lineHeightMultiplier: 1.25,
 
   });
+
+  // --- Signatures (engineer + customer) ---
+  // Drawn in the space reserved below the report-text box (availableTextHeight above
+  // keeps ~180px clear). Recording each box into options.signatureSlots lets a remote
+  // customer signature be drawn into the exact customer box later, matching service
+  // reports (drawSignOffPage) instead of the appendix fallback in /internal/sign-completed.
+  const sigColumnWidth = (page.getWidth() - margin * 2 - 12) / 2;
+  const resolveDailyPageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
+  const dailySignatureImages = Array.isArray(options.signatureImages) ? options.signatureImages : [];
+
+  const sigTitleY = textRect.y - 22;
+  page.drawText('Signatures', {
+    x: margin,
+    y: sigTitleY,
+    size: 12,
+    font,
+    color: headingColor,
+  });
+
+  const sigBoxTop = sigTitleY - 22;
+  const sigBoxHeight = Math.max(56, Math.min(84, sigBoxTop - margin - 8));
+  const sigBoxBottom = sigBoxTop - sigBoxHeight;
+
+  const dailySignatureBoxes = [
+    { label: 'Engineer signature', acroName: 'engineer_signature', x: margin },
+    { label: 'Customer signature', acroName: 'customer_signature', x: margin + sigColumnWidth + 12 },
+  ];
+
+  for (const box of dailySignatureBoxes) {
+    const boxRect = { x: box.x, y: sigBoxBottom, width: sigColumnWidth, height: sigBoxHeight };
+
+    if (Array.isArray(options.signatureSlots)) {
+      options.signatureSlots.push({
+        acroName: box.acroName,
+        page: resolveDailyPageNumber(),
+        x: Number(boxRect.x.toFixed(2)),
+        y: Number(boxRect.y.toFixed(2)),
+        width: Number(boxRect.width.toFixed(2)),
+        height: Number(boxRect.height.toFixed(2)),
+      });
+    }
+
+    page.drawText(box.label, {
+      x: boxRect.x,
+      y: boxRect.y + boxRect.height + 6,
+      size: 10,
+      font,
+      color: headingColor,
+    });
+
+    page.drawRectangle({
+      x: boxRect.x,
+      y: boxRect.y,
+      width: boxRect.width,
+      height: boxRect.height,
+      borderWidth: TABLE_BORDER_WIDTH,
+      borderColor: TABLE_BORDER_COLOR,
+      color: rgb(1, 1, 1),
+    });
+
+    const entry = dailySignatureImages.find((item) =>
+      new RegExp(box.acroName, 'i').test(item.acroName),
+    );
+    if (entry) {
+      try {
+        const decoded = decodeImageDataUrl(entry.data);
+        if (decoded) {
+          const image =
+            decoded.mimeType === 'image/png'
+              ? await pdfDoc.embedPng(decoded.buffer)
+              : await pdfDoc.embedJpg(decoded.buffer);
+          const availableWidth = boxRect.width - 12;
+          const availableHeight = boxRect.height - 12;
+          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
+          const drawWidth = image.width * scale;
+          const drawHeight = image.height * scale;
+          page.drawImage(image, {
+            x: boxRect.x + 6 + (availableWidth - drawWidth) / 2,
+            y: boxRect.y + 6 + (availableHeight - drawHeight) / 2,
+            width: drawWidth,
+            height: drawHeight,
+          });
+          signaturePlacements.push({
+            acroName: entry.acroName,
+            page: resolveDailyPageNumber(),
+            width: Number(drawWidth.toFixed(2)),
+            height: Number(drawHeight.toFixed(2)),
+          });
+        }
+      } catch (err) {
+        console.warn(`[server] Unable to draw daily signature for ${box.label}: ${err.message}`);
+      }
+    }
+  }
 
   return signaturePlacements;
 
@@ -24260,6 +24354,13 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
               ? submissionTemplateEntry.bodyTopOffset
 
               : null,
+
+          // Draw engineer/customer signature boxes and record their geometry so a
+          // remote customer signature lands in the exact box (mirrors service reports)
+          // instead of the appendix fallback in /internal/sign-completed.
+          signatureImages,
+
+          signatureSlots,
 
         },
 
