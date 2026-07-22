@@ -444,7 +444,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.57';
+const SERVICE2_VERSION = '0.58';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -21559,6 +21559,39 @@ function collectPhotoFiles(files) {
 
 }
 
+// Reload a prior report's persisted photos into multer-shaped file objects so an
+// edit-resubmit that carries no photo parts keeps the images (re-embed + re-persist).
+// Reads meta.photoFiles (field/file/mime) and the bytes from out/<type>/photos/<base>/.
+async function loadPersistedPhotoFiles(type, prevFilename) {
+  try {
+    const metaPath = buildMetaPath(type, prevFilename);
+    if (!metaPath || !fs.existsSync(metaPath)) return [];
+    const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'));
+    const manifest = Array.isArray(meta.photoFiles) ? meta.photoFiles : [];
+    if (!manifest.length) return [];
+    const base = String(prevFilename).replace(/\.pdf$/i, '');
+    const photosDir = path.join(OUTPUT_DIR, type, 'photos', base);
+    const restored = [];
+    for (const pf of manifest) {
+      if (!pf || !pf.file || !pf.field) continue;
+      const filePath = safeResolvePath(photosDir, path.join(photosDir, pf.file));
+      if (!filePath || !fs.existsSync(filePath)) continue;
+      const buffer = await fs.promises.readFile(filePath);
+      restored.push({
+        fieldname: pf.field,
+        originalname: pf.name || pf.file,
+        mimetype: String(pf.mime || 'image/jpeg').toLowerCase(),
+        buffer,
+        size: buffer.length,
+      });
+    }
+    return restored;
+  } catch (err) {
+    console.warn('[server] failed to reload persisted photos for edit:', err && err.message);
+    return [];
+  }
+}
+
 
 
 const adminTokens = new Map();
@@ -23689,7 +23722,24 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
     res.once('close', releaseInFlight);
   }
 
-  const photoFiles = collectPhotoFiles(req.files);
+  let photoFiles = collectPhotoFiles(req.files);
+
+  // Edit-resubmit with no photo parts: restore the previous report's persisted photos so
+  // the regenerated PDF keeps them. Web edits don't re-upload; iOS re-uploads originals so
+  // this stays a no-op there. `drop_photos=1` opts out to intentionally clear all photos.
+  if (editingPrevious && editingPrevious.filename && !photoFiles.length) {
+    const dropPhotos = ['1', 'true', 'yes', 'on'].includes(
+      String(toSingleValue(req.body?.drop_photos) || '').trim().toLowerCase()
+    );
+    if (!dropPhotos) {
+      const prevType = editingPrevious.type || toSingleValue(req.body?.template_type) || 'service_report';
+      const restored = await loadPersistedPhotoFiles(prevType, editingPrevious.filename);
+      if (restored.length) {
+        photoFiles = restored;
+        console.log(`[server] edit ${editingPrevious.filename}: restored ${restored.length} persisted photo(s) (no new parts)`);
+      }
+    }
+  }
 
   const totalPhotoBytes = photoFiles.reduce((sum, file) => {
 
