@@ -746,7 +746,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.62';
+const SERVICE2_VERSION = '0.63';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -3925,6 +3925,7 @@ function collectEmployeeEntries(body) {
             group,
             arrival: date && arr ? `${date}T${arr}` : arr,
             departure: date && dep ? `${date}T${dep}` : dep,
+            breakMinutes: d.breakMinutes,
           });
         });
       } else {
@@ -4087,6 +4088,12 @@ function collectEmployeeEntries(body) {
         ? determineBreakRequirement(normalized.minutes)
         : { code: 'DISABLED', minutes: 0, label: 'Breaks disabled' };
 
+      // Actual break the engineer recorded (app field). Net worked = gross - actual break,
+      // matching the app's own "Worked" math (departure - arrival - breakMinutes).
+      const parsedBreak = parseInt(toSingleValue(record.breakMinutes), 10);
+      const actualBreakMinutes = Number.isFinite(parsedBreak) && parsedBreak >= 0 ? parsedBreak : null;
+      const workedMinutes = Math.max(0, normalized.minutes - (actualBreakMinutes || 0));
+
       entries.push({
 
         index: index + 1,
@@ -4108,6 +4115,10 @@ function collectEmployeeEntries(body) {
         durationMinutes: normalized.minutes,
 
         durationLabel: formatEmployeeDuration(normalized.minutes),
+
+        breakMinutes: actualBreakMinutes,
+
+        workedMinutes,
 
         breakCode: breakInfo.code,
 
@@ -6562,7 +6573,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         groups.push(g);
       }
       g.days.push(entry);
-      g.minutes += Number(entry.durationMinutes || 0);
+      g.minutes += Number(entry.workedMinutes != null ? entry.workedMinutes : (entry.durationMinutes || 0));
     });
 
     const cols = [
@@ -6625,16 +6636,16 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         }
         const arr = dayParts(entry.arrival);
         const dep = dayParts(entry.departure);
-        const brk = !breaksEnabled ? '—'
-          : entry.breakCode === 'UNKNOWN' ? 'pending'
-          : entry.breakRequiredMinutes ? formatEmployeeDuration(entry.breakRequiredMinutes)
-          : '—';
+        // Break = the actual break the engineer recorded (app field); '—' when not provided.
+        const brk = entry.breakMinutes != null ? formatEmployeeDuration(entry.breakMinutes) : '—';
+        // Worked = net (gross - actual break), matching the app's own math.
+        const worked = entry.workedMinutes != null ? entry.workedMinutes : entry.durationMinutes;
         const rowVals = {
           date: dateLabel(arr),
           arr: arr.time || '--',
           dep: dep.time || '--',
           brk,
-          work: entry.durationLabel || formatEmployeeDuration(entry.durationMinutes),
+          work: formatEmployeeDuration(worked),
         };
         let x = margin;
         cols.forEach((c) => {
@@ -6654,7 +6665,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
     });
 
     cursorY -= 6;
-    const durationSummary = formatEmployeeDuration(employeeTotalMinutes);
+    // Total worked = sum of net per-day worked, so it matches the per-row Worked column.
+    const netTotalMinutes = employeeEntries.reduce(
+      (s, e) => s + Number(e.workedMinutes != null ? e.workedMinutes : (e.durationMinutes || 0)), 0);
+    const durationSummary = formatEmployeeDuration(netTotalMinutes);
     const knownBreakCount =
       (employeeBreakStats.MIN45 || 0) + (employeeBreakStats.MIN30 || 0) + (employeeBreakStats.NONE || 0);
     const breakMinutesLabel = knownBreakCount > 0
