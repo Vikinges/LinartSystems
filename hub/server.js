@@ -104,6 +104,9 @@ const AI_ASSISTANT_URL = (process.env.AI_ASSISTANT_URL || 'https://ai.crm-iot.co
 const AI_ASSISTANT_CLIENT_ID = process.env.AI_ASSISTANT_CLIENT_ID || '31';
 const AI_ASSISTANT_ORIGIN = process.env.AI_ASSISTANT_ORIGIN || 'https://lsc-led.de';
 const AI_ASSISTANT_ENABLED = String(process.env.AI_ASSISTANT_ENABLED || 'true').toLowerCase() !== 'false';
+// Process boot time — surfaced in /api/status as hub.startedAt so a deploy can be verified
+// even for hub-only changes (service2 doesn't restart, so its uptime is not a hub signal).
+const HUB_STARTED_AT = new Date().toISOString();
 const PUSH_DEVICES_FILE = process.env.HUB_PUSH_DEVICES_FILE
   ? path.resolve(process.env.HUB_PUSH_DEVICES_FILE)
   : (DATA_DIR ? path.join(DATA_DIR, 'push-devices.json') : path.join(__dirname, 'push-devices.json'));
@@ -1274,6 +1277,7 @@ app.get('/api/status', async (req, res) => {
     services: results,
     hub: {
       now: new Date().toISOString(),
+      startedAt: HUB_STARTED_AT,
       siteLogo: config.siteLogo,
       siteTitle: config.siteTitle,
       brandTagline: config.brandTagline,
