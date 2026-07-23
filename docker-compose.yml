@@ -52,6 +52,11 @@ services:
       - APNS_KEY_P8_BASE64=${APNS_KEY_P8_BASE64:-}
       # Shared secret for service2 -> hub internal notify (submit-failure push to admins).
       - HUB_INTERNAL_TOKEN=${HUB_INTERNAL_TOKEN:-}
+      # AI Assistant chat-bot (LinArt AI Consultant). Defaults target the LSC LED tenant.
+      - AI_ASSISTANT_URL=${AI_ASSISTANT_URL:-https://ai.crm-iot.com}
+      - AI_ASSISTANT_CLIENT_ID=${AI_ASSISTANT_CLIENT_ID:-31}
+      - AI_ASSISTANT_ORIGIN=${AI_ASSISTANT_ORIGIN:-https://lsc-led.de}
+      - AI_ASSISTANT_ENABLED=${AI_ASSISTANT_ENABLED:-true}
     volumes:
       - hub-data:/app/data
       - hub-uploads:/app/static/uploads

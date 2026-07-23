@@ -95,6 +95,15 @@ const APNS_ENV = (process.env.APNS_ENV || 'production').toLowerCase() === 'sandb
 // Shared secret for service2 -> hub internal calls (e.g. submit-failure push). Feature is
 // disabled (endpoint 401s) until this is set in the stack env on both services.
 const HUB_INTERNAL_TOKEN = process.env.HUB_INTERNAL_TOKEN || '';
+
+// AI Assistant chat-bot (LinArt AI Consultant, LSC LED tenant). The hub relays a user's
+// message in their private "AI Assistant" chat to the platform ask API and posts the
+// answer back as the `assistant` participant. Origin must be an allowed domain on the
+// platform tenant. Set AI_ASSISTANT_ENABLED=false to turn the bot off.
+const AI_ASSISTANT_URL = (process.env.AI_ASSISTANT_URL || 'https://ai.crm-iot.com').replace(/\/+$/, '');
+const AI_ASSISTANT_CLIENT_ID = process.env.AI_ASSISTANT_CLIENT_ID || '31';
+const AI_ASSISTANT_ORIGIN = process.env.AI_ASSISTANT_ORIGIN || 'https://lsc-led.de';
+const AI_ASSISTANT_ENABLED = String(process.env.AI_ASSISTANT_ENABLED || 'true').toLowerCase() !== 'false';
 const PUSH_DEVICES_FILE = process.env.HUB_PUSH_DEVICES_FILE
   ? path.resolve(process.env.HUB_PUSH_DEVICES_FILE)
   : (DATA_DIR ? path.join(DATA_DIR, 'push-devices.json') : path.join(__dirname, 'push-devices.json'));
@@ -2916,6 +2925,80 @@ function postFeedbackToChat(record) {
     return false;
   }
 }
+
+// --- AI Assistant chat-bot (per-user private DM that relays to the AI platform) ---
+const ASSISTANT_AUTHOR = 'assistant';
+function assistantConvId(username) {
+  return `assistant_${chatSanitizeId(username)}`;
+}
+// Ensure the user's private "AI Assistant" DM exists so it always shows in their chat list.
+function ensureAssistantConversation(username) {
+  if (!AI_ASSISTANT_ENABLED || !username) return null;
+  const id = assistantConvId(username);
+  const index = loadChatIndex();
+  let conv = index.find((c) => c.id === id);
+  if (!conv) {
+    conv = {
+      id,
+      kind: 'direct',
+      assistant: true,
+      title: 'AI Assistant',
+      memberUsernames: [username],
+      ownerUsername: username,
+      createdAt: new Date().toISOString(),
+      reads: {},
+    };
+    index.push(conv);
+    saveChatIndex(index);
+  }
+  return conv;
+}
+// Relay a user's message in their assistant DM to the platform ask API and post the answer
+// back as the `assistant`. Fire-and-forget; never throws into the request path.
+async function relayToAssistant(convId, text, username) {
+  if (!AI_ASSISTANT_ENABLED) return;
+  let answer = '';
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    try {
+      const r = await fetch(`${AI_ASSISTANT_URL}/api/chat/${encodeURIComponent(AI_ASSISTANT_CLIENT_ID)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Origin': AI_ASSISTANT_ORIGIN },
+        body: JSON.stringify({ message: String(text || '').slice(0, CHAT_BODY_MAX), session_id: convId }),
+        signal: controller.signal,
+      });
+      const data = await r.json().catch(() => ({}));
+      answer = (data && typeof data.response === 'string') ? data.response.trim() : '';
+    } finally { clearTimeout(timer); }
+  } catch (err) {
+    console.warn('[hub] assistant relay failed:', err && err.message);
+  }
+  if (!answer) answer = 'Entschuldigung, ich konnte gerade keine Antwort erzeugen. Bitte versuche es später erneut.';
+  const message = {
+    id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
+    conversationId: convId,
+    authorId: ASSISTANT_AUTHOR,
+    authorDisplayName: 'AI Assistant',
+    kind: 'text',
+    body: answer.slice(0, CHAT_BODY_MAX),
+    createdAt: new Date().toISOString(),
+    assistant: true,
+  };
+  appendChatMessage(convId, message);
+  const index = loadChatIndex();
+  const conv = index.find((c) => c.id === convId);
+  if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
+  for (const c of sseClients) {
+    if (c.user === username) ssePush(c, 'chat', { conversationId: convId, message });
+  }
+  // Notify when the app is backgrounded (app suppresses for the active chat).
+  sendPushToUser(username, {
+    aps: { alert: { title: 'AI Assistant', body: answer.slice(0, 160) }, sound: 'default' },
+    kind: 'chat', conversationId: convId,
+  }, 'alert').catch(() => {});
+}
+
 function conversationPayload(conv, username) {
   const msgs = readChatMessages(conv.id);
   const last = msgs.length ? msgs[msgs.length - 1] : null;
@@ -2994,8 +3077,14 @@ function requireChatMember(req, res, next) {
   setNoCache(res);
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
-  const index = loadChatIndex();
-  const conv = index.find((c) => c.id === req.params.id);
+  let index = loadChatIndex();
+  let conv = index.find((c) => c.id === req.params.id);
+  // The user's own AI Assistant DM is created lazily on first access.
+  if (!conv && AI_ASSISTANT_ENABLED && req.params.id === assistantConvId(user.username)) {
+    ensureAssistantConversation(user.username);
+    index = loadChatIndex();
+    conv = index.find((c) => c.id === req.params.id);
+  }
   if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
   if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
   req.chatUser = user;
@@ -3029,6 +3118,7 @@ app.get('/api/chat/conversations', (req, res) => {
   setNoCache(res);
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  ensureAssistantConversation(user.username); // always surface the AI Assistant DM
   const conversations = loadChatIndex()
     .filter((c) => canSeeConversation(c, user.username))
     .map((c) => conversationPayload(c, user.username))
@@ -3181,6 +3271,11 @@ app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.s
     if (c.user !== user.username && canSeeConversation(conv, c.user)) {
       ssePush(c, 'chat', { conversationId: conv.id, message });
     }
+  }
+  // AI Assistant DM: relay the user's message to the platform and post the answer back
+  // (fire-and-forget so the user's own message returns immediately).
+  if (conv.assistant && message.authorId !== ASSISTANT_AUTHOR && text) {
+    relayToAssistant(conv.id, text, user.username);
   }
   return res.json({ ok: true, ...message });
 });
