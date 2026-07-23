@@ -305,10 +305,31 @@
     };
   }
 
+  let _aiWidgetMounted = false;
+  function mountAiAssistantWidget(hub) {
+    try {
+      if (_aiWidgetMounted) return;
+      const w = hub && hub.aiWidget;
+      const user = hub && hub.user;
+      // Only for logged-in users, and only when enabled in the admin config.
+      if (!user || !w || !w.enabled || !w.clientId || !w.apiUrl) return;
+      _aiWidgetMounted = true;
+      const base = String(w.apiUrl).replace(/\/+$/, '');
+      const s = document.createElement('script');
+      s.src = base + '/widget.js';
+      s.async = true;
+      s.setAttribute('data-client', String(w.clientId));
+      s.setAttribute('data-api', base);
+      document.body.appendChild(s);
+    } catch (e) { /* widget is non-critical */ }
+  }
+
   async function load() {
     try {
       const response = await fetch('/api/status');
       const data = await response.json();
+
+      mountAiAssistantWidget(data.hub);
 
       const fallbackLogo = (data.hub && data.hub.siteLogo) || '/static/logo1.svg';
       const title = (data.hub && data.hub.siteTitle) || 'Linart Systems';

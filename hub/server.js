@@ -135,6 +135,10 @@ const DEFAULT_CONFIG = {
   pageBackgroundOpacity: 1,
   welcomeImage: '',
   socialLinks: [],
+  // AI Assistant chat widget (LinArt AI Consultant). Shown as a bottom-right popup to
+  // logged-in users on the hub web. Appearance (colour/logo/greeting) is configured on
+  // the platform (ai.crm-iot.com) for this clientId.
+  aiWidget: { enabled: true, clientId: '31', apiUrl: 'https://ai.crm-iot.com' },
 };
 const DEFAULT_ADMIN_PASSWORD = HUB_ADMIN_PASSWORD;
 const DEFAULT_ADMIN_USERNAME = 'admin';
@@ -250,6 +254,13 @@ function sanitizeConfig(input) {
         .map(normalizeSocialLink)
         .filter(Boolean)
     : [];
+
+  const aw = (merged.aiWidget && typeof merged.aiWidget === 'object') ? merged.aiWidget : {};
+  merged.aiWidget = {
+    enabled: aw.enabled !== false,
+    clientId: (typeof aw.clientId === 'string' && aw.clientId.trim()) ? aw.clientId.trim() : DEFAULT_CONFIG.aiWidget.clientId,
+    apiUrl: (typeof aw.apiUrl === 'string' && /^https?:\/\//i.test(aw.apiUrl.trim())) ? aw.apiUrl.trim().replace(/\/+$/, '') : DEFAULT_CONFIG.aiWidget.apiUrl,
+  };
 
   return merged;
 }
@@ -1270,6 +1281,7 @@ app.get('/api/status', async (req, res) => {
       surfaceOpacity: config.surfaceOpacity,
       welcomeImage: config.welcomeImage,
       socialLinks: config.socialLinks,
+      aiWidget: config.aiWidget,
       filtered: Boolean(allowed) || !user,
       user: user
         ? {
@@ -1967,6 +1979,15 @@ app.post('/admin/config', requireSuperadmin, requireSameOrigin, (req, res) => {
   if (Object.prototype.hasOwnProperty.call(body, 'welcomeImage')) {
     const value = typeof body.welcomeImage === 'string' ? body.welcomeImage.trim() : '';
     next.welcomeImage = value;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'aiWidget') && body.aiWidget && typeof body.aiWidget === 'object') {
+    const cur = next.aiWidget || DEFAULT_CONFIG.aiWidget;
+    next.aiWidget = {
+      enabled: Object.prototype.hasOwnProperty.call(body.aiWidget, 'enabled') ? body.aiWidget.enabled !== false : cur.enabled,
+      clientId: typeof body.aiWidget.clientId === 'string' && body.aiWidget.clientId.trim() ? body.aiWidget.clientId.trim() : cur.clientId,
+      apiUrl: typeof body.aiWidget.apiUrl === 'string' && body.aiWidget.apiUrl.trim() ? body.aiWidget.apiUrl.trim() : cur.apiUrl,
+    };
   }
 
   const saved = saveConfig(next);

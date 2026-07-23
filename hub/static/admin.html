@@ -399,6 +399,20 @@
     </section>
 
     <section>
+      <h2>AI Assistant (chat widget)</h2>
+      <div class="card-form" style="max-width:640px;">
+        <label class="inline"><input type="checkbox" id="aiEnabled"> <span>Show the AI Assistant popup to logged-in users on the hub web</span></label>
+        <label>Client ID<input type="text" id="aiClientId" placeholder="31"></label>
+        <label>Platform API URL<input type="text" id="aiApiUrl" placeholder="https://ai.crm-iot.com"></label>
+        <div class="chat-toolbar">
+          <button type="button" id="aiSave">Save</button>
+          <span id="aiStatus" class="meta"></span>
+        </div>
+      </div>
+      <div class="hint">Bottom-right chat popup powered by LinArt AI Consultant, trained on the LSC LED knowledge base. Appearance (colour, logo, greeting) is configured on the platform portal (ai.crm-iot.com) for this Client ID. Only shown after login.</div>
+    </section>
+
+    <section>
       <h3>Upload service bundle (ZIP)</h3>
       <form id="uploadServiceForm" class="card-form" enctype="multipart/form-data">
         <label class="button">
@@ -757,6 +771,14 @@
       siteLogoPreview.src = state.config.siteLogo || '/static/logo1.svg';
       siteTitleInput.value = state.config.siteTitle || '';
       brandTaglineInput.value = state.config.brandTagline || '';
+
+      const aw = (state.config && state.config.aiWidget) || {};
+      const aiEnabledEl = document.getElementById('aiEnabled');
+      const aiClientIdEl = document.getElementById('aiClientId');
+      const aiApiUrlEl = document.getElementById('aiApiUrl');
+      if (aiEnabledEl) aiEnabledEl.checked = aw.enabled !== false;
+      if (aiClientIdEl) aiClientIdEl.value = aw.clientId || '';
+      if (aiApiUrlEl) aiApiUrlEl.value = aw.apiUrl || '';
 
       const pageColor =
         typeof state.config.pageBackgroundColor === 'string' && state.config.pageBackgroundColor
@@ -1748,6 +1770,26 @@
     if (chatRefreshBtn) chatRefreshBtn.addEventListener('click', () => loadChatAdmin());
     if (fbRefreshBtn) fbRefreshBtn.addEventListener('click', () => loadFeedbackAdmin());
     if (fbKindFilter) fbKindFilter.addEventListener('change', () => loadFeedbackAdmin());
+
+    const aiSaveBtn = document.getElementById('aiSave');
+    if (aiSaveBtn) aiSaveBtn.addEventListener('click', async () => {
+      const aiStatus = document.getElementById('aiStatus');
+      const payload = { aiWidget: {
+        enabled: document.getElementById('aiEnabled').checked,
+        clientId: document.getElementById('aiClientId').value.trim(),
+        apiUrl: document.getElementById('aiApiUrl').value.trim(),
+      } };
+      try {
+        const data = await fetchJson('/admin/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        state.config = data.config || state.config;
+        renderBranding();
+        if (aiStatus) aiStatus.textContent = 'Saved.';
+      } catch (error) { handleError(error); }
+    });
 
     async function loadAll() {
       try {
