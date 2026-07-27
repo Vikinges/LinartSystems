@@ -1130,6 +1130,13 @@ app.get('/service2/api/files/trash', requireFilesAdminAccess, attachHubProxyHead
 app.post('/service2/api/files/:type/:filename/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.post('/service2/api/files/:type/:filename/restore', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.delete('/service2/api/files/:type/:filename/purge', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+// Legacy hard-delete + bulk-zip used by the web Files page. service2 gates both on
+// delete permission; register them here (before registerProxies' open /service2
+// catch-all) so an admin hub session attaches the authoritative x-hub-* headers and
+// can delete/zip without the separate service2 admin password. Admin/superadmin only,
+// matching the trash routes and the delete policy (managers get view/download only).
+app.post('/service2/api/files/delete', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/zip', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 
 // In-app feedback / diagnostics (issue #1). Intake is any authenticated service2 user
 // (same gate as report submit); management is admin/superadmin only. Registered before
