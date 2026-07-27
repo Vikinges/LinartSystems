@@ -776,7 +776,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.66';
+const SERVICE2_VERSION = '0.67';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -9561,6 +9561,28 @@ ${rows.join('\n')}
       .photo-slot small {
 
         color: #6b7280;
+
+      }
+
+      .photo-slot.drag-over {
+
+        border-color: #2563eb;
+
+        border-style: solid;
+
+        background: #eef2ff;
+
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+
+      }
+
+      .photo-drop-hint {
+
+        color: #6b7280;
+
+        font-size: 0.8rem;
+
+        font-weight: 500;
 
       }
 
@@ -19492,6 +19514,44 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         }
 
+        let activePhotoField = null;
+
+        function isPhotoElementVisible(el) {
+          return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+        }
+
+        // Add dropped/pasted images to a photo field's real <input type=file> (the source of
+        // truth for submission) via a DataTransfer, then refresh the preview. multi appends,
+        // single replaces. Non-image items are ignored; nameless pastes get a filename.
+        function addFilesToPhotoField(fieldName, newFiles) {
+          const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+          if (!input) return;
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          const mode = (container && container.dataset.photoMode) || (input.multiple ? 'multi' : 'single');
+
+          const images = Array.prototype.slice.call(newFiles || [])
+            .filter(function (f) { return f && f.type && f.type.indexOf('image/') === 0; })
+            .map(function (f) {
+              if (f.name) return f;
+              const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+              try {
+                return new File([f], 'pasted-' + Date.now() + '.' + ext, { type: f.type, lastModified: Date.now() });
+              } catch (e) { return f; }
+            });
+          if (!images.length) return;
+
+          let dt;
+          try { dt = new DataTransfer(); } catch (e) { return; }
+          if (mode === 'multi') {
+            Array.prototype.slice.call(input.files || []).forEach(function (f) { dt.items.add(f); });
+            images.forEach(function (f) { dt.items.add(f); });
+          } else {
+            dt.items.add(images[images.length - 1]);
+          }
+          input.files = dt.files;
+          handleFileSelection(fieldName, input.files, mode);
+        }
+
         function setupPhotoUploads() {
 
           document.querySelectorAll('[data-photo-preview]').forEach((container) => {
@@ -19510,7 +19570,73 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             input.addEventListener('change', () => handleFileSelection(fieldName, input.files, mode));
 
+            // Drag & drop onto the whole slot; also mark it active so Ctrl+V routes here.
+            const zone = container.closest('[data-photo-slot]') || container;
+            if (zone.dataset.dropWired !== '1') {
+              zone.dataset.dropWired = '1';
+              const markActive = () => { activePhotoField = fieldName; };
+              zone.addEventListener('mouseenter', markActive);
+              zone.addEventListener('click', markActive);
+              ['dragenter', 'dragover'].forEach((ev) => zone.addEventListener(ev, (e) => {
+                e.preventDefault();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add('drag-over');
+                activePhotoField = fieldName;
+              }));
+              ['dragleave', 'dragend'].forEach((ev) => zone.addEventListener(ev, (e) => {
+                if (ev === 'dragend' || !zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+              }));
+              zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) addFilesToPhotoField(fieldName, files);
+              });
+              const hint = document.createElement('div');
+              hint.className = 'photo-drop-hint';
+              hint.textContent = 'Tip: drag & drop photos here, or paste them with Ctrl+V.';
+              const uploadBtn = zone.querySelector('.upload-button');
+              if (uploadBtn && uploadBtn.parentNode) {
+                uploadBtn.parentNode.insertBefore(hint, uploadBtn.nextSibling);
+              } else {
+                zone.appendChild(hint);
+              }
+            }
+
           });
+
+          // Paste an image anywhere on the form → route it to the active (or first visible)
+          // photo field. Wired once. Non-image pastes fall through to normal text paste.
+          if (!document.__photoPasteWired) {
+            document.__photoPasteWired = true;
+            document.addEventListener('paste', (e) => {
+              const items = (e.clipboardData && e.clipboardData.items) || null;
+              if (!items) return;
+              const imgs = [];
+              for (let i = 0; i < items.length; i += 1) {
+                const it = items[i];
+                if (it && it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+                  const f = it.getAsFile();
+                  if (f) imgs.push(f);
+                }
+              }
+              if (!imgs.length) return;
+              let field = null;
+              if (activePhotoField) {
+                const activeSlot = document.querySelector('[data-photo-slot="' + activePhotoField + '"]');
+                if (activeSlot && isPhotoElementVisible(activeSlot)) field = activePhotoField;
+              }
+              if (!field) {
+                const firstVisible = Array.prototype.slice.call(document.querySelectorAll('[data-photo-slot]'))
+                  .find((slot) => isPhotoElementVisible(slot));
+                if (firstVisible) field = firstVisible.dataset.photoSlot;
+              }
+              if (field) {
+                e.preventDefault();
+                addFilesToPhotoField(field, imgs);
+              }
+            });
+          }
 
         }
 
