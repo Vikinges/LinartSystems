@@ -776,7 +776,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.65';
+const SERVICE2_VERSION = '0.66';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -25585,6 +25585,10 @@ app.post('/internal/sign-completed', requireInternalToken, async (req, res) => {
     return res.json({
       ok: true, type, file: signedFile, placement,
       url: `/api/files/${encodeURIComponent(type)}/${encodeURIComponent(signedFile)}`,
+      // When the signature landed in the customer box, hand the canonical PDF back to
+      // the sign service so the signer downloads the box-placed copy (not a separate
+      // appendix page). Only sent on box placement to keep the payload small.
+      signedPdfBase64: placement === 'customer_box' ? Buffer.from(signedBytes).toString('base64') : undefined,
     });
   } catch (err) {
     console.error('[server] /internal/sign-completed failed', err);

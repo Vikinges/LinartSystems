@@ -639,81 +639,125 @@ app.post('/s/:token/submit', rateLimit, requirePin, async (req, res) => {
   }
 
   try {
-    const pdfBytes = await fs.promises.readFile(sourcePath);
-    const pdfDoc = await PDFDocument.load(pdfBytes);
-    const pages = pdfDoc.getPages();
-    const basePage = pages.length ? pages[0] : pdfDoc.addPage();
-    const { width, height } = basePage.getSize();
-    const page = pdfDoc.addPage([width, height]);
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const titleSize = 20;
-    const textSize = 12;
-    const margin = 48;
-
-    page.drawText('Signature', {
-      x: margin,
-      y: height - margin - titleSize,
-      size: titleSize,
-      font,
-      color: rgb(0.1, 0.1, 0.1),
-    });
-
-    const boxHeight = 160;
-    const boxWidth = width - margin * 2;
-    const boxY = height - margin - titleSize - 24 - boxHeight;
-    page.drawRectangle({
-      x: margin,
-      y: boxY,
-      width: boxWidth,
-      height: boxHeight,
-      borderWidth: 1,
-      borderColor: rgb(0.75, 0.78, 0.82),
-    });
-
-    const image =
-      match[1].toLowerCase().includes('png')
-        ? await pdfDoc.embedPng(signatureBuffer)
-        : await pdfDoc.embedJpg(signatureBuffer);
-    const maxWidth = boxWidth - 24;
-    const maxHeight = boxHeight - 24;
-    const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
-    const sigWidth = image.width * scale;
-    const sigHeight = image.height * scale;
-    const sigX = margin + (boxWidth - sigWidth) / 2;
-    const sigY = boxY + (boxHeight - sigHeight) / 2;
-    page.drawImage(image, {
-      x: sigX,
-      y: sigY,
-      width: sigWidth,
-      height: sigHeight,
-    });
-
     const signedAt = new Date().toISOString();
-    page.drawText(`Signed at: ${signedAt}`, {
-      x: margin,
-      y: boxY - 28,
-      size: textSize,
-      font,
-      color: rgb(0.25, 0.25, 0.25),
-    });
+    let signedBytes = null;
+    let placedInBox = false;
+    let remoteSignedFile = null;
 
-    if (comment) {
-      const lines = wrapText(comment, font, textSize, width - margin * 2);
-      let cursorY = boxY - 52;
-      for (const line of lines.slice(0, 8)) {
-        page.drawText(line, {
-          x: margin,
-          y: cursorY,
-          size: textSize,
-          font,
-          color: rgb(0.2, 0.2, 0.2),
+    // Prefer the canonical, box-placed PDF from service2 when this job carries a source
+    // report — so the signer downloads exactly the report with the signature in the
+    // customer_signature box, identical to the copy stored in Files. Falls back to the
+    // appendix render below for standalone documents or if the callback is unavailable.
+    if (job.report_type && job.report_file && INTERNAL_TOKEN) {
+      try {
+        const cbResp = await fetch(`${SERVICE2_URL}/internal/sign-completed`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-internal-token': INTERNAL_TOKEN },
+          body: JSON.stringify({
+            reportType: job.report_type,
+            reportFile: job.report_file,
+            signatureDataUrl: signatureData,
+            signedAt,
+          }),
         });
-        cursorY -= textSize + 4;
-        if (cursorY < margin) break;
+        const cbData = await cbResp.json().catch(() => ({}));
+        if (cbResp.ok && cbData && cbData.ok) {
+          remoteSignedFile = cbData.file || null;
+          if (cbData.placement === 'customer_box' && typeof cbData.signedPdfBase64 === 'string') {
+            try {
+              signedBytes = Buffer.from(cbData.signedPdfBase64, 'base64');
+              placedInBox = true;
+            } catch (decErr) {
+              console.warn('[sign] could not decode box-placed PDF:', decErr.message);
+            }
+          }
+        } else {
+          console.warn('[sign] sign-completed callback rejected:', cbData && cbData.error);
+        }
+      } catch (cbErr) {
+        console.warn('[sign] sign-completed callback failed:', cbErr.message);
       }
     }
 
-    const signedBytes = await pdfDoc.save();
+    // Fallback: append a dedicated signature page onto the source PDF. Used for
+    // standalone documents, or when the report's customer box was not available.
+    if (!signedBytes) {
+      const pdfBytes = await fs.promises.readFile(sourcePath);
+      const pdfDoc = await PDFDocument.load(pdfBytes);
+      const pages = pdfDoc.getPages();
+      const basePage = pages.length ? pages[0] : pdfDoc.addPage();
+      const { width, height } = basePage.getSize();
+      const page = pdfDoc.addPage([width, height]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const titleSize = 20;
+      const textSize = 12;
+      const margin = 48;
+
+      page.drawText('Signature', {
+        x: margin,
+        y: height - margin - titleSize,
+        size: titleSize,
+        font,
+        color: rgb(0.1, 0.1, 0.1),
+      });
+
+      const boxHeight = 160;
+      const boxWidth = width - margin * 2;
+      const boxY = height - margin - titleSize - 24 - boxHeight;
+      page.drawRectangle({
+        x: margin,
+        y: boxY,
+        width: boxWidth,
+        height: boxHeight,
+        borderWidth: 1,
+        borderColor: rgb(0.75, 0.78, 0.82),
+      });
+
+      const image =
+        match[1].toLowerCase().includes('png')
+          ? await pdfDoc.embedPng(signatureBuffer)
+          : await pdfDoc.embedJpg(signatureBuffer);
+      const maxWidth = boxWidth - 24;
+      const maxHeight = boxHeight - 24;
+      const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
+      const sigWidth = image.width * scale;
+      const sigHeight = image.height * scale;
+      const sigX = margin + (boxWidth - sigWidth) / 2;
+      const sigY = boxY + (boxHeight - sigHeight) / 2;
+      page.drawImage(image, {
+        x: sigX,
+        y: sigY,
+        width: sigWidth,
+        height: sigHeight,
+      });
+
+      page.drawText(`Signed at: ${signedAt}`, {
+        x: margin,
+        y: boxY - 28,
+        size: textSize,
+        font,
+        color: rgb(0.25, 0.25, 0.25),
+      });
+
+      if (comment) {
+        const lines = wrapText(comment, font, textSize, width - margin * 2);
+        let cursorY = boxY - 52;
+        for (const line of lines.slice(0, 8)) {
+          page.drawText(line, {
+            x: margin,
+            y: cursorY,
+            size: textSize,
+            font,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+          cursorY -= textSize + 4;
+          if (cursorY < margin) break;
+        }
+      }
+
+      signedBytes = await pdfDoc.save();
+    }
+
     const signedFilename = `${job.id}_signed.pdf`;
     const signedRelPath = path.posix.join('signed', signedFilename);
     const signedAbsPath = absoluteSharedPath(signedRelPath);
@@ -732,34 +776,11 @@ app.post('/s/:token/submit', rateLimit, requirePin, async (req, res) => {
       audit_ua: String(req.headers['user-agent'] || '').slice(0, 240) || null,
     });
 
-    // If this job carries a source report, ask service2 to draw the signature into
-    // the report's customer_signature box and persist a *_remote-signed copy in Files.
-    // Best-effort: the appendix-page signed PDF above already exists as a fallback.
-    let remoteSignedFile = null;
-    if (job.report_type && job.report_file && INTERNAL_TOKEN) {
-      try {
-        const cbResp = await fetch(`${SERVICE2_URL}/internal/sign-completed`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'x-internal-token': INTERNAL_TOKEN },
-          body: JSON.stringify({
-            reportType: job.report_type,
-            reportFile: job.report_file,
-            signatureDataUrl: signatureData,
-            signedAt,
-          }),
-        });
-        const cbData = await cbResp.json().catch(() => ({}));
-        if (cbResp.ok && cbData && cbData.ok) remoteSignedFile = cbData.file || null;
-        else console.warn('[sign] sign-completed callback rejected:', cbData && cbData.error);
-      } catch (cbErr) {
-        console.warn('[sign] sign-completed callback failed:', cbErr.message);
-      }
-    }
-
     return res.json({
       ok: true,
       downloadUrl: `/s/${encodeURIComponent(token)}/download`,
       remoteSignedFile,
+      placedInBox,
     });
   } catch (err) {
     console.error('[sign] Failed to embed signature', err);

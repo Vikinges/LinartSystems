@@ -724,6 +724,13 @@
             copyBtn.textContent = 'Copy link';
             copyBtn.hidden = true;
 
+            // One-click: copy a ready-to-send message (link + PIN + expiry) for the client.
+            const copyMsgBtn = document.createElement('button');
+            copyMsgBtn.type = 'button';
+            copyMsgBtn.className = 'button primary small';
+            copyMsgBtn.textContent = 'Copy link + PIN';
+            copyMsgBtn.hidden = true;
+
             const openBtn = document.createElement('a');
             openBtn.className = 'button secondary small';
             openBtn.textContent = 'Open link';
@@ -742,6 +749,8 @@
               rowStatus.textContent = message || '';
               rowStatus.classList.toggle('error', Boolean(isError));
             };
+
+            let signInfo = null;
 
             signBtn.addEventListener('click', async () => {
               signBtn.disabled = true;
@@ -771,6 +780,8 @@
                 openBtn.hidden = !linkValue;
                 meta.textContent = payload.expiresAt ? `Expires ${formatDate(payload.expiresAt)}` : '';
                 meta.hidden = !meta.textContent;
+                signInfo = { url: linkValue, pin: payload.pin || '', expiresAt: payload.expiresAt || '' };
+                copyMsgBtn.hidden = false;
                 setRowStatus('Link ready.');
               } catch (err) {
                 setRowStatus(err && err.message ? err.message : 'Unable to create link.', true);
@@ -784,11 +795,25 @@
               setRowStatus(ok ? 'Copied.' : 'Copy failed.', !ok);
             });
 
+            copyMsgBtn.addEventListener('click', async () => {
+              if (!signInfo || !signInfo.url) return;
+              const lines = [
+                'Please review and sign the document:',
+                '',
+                signInfo.url,
+              ];
+              if (signInfo.pin) lines.push(`PIN: ${signInfo.pin}`);
+              if (signInfo.expiresAt) lines.push(`Valid until: ${formatDate(signInfo.expiresAt)}`);
+              const ok = await copyText(lines.join('\n'), linkInput);
+              setRowStatus(ok ? 'Link + PIN copied — ready to send.' : 'Copy failed.', !ok);
+            });
+
             actionsWrap.appendChild(ttlWrap);
             actionsWrap.appendChild(signBtn);
             actionsWrap.appendChild(linkInput);
             actionsWrap.appendChild(pinLabel);
             actionsWrap.appendChild(copyBtn);
+            actionsWrap.appendChild(copyMsgBtn);
             actionsWrap.appendChild(openBtn);
             actionsWrap.appendChild(meta);
             actionsWrap.appendChild(rowStatus);
