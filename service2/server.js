@@ -776,7 +776,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.67';
+const SERVICE2_VERSION = '0.68';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -9696,6 +9696,164 @@ ${rows.join('\n')}
 
       }
 
+      .photo-item-thumb {
+
+        position: relative;
+
+        line-height: 0;
+
+      }
+
+      .photo-item-remove,
+      .photo-item-zoom {
+
+        position: absolute;
+
+        border: none;
+
+        color: #ffffff;
+
+        cursor: pointer;
+
+        opacity: 0;
+
+        transition: opacity 0.15s ease, background 0.15s ease;
+
+        z-index: 2;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 0;
+
+      }
+
+      .photo-item-remove {
+
+        top: 6px;
+
+        right: 6px;
+
+        width: 24px;
+
+        height: 24px;
+
+        border-radius: 50%;
+
+        background: rgba(17, 24, 39, 0.72);
+
+        font-size: 16px;
+
+      }
+
+      .photo-item-remove:hover {
+
+        background: #dc2626;
+
+      }
+
+      .photo-item-zoom {
+
+        top: 50%;
+
+        left: 50%;
+
+        transform: translate(-50%, -50%);
+
+        width: 40px;
+
+        height: 40px;
+
+        border-radius: 50%;
+
+        background: rgba(17, 24, 39, 0.6);
+
+        font-size: 18px;
+
+      }
+
+      .photo-item-zoom:hover {
+
+        background: rgba(17, 24, 39, 0.88);
+
+      }
+
+      .photo-item-thumb:hover .photo-item-remove,
+      .photo-item-thumb:hover .photo-item-zoom,
+      .photo-item-thumb:focus-within .photo-item-remove,
+      .photo-item-thumb:focus-within .photo-item-zoom {
+
+        opacity: 1;
+
+      }
+
+      .photo-lightbox {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 1000;
+
+        background: rgba(0, 0, 0, 0.82);
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 24px;
+
+      }
+
+      .photo-lightbox[hidden] {
+
+        display: none;
+
+      }
+
+      .photo-lightbox img {
+
+        max-width: 95vw;
+
+        max-height: 90vh;
+
+        border-radius: 8px;
+
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+
+      }
+
+      .photo-lightbox-close {
+
+        position: absolute;
+
+        top: 16px;
+
+        right: 20px;
+
+        width: 40px;
+
+        height: 40px;
+
+        border-radius: 50%;
+
+        border: none;
+
+        background: rgba(255, 255, 255, 0.16);
+
+        color: #ffffff;
+
+        font-size: 24px;
+
+        cursor: pointer;
+
+      }
+
       .signature-info {
 
         margin-bottom: 0.5rem;
@@ -17191,7 +17349,107 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         }
 
+        // Remove one photo (by index) from a field's real <input type=file> via a
+        // DataTransfer, then refresh the preview — mirrors how photos are added.
+        function removePhotoAt(fieldName, index) {
+          const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+          if (!input) return;
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          const mode = (container && container.dataset.photoMode) || (input.multiple ? 'multi' : 'single');
+          const kept = Array.prototype.slice.call(input.files || []).filter(function (_f, i) { return i !== index; });
+          let dt;
+          try { dt = new DataTransfer(); } catch (e) { return; }
+          kept.forEach(function (f) { dt.items.add(f); });
+          input.files = dt.files;
+          handleFileSelection(fieldName, input.files, mode);
+        }
 
+        // Full-size preview overlay (single reused element). Click backdrop/×/Esc to close.
+        function openPhotoLightbox(src, name) {
+          let ov = document.querySelector('[data-photo-lightbox]');
+          if (!ov) {
+            ov = document.createElement('div');
+            ov.dataset.photoLightbox = 'true';
+            ov.className = 'photo-lightbox';
+            ov.hidden = true;
+            const img = document.createElement('img');
+            img.dataset.photoLightboxImg = 'true';
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'photo-lightbox-close';
+            close.setAttribute('aria-label', 'Close');
+            close.textContent = '×';
+            ov.appendChild(close);
+            ov.appendChild(img);
+            document.body.appendChild(ov);
+            // Clear the src on close so the overlay never keeps a blob URL that a later
+            // photo removal revokes (which would log a broken-image error).
+            const hide = function () { ov.hidden = true; img.removeAttribute('src'); };
+            ov.addEventListener('click', function (e) { if (e.target === ov || e.target === close) hide(); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) hide(); });
+          }
+          const img = ov.querySelector('[data-photo-lightbox-img]');
+          img.src = src;
+          img.alt = name || '';
+          ov.hidden = false;
+        }
+
+        // Build one preview tile: thumbnail + hover controls (× remove, magnifier preview)
+        // + caption. Pushes the created object URL into urls for later revocation.
+        function buildPhotoPreviewItem(fieldName, file, mode, index, urls) {
+          const item = document.createElement('div');
+          item.className = 'photo-preview-item';
+
+          const thumb = document.createElement('div');
+          thumb.className = 'photo-item-thumb';
+
+          const img = document.createElement('img');
+          const url = URL.createObjectURL(file);
+          urls.push(url);
+          img.src = url;
+          img.alt = file.name;
+          img.onerror = function () {
+            URL.revokeObjectURL(url);
+            const reader = new FileReader();
+            reader.onload = function () { img.src = reader.result; };
+            reader.readAsDataURL(file);
+          };
+
+          const zoomBtn = document.createElement('button');
+          zoomBtn.type = 'button';
+          zoomBtn.className = 'photo-item-zoom';
+          zoomBtn.title = 'Preview';
+          zoomBtn.setAttribute('aria-label', 'Preview photo');
+          zoomBtn.textContent = '🔍';
+          zoomBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openPhotoLightbox(img.src, file.name);
+          });
+
+          const removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'photo-item-remove';
+          removeBtn.title = 'Remove';
+          removeBtn.setAttribute('aria-label', 'Remove photo');
+          removeBtn.textContent = '×';
+          removeBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            removePhotoAt(fieldName, index);
+          });
+
+          thumb.appendChild(img);
+          thumb.appendChild(zoomBtn);
+          thumb.appendChild(removeBtn);
+
+          const caption = document.createElement('span');
+          caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+
+          item.appendChild(thumb);
+          item.appendChild(caption);
+          return item;
+        }
 
         function renderPreview(fieldName, files, mode) {
 
@@ -17199,9 +17457,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           if (!container) return;
 
-          revokePreviewUrls(fieldName);
-
+          // Clear the DOM first, then revoke the old object URLs — revoking while the old
+          // <img> tags are still attached makes the browser log ERR_FILE_NOT_FOUND for them.
           container.innerHTML = '';
+
+          revokePreviewUrls(fieldName);
 
           if (!files || !files.length) {
 
@@ -17227,47 +17487,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             list.className = 'photo-preview-list';
 
-            files.forEach((file) => {
+            files.forEach((file, index) => {
 
-              const item = document.createElement('div');
-
-              item.className = 'photo-preview-item';
-
-              const img = document.createElement('img');
-
-              const url = URL.createObjectURL(file);
-
-              urls.push(url);
-
-              img.src = url;
-
-              img.alt = file.name;
-
-              img.onerror = () => {
-
-                URL.revokeObjectURL(url);
-
-                const reader = new FileReader();
-
-                reader.onload = () => {
-
-                  img.src = reader.result;
-
-                };
-
-                reader.readAsDataURL(file);
-
-              };
-
-              const caption = document.createElement('span');
-
-              caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
-
-              item.appendChild(img);
-
-              item.appendChild(caption);
-
-              list.appendChild(item);
+              list.appendChild(buildPhotoPreviewItem(fieldName, file, mode, index, urls));
 
             });
 
@@ -17277,45 +17499,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const file = files[0];
 
-            const item = document.createElement('div');
-
-            item.className = 'photo-preview-item';
-
-            const img = document.createElement('img');
-
-            const url = URL.createObjectURL(file);
-
-            urls.push(url);
-
-            img.src = url;
-
-            img.alt = file.name;
-
-            img.onerror = () => {
-
-              URL.revokeObjectURL(url);
-
-              const reader = new FileReader();
-
-              reader.onload = () => {
-
-                img.src = reader.result;
-
-              };
-
-              reader.readAsDataURL(file);
-
-            };
-
-            const caption = document.createElement('span');
-
-            caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
-
-            item.appendChild(img);
-
-            item.appendChild(caption);
-
-            container.appendChild(item);
+            container.appendChild(buildPhotoPreviewItem(fieldName, file, mode, 0, urls));
 
           }
 
