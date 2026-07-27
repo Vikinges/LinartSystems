@@ -782,7 +782,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.69';
+const SERVICE2_VERSION = '0.70';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -10087,6 +10087,24 @@ ${rows.join('\n')}
       }
 
       .fb-attach-preview audio { height: 36px; max-width: 220px; }
+
+      .fb-hint {
+
+        margin: 0;
+
+        font-size: 0.8rem;
+
+        color: #6b7280;
+
+        background: #f3f4f6;
+
+        border-radius: 8px;
+
+        padding: 8px 10px;
+
+      }
+
+      .fb-hint b { color: #374151; }
 
       .fb-chip {
 
@@ -21936,6 +21954,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             <button type="button" class="fb-attach-btn" id="fb-record">&#127908; Record voice</button>
             <label class="fb-attach-btn">&#127911; Audio file<input type="file" id="fb-audio-file" accept="audio/*" hidden></label>
           </div>
+          <p class="fb-hint">&#128161; Tip: copy an image or file and press <b>Ctrl+V</b> here to attach it. On Windows, press <b>Win+Shift+S</b> to capture part of the screen, then <b>Ctrl+V</b> in this window.</p>
           <div id="fb-attach-preview" class="fb-attach-preview"></div>
           <div class="fb-actions">
             <button type="button" class="fb-send" id="fb-send">Send to support</button>
@@ -21961,6 +21980,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         let kind = 'bug';
         let photos = [];      // File[]
+        let photoUrls = [];   // object URLs currently shown (revoked on re-render)
         let audioBlob = null; // Blob (recorded or picked)
         let audioName = '';
         let mediaRecorder = null;
@@ -21987,14 +22007,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         const revokeRec = () => { if (recUrl) { URL.revokeObjectURL(recUrl); recUrl = null; } };
 
         function renderPreview() {
+          // Clear the DOM first, then revoke the previous object URLs (revoking while the
+          // old <img> tags are still attached logs broken-image errors on quick re-renders).
           preview.innerHTML = '';
+          photoUrls.forEach((u) => URL.revokeObjectURL(u));
+          photoUrls = [];
           photos.forEach((file, i) => {
             const wrap = document.createElement('span');
             wrap.className = 'fb-chip';
             const img = document.createElement('img');
             const u = URL.createObjectURL(file);
+            photoUrls.push(u);
             img.src = u;
-            img.onload = () => URL.revokeObjectURL(u);
             const rm = document.createElement('button');
             rm.type = 'button';
             rm.textContent = '\\u00d7';
@@ -22033,6 +22057,32 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           if (f) { audioBlob = f; audioName = f.name || 'audio'; }
           audioFileInput.value = '';
           renderPreview();
+        });
+
+        // Paste (Ctrl+V) an image/file from the clipboard while the dialog is open — e.g. a
+        // screenshot taken with Win+Shift+S. Non-file pastes fall through to normal text paste.
+        document.addEventListener('paste', (e) => {
+          if (overlay.hidden) return;
+          const items = (e.clipboardData && e.clipboardData.items) || null;
+          if (!items) return;
+          let added = 0;
+          for (let i = 0; i < items.length; i += 1) {
+            const it = items[i];
+            if (!it || it.kind !== 'file') continue;
+            const f = it.getAsFile();
+            if (!f) continue;
+            const type = String(f.type || '').toLowerCase();
+            if (type.indexOf('image/') === 0) {
+              if (photos.length < 10) { photos.push(f); added += 1; }
+            } else if (type.indexOf('audio/') === 0) {
+              audioBlob = f; audioName = f.name || 'audio'; added += 1;
+            }
+          }
+          if (added) {
+            e.preventDefault();
+            renderPreview();
+            setStatus(added + ' attachment(s) pasted.', 'ok');
+          }
         });
 
         recordBtn.addEventListener('click', async () => {
