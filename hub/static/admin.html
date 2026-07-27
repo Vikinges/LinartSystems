@@ -125,6 +125,9 @@
     .chat-kind.warn { background: #fde8e4; color: #b3341f; }
     .fb-message { white-space: pre-wrap; word-break: break-word; background: #f7f9fc; border: 1px solid #eef2f8; border-radius: 8px; padding: 10px 12px; margin: 8px 0; }
     .fb-context { white-space: pre; overflow: auto; max-height: 260px; background: #0f1b2d; color: #dbe6f5; border-radius: 8px; padding: 10px 12px; font-size: 0.78rem; margin: 8px 0; }
+    .fb-attachments { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+    .fb-attach-img { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; border: 1px solid #e0e6f0; cursor: zoom-in; background: #f3f4f6; }
+    .fb-attach-audio { height: 40px; max-width: 320px; }
     .chat-att a { color: #2563eb; font-size: 0.85rem; }
     @media (max-width: 760px) {
       body { padding: 16px; }
@@ -1565,17 +1568,38 @@
           fbViewer.appendChild(pre);
         }
 
+        const media = document.createElement('div');
+        media.className = 'fb-attachments';
         const links = document.createElement('div');
         links.className = 'actions';
         (fb.attachments || []).forEach((a, i) => {
+          const src = '/service2' + a.url;
+          const mime = String(a.mime || '').toLowerCase();
+          if (mime.startsWith('image/')) {
+            const img = document.createElement('img');
+            img.className = 'fb-attach-img';
+            img.src = src;
+            img.alt = a.name || ('attachment ' + (i + 1));
+            img.title = 'Open full size';
+            img.addEventListener('click', () => window.open(src, '_blank', 'noopener'));
+            media.appendChild(img);
+          } else if (mime.startsWith('audio/')) {
+            const audio = document.createElement('audio');
+            audio.className = 'fb-attach-audio';
+            audio.controls = true;
+            audio.preload = 'metadata';
+            audio.src = src;
+            media.appendChild(audio);
+          }
           const link = document.createElement('a');
           link.className = 'button';
-          link.href = '/service2' + a.url;
+          link.href = src;
           link.target = '_blank';
           link.rel = 'noopener';
           link.textContent = '⤓ ' + (a.name || ('attachment ' + (i + 1)));
           links.appendChild(link);
         });
+        if (media.children.length) fbViewer.appendChild(media);
         if (fb.logsUrl) {
           const l = document.createElement('a');
           l.className = 'button'; l.href = '/service2' + fb.logsUrl; l.target = '_blank'; l.rel = 'noopener';

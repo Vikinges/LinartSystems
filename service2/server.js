@@ -704,6 +704,12 @@ function feedbackAttachmentExt(mime) {
   if (m === 'application/pdf') return 'pdf';
   if (m === 'application/json') return 'json';
   if (m.startsWith('text/')) return 'txt';
+  if (m === 'audio/webm') return 'webm';
+  if (m === 'audio/mp4' || m === 'audio/x-m4a' || m === 'audio/m4a') return 'm4a';
+  if (m === 'audio/mpeg' || m === 'audio/mp3') return 'mp3';
+  if (m === 'audio/ogg' || m === 'audio/oga') return 'ogg';
+  if (m === 'audio/wav' || m === 'audio/x-wav' || m === 'audio/wave') return 'wav';
+  if (m.startsWith('audio/')) return 'audio';
   return 'bin';
 }
 
@@ -776,7 +782,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.68';
+const SERVICE2_VERSION = '0.69';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -9853,6 +9859,282 @@ ${rows.join('\n')}
         cursor: pointer;
 
       }
+
+      .fb-fab {
+
+        position: fixed;
+
+        right: 20px;
+
+        bottom: 20px;
+
+        width: 58px;
+
+        height: 58px;
+
+        border: none;
+
+        background: transparent;
+
+        cursor: pointer;
+
+        z-index: 900;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+
+        transition: transform 0.12s ease;
+
+      }
+
+      .fb-fab:hover { transform: translateY(-2px) scale(1.04); }
+
+      .fb-fab-tri { width: 58px; height: 58px; }
+
+      .fb-fab-hand {
+
+        position: absolute;
+
+        top: 54%;
+
+        left: 50%;
+
+        transform: translate(-50%, -50%);
+
+        font-size: 20px;
+
+        pointer-events: none;
+
+      }
+
+      .fb-overlay {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 1000;
+
+        background: rgba(15, 23, 42, 0.55);
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 16px;
+
+      }
+
+      .fb-overlay[hidden] { display: none; }
+
+      .fb-dialog {
+
+        width: 100%;
+
+        max-width: 480px;
+
+        background: #ffffff;
+
+        border-radius: 14px;
+
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+
+        overflow: hidden;
+
+        max-height: 90vh;
+
+        display: flex;
+
+        flex-direction: column;
+
+      }
+
+      .fb-dialog-head {
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: space-between;
+
+        padding: 14px 16px;
+
+        background: #c8102e;
+
+        color: #ffffff;
+
+      }
+
+      .fb-close {
+
+        border: none;
+
+        background: transparent;
+
+        color: #ffffff;
+
+        font-size: 22px;
+
+        cursor: pointer;
+
+        line-height: 1;
+
+      }
+
+      .fb-dialog-body {
+
+        padding: 16px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 12px;
+
+        overflow-y: auto;
+
+      }
+
+      .fb-types { display: flex; gap: 8px; }
+
+      .fb-type {
+
+        flex: 1;
+
+        padding: 0.5rem 0.75rem;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 999px;
+
+        background: #f9fafb;
+
+        cursor: pointer;
+
+        font-weight: 600;
+
+      }
+
+      .fb-type.is-active { background: #c8102e; color: #ffffff; border-color: #c8102e; }
+
+      .fb-dialog-body textarea {
+
+        width: 100%;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 10px;
+
+        padding: 0.6rem 0.75rem;
+
+        font: inherit;
+
+        resize: vertical;
+
+        min-height: 84px;
+
+      }
+
+      .fb-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+      .fb-attach-btn {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 6px;
+
+        padding: 0.5rem 0.9rem;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 999px;
+
+        background: #f3f4f6;
+
+        cursor: pointer;
+
+        font-weight: 500;
+
+        font-size: 0.9rem;
+
+      }
+
+      .fb-attach-btn.is-recording { background: #fee2e2; border-color: #dc2626; color: #b91c1c; }
+
+      .fb-attach-preview { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+      .fb-attach-preview img {
+
+        width: 64px;
+
+        height: 64px;
+
+        object-fit: cover;
+
+        border-radius: 8px;
+
+        border: 1px solid #e5e7eb;
+
+      }
+
+      .fb-attach-preview audio { height: 36px; max-width: 220px; }
+
+      .fb-chip {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 6px;
+
+        background: #eef2ff;
+
+        border-radius: 999px;
+
+        padding: 2px 6px 2px 10px;
+
+        font-size: 0.8rem;
+
+      }
+
+      .fb-chip button { border: none; background: transparent; cursor: pointer; font-size: 14px; color: #6b7280; }
+
+      .fb-actions { display: flex; align-items: center; gap: 12px; }
+
+      .fb-send {
+
+        padding: 0.6rem 1.2rem;
+
+        border: none;
+
+        border-radius: 999px;
+
+        background: #c8102e;
+
+        color: #ffffff;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+      }
+
+      .fb-send:disabled { opacity: 0.6; cursor: default; }
+
+      .fb-status { font-size: 0.85rem; color: #6b7280; }
+
+      .fb-status.error { color: #dc2626; }
+
+      .fb-status.ok { color: #059669; }
 
       .signature-info {
 
@@ -21633,6 +21915,192 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
     </script>
 
+    <button type="button" id="fb-fab" class="fb-fab" title="Report a problem or idea" aria-label="Report a problem or idea">
+      <svg class="fb-fab-tri" viewBox="0 0 40 36" aria-hidden="true"><path d="M20 3 L37 32 H3 Z" fill="#ffffff" stroke="#c8102e" stroke-width="2.6" stroke-linejoin="round"/></svg>
+      <span class="fb-fab-hand" aria-hidden="true">&#9995;</span>
+    </button>
+    <div id="fb-overlay" class="fb-overlay" hidden>
+      <div class="fb-dialog" role="dialog" aria-modal="true" aria-label="Send feedback to support">
+        <div class="fb-dialog-head">
+          <strong>Report a problem or idea</strong>
+          <button type="button" class="fb-close" id="fb-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="fb-dialog-body">
+          <div class="fb-types">
+            <button type="button" class="fb-type is-active" data-fb-kind="bug">&#128736; Problem</button>
+            <button type="button" class="fb-type" data-fb-kind="idea">&#128161; Idea</button>
+          </div>
+          <textarea id="fb-message" rows="4" placeholder="Describe the problem or your idea..."></textarea>
+          <div class="fb-row">
+            <label class="fb-attach-btn">&#128247; Add photos<input type="file" id="fb-photos" accept="image/*" multiple hidden></label>
+            <button type="button" class="fb-attach-btn" id="fb-record">&#127908; Record voice</button>
+            <label class="fb-attach-btn">&#127911; Audio file<input type="file" id="fb-audio-file" accept="audio/*" hidden></label>
+          </div>
+          <div id="fb-attach-preview" class="fb-attach-preview"></div>
+          <div class="fb-actions">
+            <button type="button" class="fb-send" id="fb-send">Send to support</button>
+            <span id="fb-status" class="fb-status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const fab = document.getElementById('fb-fab');
+        const overlay = document.getElementById('fb-overlay');
+        if (!fab || !overlay) return;
+        const closeBtn = document.getElementById('fb-close');
+        const messageEl = document.getElementById('fb-message');
+        const photosInput = document.getElementById('fb-photos');
+        const audioFileInput = document.getElementById('fb-audio-file');
+        const recordBtn = document.getElementById('fb-record');
+        const preview = document.getElementById('fb-attach-preview');
+        const sendBtn = document.getElementById('fb-send');
+        const statusEl = document.getElementById('fb-status');
+        const typeBtns = Array.prototype.slice.call(document.querySelectorAll('.fb-type'));
+
+        let kind = 'bug';
+        let photos = [];      // File[]
+        let audioBlob = null; // Blob (recorded or picked)
+        let audioName = '';
+        let mediaRecorder = null;
+        let recChunks = [];
+        let recUrl = null;
+
+        const setStatus = (msg, cls) => { statusEl.textContent = msg || ''; statusEl.className = 'fb-status' + (cls ? ' ' + cls : ''); };
+
+        const open = () => { overlay.hidden = false; setStatus(''); messageEl.focus(); };
+        const close = () => {
+          overlay.hidden = true;
+          if (mediaRecorder && mediaRecorder.state === 'recording') { try { mediaRecorder.stop(); } catch (e) {} }
+        };
+        fab.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
+
+        typeBtns.forEach((b) => b.addEventListener('click', () => {
+          kind = b.dataset.fbKind || 'bug';
+          typeBtns.forEach((x) => x.classList.toggle('is-active', x === b));
+        }));
+
+        const revokeRec = () => { if (recUrl) { URL.revokeObjectURL(recUrl); recUrl = null; } };
+
+        function renderPreview() {
+          preview.innerHTML = '';
+          photos.forEach((file, i) => {
+            const wrap = document.createElement('span');
+            wrap.className = 'fb-chip';
+            const img = document.createElement('img');
+            const u = URL.createObjectURL(file);
+            img.src = u;
+            img.onload = () => URL.revokeObjectURL(u);
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.textContent = '\\u00d7';
+            rm.title = 'Remove';
+            rm.addEventListener('click', () => { photos.splice(i, 1); renderPreview(); });
+            wrap.appendChild(img);
+            wrap.appendChild(rm);
+            preview.appendChild(wrap);
+          });
+          if (audioBlob) {
+            const chip = document.createElement('span');
+            chip.className = 'fb-chip';
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            revokeRec();
+            recUrl = URL.createObjectURL(audioBlob);
+            audio.src = recUrl;
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.textContent = '\\u00d7';
+            rm.title = 'Remove voice';
+            rm.addEventListener('click', () => { audioBlob = null; audioName = ''; revokeRec(); renderPreview(); });
+            chip.appendChild(audio);
+            chip.appendChild(rm);
+            preview.appendChild(chip);
+          }
+        }
+
+        photosInput.addEventListener('change', () => {
+          Array.prototype.slice.call(photosInput.files || []).forEach((f) => { if (photos.length < 10) photos.push(f); });
+          photosInput.value = '';
+          renderPreview();
+        });
+        audioFileInput.addEventListener('change', () => {
+          const f = (audioFileInput.files || [])[0];
+          if (f) { audioBlob = f; audioName = f.name || 'audio'; }
+          audioFileInput.value = '';
+          renderPreview();
+        });
+
+        recordBtn.addEventListener('click', async () => {
+          if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
+          if (!navigator.mediaDevices || !window.MediaRecorder) { setStatus('Recording not supported in this browser — attach an audio file instead.', 'error'); return; }
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+              stream.getTracks().forEach((t) => t.stop());
+              audioBlob = new Blob(recChunks, { type: (mediaRecorder.mimeType || 'audio/webm') });
+              audioName = 'voice-message';
+              recordBtn.classList.remove('is-recording');
+              recordBtn.innerHTML = '\\ud83c\\udf99 Record voice';
+              renderPreview();
+            };
+            mediaRecorder.start();
+            recordBtn.classList.add('is-recording');
+            recordBtn.innerHTML = '\\u23f9 Stop recording';
+            setStatus('Recording... tap Stop when done.');
+          } catch (e) {
+            setStatus('Microphone access denied.', 'error');
+          }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+          const message = (messageEl.value || '').trim();
+          if (!message && !photos.length && !audioBlob) { setStatus('Add a message, a photo, or a voice note.', 'error'); return; }
+          sendBtn.disabled = true;
+          setStatus('Sending...');
+          try {
+            const fd = new FormData();
+            fd.append('kind', kind);
+            fd.append('message', message);
+            let formType = '';
+            try { const el = document.querySelector('[name="template_type"]'); if (el) formType = el.value || ''; } catch (e) {}
+            fd.append('context', JSON.stringify({ source: 'web_form', formType: formType, page: location.pathname, userAgent: navigator.userAgent }));
+            photos.forEach((f, i) => fd.append('photo_' + i, f, f.name || ('photo_' + i + '.jpg')));
+            if (audioBlob) {
+              let fname;
+              if (audioName && /\.[a-z0-9]{2,4}$/i.test(audioName)) {
+                fname = audioName; // picked file already carries an extension
+              } else {
+                const ext = (audioBlob.type && audioBlob.type.indexOf('mp4') >= 0) ? 'm4a' : (audioBlob.type && audioBlob.type.indexOf('ogg') >= 0 ? 'ogg' : 'webm');
+                fname = (audioName || 'voice') + '.' + ext;
+              }
+              fd.append('voice', audioBlob, fname);
+            }
+            const fbUrl = new URL('api/feedback', new URL('.', window.location.href)).toString();
+            const resp = await fetch(fbUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) throw new Error((data && data.error) || ('HTTP ' + resp.status));
+            setStatus('Sent — thank you!', 'ok');
+            messageEl.value = '';
+            photos = []; audioBlob = null; audioName = ''; revokeRec();
+            renderPreview();
+            setTimeout(close, 900);
+          } catch (e) {
+            setStatus('Could not send: ' + (e && e.message ? e.message : 'error'), 'error');
+          } finally {
+            sendBtn.disabled = false;
+          }
+        });
+      })();
+    </script>
+
   </body>
 
 </html>`);
@@ -21702,6 +22170,8 @@ app.use(
         styleSrc: ["'self'", "'unsafe-inline'"],
 
         imgSrc: ["'self'", "data:", "blob:"],
+
+        mediaSrc: ["'self'", "data:", "blob:"],
 
         connectSrc: ["'self'", OCR_CDN_HOST, OCR_DATA_HOST, 'data:', 'blob:'],
 
@@ -24198,7 +24668,7 @@ const feedbackUpload = multer({
   limits: { fileSize: 10 * 1024 * 1024, files: 12 },
   fileFilter: (req, file, cb) => {
     const m = String(file.mimetype || '').toLowerCase();
-    const ok = m.startsWith('image/') || m === 'application/pdf' || m.startsWith('text/') || m === 'application/json';
+    const ok = m.startsWith('image/') || m.startsWith('audio/') || m === 'application/pdf' || m.startsWith('text/') || m === 'application/json';
     if (!ok) { const e = new Error('Unsupported feedback attachment type.'); e.statusCode = 400; return cb(e); }
     return cb(null, true);
   },
@@ -24278,12 +24748,12 @@ app.get(['/api/feedback/admin/:id/attachments/:name', '/service2/api/feedback/ad
   const filePath = safeResolvePath(attachDir, path.join(attachDir, sanitizeFilename(req.params.name || '')));
   if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'attachment_not_found' });
   const ext = path.extname(filePath).toLowerCase();
-  const mime = ext === '.png' ? 'image/png'
-    : (ext === '.jpg' ? 'image/jpeg'
-    : (ext === '.webp' ? 'image/webp'
-    : (ext === '.heic' ? 'image/heic'
-    : (ext === '.pdf' ? 'application/pdf'
-    : (ext === '.json' ? 'application/json' : 'application/octet-stream')))));
+  const MIME_BY_EXT = {
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
+    '.heic': 'image/heic', '.pdf': 'application/pdf', '.json': 'application/json', '.txt': 'text/plain',
+    '.webm': 'audio/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
+  };
+  const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
   res.setHeader('Content-Type', mime);
   res.setHeader('Cache-Control', 'private, max-age=3600');
   // dotfiles:'allow' — the path lives under out/.feedback/ and sendFile ignores dotdirs by default.
