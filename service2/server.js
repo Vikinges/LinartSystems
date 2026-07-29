@@ -237,6 +237,20 @@ function normalizeReportStatus(s) {
   return REPORT_STATUSES.includes(s) ? s : 'submitted';
 }
 
+// Count the distinct signatures present on a report from its meta — a signature is
+// "present" if it was drawn (signaturePlacements) or persisted for edit (signatureFiles).
+// Returns 0..2 (engineer_signature, customer_signature).
+function countReportSignatures(meta) {
+  const names = new Set();
+  if (meta && Array.isArray(meta.signaturePlacements)) {
+    meta.signaturePlacements.forEach((s) => { if (s && s.acroName) names.add(String(s.acroName)); });
+  }
+  if (meta && meta.signatureFiles && typeof meta.signatureFiles === 'object') {
+    Object.keys(meta.signatureFiles).forEach((k) => names.add(String(k)));
+  }
+  return names.size;
+}
+
 function buildFileListEntry(meta, type, fallbackFilename) {
   if (!meta || typeof meta !== 'object') return null;
   const templateType = normalizeQueryText(meta.templateType) || normalizeQueryText(type);
@@ -273,6 +287,8 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
     photoCount: Array.isArray(meta.photoFiles) ? meta.photoFiles.length : 0,
+    // Distinct signatures actually present on the report (engineer/customer) → 0, 1 or 2.
+    signatureCount: countReportSignatures(meta),
     submittedBy: (function () {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
@@ -782,7 +798,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.70';
+const SERVICE2_VERSION = '0.71';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -24427,6 +24443,7 @@ async function readFileDataResponse(type, filename) {
     signaturesRestored,
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
+    signatureCount: countReportSignatures(meta),
     photos,
     fields: rb,
   };
