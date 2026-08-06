@@ -3127,11 +3127,19 @@ async function relayToAssistant(convId, text, username) {
   for (const c of sseClients) {
     if (c.user === username) ssePush(c, 'chat', { conversationId: convId, message });
   }
-  // Notify when the app is backgrounded (app suppresses for the active chat).
-  sendPushToUser(username, {
-    aps: { alert: { title: 'AI Assistant', body: answer.slice(0, 160) }, sound: 'default' },
-    kind: 'chat', conversationId: convId,
-  }, 'alert').catch(() => {});
+  // Notify when the app is backgrounded (app suppresses for the active chat) — unless the user
+  // muted their AI Assistant conversation.
+  if (!isConversationMuted(conv, username)) {
+    sendPushToUser(username, {
+      aps: { alert: { title: 'AI Assistant', body: answer.slice(0, 160) }, sound: 'default' },
+      kind: 'chat', conversationId: convId,
+    }, 'alert').catch(() => {});
+  }
+}
+
+// Per-(user, conversation) notification mute. Stored like reads: conv.mutes[username] = true.
+function isConversationMuted(conv, username) {
+  return !!(conv && conv.mutes && conv.mutes[username]);
 }
 
 function conversationPayload(conv, username) {
@@ -3152,7 +3160,7 @@ function conversationPayload(conv, username) {
     lastMessage: last,
     unreadCount,
     lastReadAt,
-    muted: false,
+    muted: isConversationMuted(conv, username),
   };
 }
 
@@ -3432,6 +3440,24 @@ app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.s
       ssePush(c, 'chat', { conversationId: conv.id, message });
     }
   }
+  // APNs to other members so they're notified when the app is backgrounded/closed. Skip the
+  // sender and anyone who muted this conversation (the app suppresses the banner for the chat
+  // that's currently open). Fire-and-forget; no-op if APNs isn't configured.
+  try {
+    const recipients = (conv.memberUsernames || [])
+      .filter((u) => u && u !== user.username && !isConversationMuted(conv, u));
+    if (recipients.length) {
+      const bodyText = text
+        ? text
+        : (file ? `📎 ${(message.attachment && message.attachment.name) || 'attachment'}` : 'New message');
+      const payload = {
+        aps: { alert: { title: conv.title || 'New message', body: `${message.authorDisplayName}: ${bodyText}`.slice(0, 180) }, sound: 'default' },
+        kind: 'chat',
+        conversationId: conv.id,
+      };
+      for (const u of recipients) sendPushToUser(u, payload, 'alert').catch(() => {});
+    }
+  } catch (e) { /* never block the message on push */ }
   // AI Assistant DM: relay the user's message to the platform and post the answer back
   // (fire-and-forget so the user's own message returns immediately).
   if (conv.assistant && message.authorId !== ASSISTANT_AUTHOR && text) {
@@ -3468,6 +3494,24 @@ app.post('/api/chat/conversations/:id/read', (req, res) => {
   conv.reads[user.username] = new Date().toISOString();
   saveChatIndex(index);
   return res.json({ ok: true });
+});
+
+// Mute / unmute a conversation for the requesting user. Muted conversations don't send that
+// user an APNs push (the badge/unread still updates when they open the app). Persisted per
+// (user, conversation) so it survives app restarts / reinstalls.
+app.post('/api/chat/conversations/:id/mute', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const conv = index.find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  const muted = !!(req.body && req.body.muted);
+  if (!conv.mutes) conv.mutes = {};
+  if (muted) conv.mutes[user.username] = true; else delete conv.mutes[user.username];
+  saveChatIndex(index);
+  return res.json({ ok: true, ...conversationPayload(conv, user.username) });
 });
 
 // P10-B: member directory for the DM username picker. Excludes the requester and
