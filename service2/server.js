@@ -775,6 +775,11 @@ async function notifyHubFeedback(record) {
         message: record.message,
         context: record.context || {},
         attachmentCount: Array.isArray(record.attachments) ? record.attachments.length : 0,
+        // The hub pulls these back (by feedback id + file) and re-posts them as real chat
+        // attachments in Feedback & reports, so admins see photos/voice inline.
+        attachments: Array.isArray(record.attachments)
+          ? record.attachments.map((a) => ({ file: a.file, mime: a.mime || null, name: a.name || null, size: a.size || 0 }))
+          : [],
       }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timer));
@@ -798,7 +803,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.71';
+const SERVICE2_VERSION = '0.72';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).

@@ -97,6 +97,9 @@ const APNS_ENV = (process.env.APNS_ENV || 'production').toLowerCase() === 'sandb
 // Shared secret for service2 -> hub internal calls (e.g. submit-failure push). Feature is
 // disabled (endpoint 401s) until this is set in the stack env on both services.
 const HUB_INTERNAL_TOKEN = process.env.HUB_INTERNAL_TOKEN || '';
+// service2 base URL on the internal network — used to pull feedback attachment bytes back
+// so they can be re-posted as real chat attachments in the Feedback & reports feed.
+const SERVICE2_INTERNAL_URL = (process.env.SERVICE2_INTERNAL_URL || 'http://service2:3001').replace(/\/+$/, '');
 
 // AI Assistant chat-bot (LinArt AI Consultant, LSC LED tenant). The hub relays a user's
 // message in their private "AI Assistant" chat to the platform ask API and posts the
@@ -2512,6 +2515,17 @@ app.post('/internal/notify/feedback', async (req, res) => {
     attachmentCount: b.attachmentCount,
   });
 
+  // Then re-post the uploaded files as real chat attachments (photos/voice show inline).
+  // Fire-and-forget so this internal notify returns fast for service2.
+  if (Array.isArray(b.attachments) && b.attachments.length) {
+    relayFeedbackAttachmentsToChat({
+      id: b.feedbackId,
+      kind: b.kind,
+      username: b.username,
+      attachments: b.attachments,
+    });
+  }
+
   // submit_failure means an engineer couldn't publish from the field → also push admins.
   let push = { skipped: true };
   if (b.kind === 'submit_failure') {
@@ -2937,6 +2951,66 @@ function postFeedbackToChat(record) {
   } catch (err) {
     console.warn('[hub] postFeedbackToChat failed:', err && err.message);
     return false;
+  }
+}
+
+// Pull a feedback item's stored attachments back from service2 and re-post them into the
+// Feedback & reports feed as REAL chat attachments (image / audio / file), so admins see the
+// photos and voice notes inline instead of just a "— N attachment(s)" count. Best-effort and
+// fire-and-forget: the text summary is already posted; any file that can't be fetched is skipped.
+async function relayFeedbackAttachmentsToChat(record) {
+  try {
+    const atts = Array.isArray(record.attachments) ? record.attachments : [];
+    if (!atts.length || !record.id || !HUB_INTERNAL_TOKEN) return;
+    ensureFeedbackConversation();
+    const author = String(record.username || 'unknown');
+    const dir = path.join(CHAT_ATTACH_DIR, chatSanitizeId(FEEDBACK_CONV_ID));
+    fs.mkdirSync(dir, { recursive: true });
+    for (const a of atts) {
+      if (!a || !a.file) continue;
+      try {
+        const url = `${SERVICE2_INTERNAL_URL}/api/feedback/admin/${encodeURIComponent(record.id)}/attachments/${encodeURIComponent(a.file)}`;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 8000);
+        // Direct internal call (never through the public proxy); x-hub-role satisfies service2's
+        // requireFileAdmin, which trusts the hub on the internal network.
+        const resp = await fetch(url, { headers: { 'x-hub-role': 'admin' }, signal: controller.signal })
+          .finally(() => clearTimeout(timer));
+        if (!resp.ok) { console.warn('[hub] feedback attach fetch failed', a.file, resp.status); continue; }
+        const buf = Buffer.from(await resp.arrayBuffer());
+        if (!buf.length || buf.length > CHAT_ATTACH_MAX) continue;
+        const ext = path.extname(a.file || '').toLowerCase().slice(0, 12);
+        const stored = `${Date.now().toString(36)}-${crypto.randomBytes(4).toString('hex')}${ext}`;
+        fs.writeFileSync(path.join(dir, stored), buf);
+        const mime = a.mime || resp.headers.get('content-type') || 'application/octet-stream';
+        const message = {
+          id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
+          conversationId: FEEDBACK_CONV_ID,
+          authorId: author,
+          authorDisplayName: author,
+          kind: chatAttachmentKind(mime),
+          body: '',
+          createdAt: new Date().toISOString(),
+          feedback: { id: record.id, kind: record.kind || null },
+          attachment: {
+            name: String(a.name || a.file).slice(0, 200),
+            file: stored,
+            mime,
+            size: buf.length,
+            url: `/api/chat/conversations/${FEEDBACK_CONV_ID}/attachments/${encodeURIComponent(stored)}`,
+          },
+        };
+        appendChatMessage(FEEDBACK_CONV_ID, message);
+        const index = loadChatIndex();
+        const conv = index.find((c) => c.id === FEEDBACK_CONV_ID);
+        if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
+        for (const c of sseClients) {
+          if (isAdminUsername(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
+        }
+      } catch (e) { console.warn('[hub] feedback attach relay error', a && a.file, e && e.message); }
+    }
+  } catch (err) {
+    console.warn('[hub] relayFeedbackAttachmentsToChat failed:', err && err.message);
   }
 }
 
