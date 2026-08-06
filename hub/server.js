@@ -2926,6 +2926,11 @@ function appendChatMessage(convId, message) {
   fs.mkdirSync(CHAT_DIR, { recursive: true });
   fs.appendFileSync(chatMessagesPath(convId), JSON.stringify(message) + '\n');
 }
+// Rewrite the whole message log (used for edit / soft-delete of a message in place).
+function writeChatMessages(convId, messages) {
+  fs.mkdirSync(CHAT_DIR, { recursive: true });
+  fs.writeFileSync(chatMessagesPath(convId), messages.map((m) => JSON.stringify(m)).join('\n') + (messages.length ? '\n' : ''));
+}
 function knownHubUsername(name) {
   if (!name) return false;
   const superName = adminCredentials.superadmin && adminCredentials.superadmin.username;
@@ -3218,7 +3223,7 @@ const chatUpload = multer({
       err.code = 'UNSUPPORTED_FILE_TYPE';
       return cb(err);
     }
-    if (mime.startsWith('image/') || mime.startsWith('audio/')) return cb(null, true);
+    if (mime.startsWith('image/') || mime.startsWith('audio/') || mime.startsWith('video/')) return cb(null, true);
     if (mime === 'application/pdf' || CHAT_ATTACH_DOC_EXT.has(ext)) return cb(null, true);
     const err = new Error('Unsupported attachment type.');
     err.code = 'UNSUPPORTED_FILE_TYPE';
@@ -3475,6 +3480,53 @@ app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.s
     relayToAssistant(conv.id, text, user.username);
   }
   return res.json({ ok: true, ...message });
+});
+
+// Edit your own text message. Author-only, text only. Sets `editedAt`; returns the updated
+// message (flat, same shape as POST). No push — an edit must not re-notify.
+app.patch('/api/chat/conversations/:id/messages/:messageId', requireChatMember, (req, res) => {
+  const user = req.chatUser;
+  const conv = req.chatConv;
+  const newText = typeof (req.body && req.body.body) === 'string' ? req.body.body.trim() : '';
+  if (!newText) return res.status(400).json({ ok: false, error: 'body_required' });
+  const messages = readChatMessages(conv.id);
+  const idx = messages.findIndex((m) => m.id === req.params.messageId);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'message_not_found' });
+  const msg = messages[idx];
+  if (msg.authorId !== user.username) return res.status(403).json({ ok: false, error: 'not_author' });
+  if (msg.deletedAt) return res.status(400).json({ ok: false, error: 'message_deleted' });
+  if (msg.attachment || msg.kind !== 'text') return res.status(400).json({ ok: false, error: 'text_only' });
+  msg.body = newText.slice(0, CHAT_BODY_MAX);
+  msg.editedAt = new Date().toISOString();
+  writeChatMessages(conv.id, messages);
+  return res.json({ ok: true, ...msg });
+});
+
+// Soft-delete your own message. Author-only. Keeps the id but sets `deletedAt` and clears
+// body/attachment (clients render a "message deleted" tombstone); removes the stored file.
+app.delete('/api/chat/conversations/:id/messages/:messageId', requireChatMember, (req, res) => {
+  const user = req.chatUser;
+  const conv = req.chatConv;
+  const messages = readChatMessages(conv.id);
+  const idx = messages.findIndex((m) => m.id === req.params.messageId);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'message_not_found' });
+  const msg = messages[idx];
+  if (msg.authorId !== user.username) return res.status(403).json({ ok: false, error: 'not_author' });
+  if (!msg.deletedAt) {
+    if (msg.attachment && msg.attachment.file) {
+      try {
+        const dir = path.resolve(path.join(CHAT_ATTACH_DIR, chatSanitizeId(conv.id)));
+        const fp = path.resolve(path.join(dir, chatSanitizeId(msg.attachment.file)));
+        if (fp.startsWith(dir + path.sep) && fs.existsSync(fp)) fs.unlinkSync(fp);
+      } catch (e) { /* best-effort */ }
+    }
+    msg.deletedAt = new Date().toISOString();
+    msg.body = '';
+    msg.kind = 'text';
+    delete msg.attachment;
+    writeChatMessages(conv.id, messages);
+  }
+  return res.status(204).end();
 });
 
 // Serve an attachment to conversation members only. Sandboxed + nosniff to
