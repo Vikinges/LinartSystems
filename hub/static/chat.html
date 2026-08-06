@@ -95,6 +95,7 @@
       <div class="sidebar-head">
         <a href="/" class="back">&larr; Hub</a>
         <strong>LSC LED Chat</strong>
+        <button class="btn secondary" id="setNameBtn" title="Set your chat name">&#9998; Name</button>
         <button class="btn" id="newChatBtn">+ New</button>
       </div>
       <div class="conv-list" id="convList"></div>
@@ -568,6 +569,26 @@
       } catch (err) {
         if (err.message !== 'chat_disabled') alert('Could not add people: ' + err.message);
       }
+    });
+
+    // Set your chat display name — shown to others as "Name(Role)".
+    const setNameBtn = document.getElementById('setNameBtn');
+    if (setNameBtn) setNameBtn.addEventListener('click', async () => {
+      let cur = null;
+      try { cur = await api('/api/chat/profile'); } catch (e) { return; }
+      const roleLabel = (cur && cur.roleLabel) || 'Role';
+      const current = (cur && cur.displayName) || '';
+      const next = window.prompt('Your name in chat — others will see "Name(' + roleLabel + ')". Leave empty to use your username:', current);
+      if (next === null) return;
+      try {
+        const p = await api('/api/chat/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ displayName: next }),
+        });
+        alert('Saved. Your messages will show as:  ' + (p.authorLabel || p.username));
+        if (currentConvId) loadMessages(false);
+      } catch (e) { alert('Could not save your name.'); }
     });
 
     // Boot

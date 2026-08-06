@@ -2858,6 +2858,53 @@ function saveChatIndex(list) {
     console.warn('[hub] chat index save failed', err.message);
   }
 }
+
+// Self-service chat display names: a user can set the name shown next to their messages.
+// Stored as { username: "Vladimir" }; the shown label is "Vladimir(Admin)" (name + role).
+const CHAT_NAMES_FILE = path.join(CHAT_DIR, 'display-names.json');
+const CHAT_DISPLAY_NAME_MAX = 40;
+function loadChatNames() {
+  try {
+    const data = JSON.parse(fs.readFileSync(CHAT_NAMES_FILE, 'utf8'));
+    return (data && typeof data === 'object') ? data : {};
+  } catch (err) {
+    return {};
+  }
+}
+function saveChatNames(map) {
+  try {
+    fs.mkdirSync(CHAT_DIR, { recursive: true });
+    fs.writeFileSync(CHAT_NAMES_FILE, JSON.stringify(map, null, 2));
+  } catch (err) {
+    console.warn('[hub] chat names save failed', err.message);
+  }
+}
+function getChatDisplayName(username) {
+  const map = loadChatNames();
+  const v = map[username];
+  return typeof v === 'string' && v.trim() ? v.trim() : '';
+}
+function setChatDisplayName(username, name) {
+  const map = loadChatNames();
+  const clean = String(name || '').replace(/[\r\n\t]/g, ' ').replace(/[()]/g, '').trim().slice(0, CHAT_DISPLAY_NAME_MAX);
+  if (clean) map[username] = clean; else delete map[username];
+  saveChatNames(map);
+  return clean;
+}
+// Short role tag shown in parentheses after the name.
+function chatRoleLabel(user) {
+  if (!user) return '';
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return 'Admin';
+  if (user.role === USER_ROLE_PLANNER) return 'Manager';
+  if (user.role === USER_ROLE_MANAGER) return 'Engineer';
+  return '';
+}
+// The label shown next to a user's chat messages: "Vladimir(Admin)" (or "username(Role)").
+function formatChatAuthor(user) {
+  const name = getChatDisplayName(user.username) || user.username;
+  const tag = chatRoleLabel(user);
+  return tag ? `${name}(${tag})` : name;
+}
 function chatMessagesPath(convId) {
   return path.join(CHAT_DIR, `msg_${chatSanitizeId(convId)}.jsonl`);
 }
@@ -3202,6 +3249,31 @@ app.use('/api/chat', (req, res, next) => {
   return next();
 });
 
+// Self-service chat display name. GET returns the current name + the label shown to others
+// ("Vladimir(Admin)"); POST { displayName } sets it (empty clears back to the username).
+app.get('/api/chat/profile', (req, res) => {
+  const user = getSessionUser(req);
+  return res.json({
+    ok: true,
+    username: user.username,
+    displayName: getChatDisplayName(user.username),
+    roleLabel: chatRoleLabel(user),
+    authorLabel: formatChatAuthor(user),
+  });
+});
+app.post('/api/chat/profile', (req, res) => {
+  const user = getSessionUser(req);
+  const body = req.body || {};
+  const displayName = setChatDisplayName(user.username, body.displayName);
+  return res.json({
+    ok: true,
+    username: user.username,
+    displayName,
+    roleLabel: chatRoleLabel(user),
+    authorLabel: formatChatAuthor(user),
+  });
+});
+
 app.get('/api/chat/conversations', (req, res) => {
   setNoCache(res);
   const user = getSessionUser(req);
@@ -3332,7 +3404,7 @@ app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.s
     id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
     conversationId: conv.id,
     authorId: user.username,
-    authorDisplayName: user.username,
+    authorDisplayName: formatChatAuthor(user),
     kind: file ? chatAttachmentKind(file.mimetype) : 'text',
     body: text.slice(0, CHAT_BODY_MAX),
     createdAt: new Date().toISOString(),
