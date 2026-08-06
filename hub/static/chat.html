@@ -44,6 +44,7 @@
     .msg.mine .msg-time { color: #cdd9f5; }
     .msg-att img { max-width: 240px; max-height: 240px; border-radius: 10px; display: block; margin-top: 4px; cursor: pointer; }
     .msg-att audio { margin-top: 4px; max-width: 240px; }
+    .msg-att video { margin-top: 4px; max-width: 260px; max-height: 260px; border-radius: 10px; display: block; }
     .msg-att a { color: #bcd3ff; font-size: 0.85rem; display: inline-flex; gap: 6px; margin-top: 4px; text-decoration: none; }
     .msg.mine .msg-att a { color: #eaf1ff; }
     .composer { display: flex; gap: 8px; align-items: center; padding: 12px 14px; border-top: 1px solid #1c2740; }
@@ -376,6 +377,12 @@
           audio.controls = true;
           audio.src = m.attachment.url;
           att.appendChild(audio);
+        } else if (mime.indexOf('video/') === 0) {
+          const video = document.createElement('video');
+          video.controls = true;
+          video.setAttribute('playsinline', '');
+          video.src = m.attachment.url;
+          att.appendChild(video);
         } else {
           const link = document.createElement('a');
           link.href = m.attachment.url;

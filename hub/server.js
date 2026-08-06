@@ -3193,6 +3193,7 @@ function chatAttachmentKind(mime) {
   if (m === 'image/svg+xml') return 'file';
   if (m.startsWith('image/')) return 'image';
   if (m.startsWith('audio/')) return 'audio';
+  if (m.startsWith('video/')) return 'video';
   return 'file';
 }
 

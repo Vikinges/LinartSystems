@@ -726,6 +726,11 @@ function feedbackAttachmentExt(mime) {
   if (m === 'audio/ogg' || m === 'audio/oga') return 'ogg';
   if (m === 'audio/wav' || m === 'audio/x-wav' || m === 'audio/wave') return 'wav';
   if (m.startsWith('audio/')) return 'audio';
+  if (m === 'video/mp4') return 'mp4';
+  if (m === 'video/quicktime' || m === 'video/mov') return 'mov';
+  if (m === 'video/webm') return 'webm';
+  if (m === 'video/x-m4v' || m === 'video/m4v') return 'm4v';
+  if (m.startsWith('video/')) return 'video';
   return 'bin';
 }
 
@@ -803,7 +808,7 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.72';
+const SERVICE2_VERSION = '0.73';
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -24737,10 +24742,11 @@ app.delete(['/api/files/:type/:filename/purge', '/service2/api/files/:type/:file
 // Accepts images/PDF/text/json parts; unknown/oversized handled gracefully.
 const feedbackUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024, files: 12 },
+  // 25 MB/file to accommodate short compressed videos (iOS uploads 720p MP4).
+  limits: { fileSize: 25 * 1024 * 1024, files: 12 },
   fileFilter: (req, file, cb) => {
     const m = String(file.mimetype || '').toLowerCase();
-    const ok = m.startsWith('image/') || m.startsWith('audio/') || m === 'application/pdf' || m.startsWith('text/') || m === 'application/json';
+    const ok = m.startsWith('image/') || m.startsWith('audio/') || m.startsWith('video/') || m === 'application/pdf' || m.startsWith('text/') || m === 'application/json';
     if (!ok) { const e = new Error('Unsupported feedback attachment type.'); e.statusCode = 400; return cb(e); }
     return cb(null, true);
   },
@@ -24824,6 +24830,7 @@ app.get(['/api/feedback/admin/:id/attachments/:name', '/service2/api/feedback/ad
     '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp',
     '.heic': 'image/heic', '.pdf': 'application/pdf', '.json': 'application/json', '.txt': 'text/plain',
     '.webm': 'audio/webm', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
+    '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.m4v': 'video/x-m4v',
   };
   const mime = MIME_BY_EXT[ext] || 'application/octet-stream';
   res.setHeader('Content-Type', mime);
