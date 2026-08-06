@@ -113,6 +113,17 @@
     .chat-kind.direct { background: #e3edff; color: #1d4fd7; }
     .chat-kind.project { background: #e2f6e9; color: #1d7a3f; }
     .chat-conv-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chat-search { flex: 1; min-width: 200px; padding: 8px 12px; border: 1px solid #dbe2ee; border-radius: 8px; font: inherit; }
+    .chat-groupby { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; color: #556; }
+    .chat-groupby select { padding: 6px 8px; border: 1px solid #dbe2ee; border-radius: 8px; font: inherit; }
+    .chat-group { border: 1px solid #e6eef8; border-radius: 10px; background: #fff; overflow: hidden; }
+    .chat-group > .chat-group-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; cursor: pointer; background: #f2f6fc; font-weight: 600; user-select: none; }
+    .chat-group > .chat-group-head .caret { font-size: 0.75rem; color: #64748b; width: 12px; }
+    .chat-group.collapsed > .chat-group-head .caret::before { content: '▸'; }
+    .chat-group:not(.collapsed) > .chat-group-head .caret::before { content: '▾'; }
+    .chat-group-count { margin-left: auto; font-weight: 500; color: #64748b; font-size: 0.8rem; }
+    .chat-group > .chat-group-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
+    .chat-group.collapsed > .chat-group-body { display: none; }
     .chat-viewer { margin-top: 16px; border: 1px solid #dbe2ee; border-radius: 10px; padding: 16px; background: #fff; }
     .chat-viewer-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .chat-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow: auto; }
@@ -379,6 +390,18 @@
         <button type="button" id="chatRefresh" class="secondary">Refresh</button>
         <a id="chatFullArchive" class="button" href="/api/chat/admin/archive">Download all (ZIP)</a>
         <span id="chatAdminStatus" class="meta"></span>
+      </div>
+      <div class="chat-toolbar">
+        <input type="search" id="chatSearch" class="chat-search" placeholder="Search chats — name or member…" autocomplete="off">
+        <label class="chat-groupby">Group by
+          <select id="chatGroupBy">
+            <option value="type">Type</option>
+            <option value="person">Person</option>
+            <option value="none">Flat</option>
+          </select>
+        </label>
+        <button type="button" id="chatExpandAll" class="secondary">Expand all</button>
+        <button type="button" id="chatCollapseAll" class="secondary">Collapse all</button>
       </div>
       <div id="chatConvList" class="chat-conv-list"></div>
       <div id="chatViewer" class="chat-viewer is-hidden"></div>
@@ -1444,6 +1467,12 @@
     const chatViewer = document.getElementById('chatViewer');
     const chatRefreshBtn = document.getElementById('chatRefresh');
     const chatAdminStatus = document.getElementById('chatAdminStatus');
+    const chatSearch = document.getElementById('chatSearch');
+    const chatGroupBy = document.getElementById('chatGroupBy');
+    const chatExpandAll = document.getElementById('chatExpandAll');
+    const chatCollapseAll = document.getElementById('chatCollapseAll');
+    let chatAdminConvs = [];
+    const chatTreeCollapsed = new Set(); // group keys the admin has collapsed
 
     // --- Feedback & reports (in-app bug/idea/submit_failure) ---
     const fbList = document.getElementById('fbList');
@@ -1631,21 +1660,99 @@
       if (!chatConvList) return;
       try {
         const data = await fetchJson('/api/chat/admin/conversations');
-        const convs = Array.isArray(data.conversations) ? data.conversations : [];
-        chatConvList.innerHTML = '';
-        if (chatAdminStatus) chatAdminStatus.textContent = convs.length + ' conversation(s)';
-        if (!convs.length) {
-          const empty = document.createElement('div');
-          empty.className = 'meta';
-          empty.textContent = 'No conversations yet.';
-          chatConvList.appendChild(empty);
-          return;
-        }
-        convs.forEach((conv) => chatConvList.appendChild(renderChatConvCard(conv)));
+        chatAdminConvs = Array.isArray(data.conversations) ? data.conversations : [];
+        renderChatTree();
       } catch (error) {
         if (chatAdminStatus) chatAdminStatus.textContent = 'Failed to load chats.';
         console.warn('chat admin load failed', error);
       }
+    }
+
+    function chatConvMatches(conv, q) {
+      if (!q) return true;
+      const hay = [conv.title, conv.id, conv.kind, (conv.memberUsernames || []).join(' ')]
+        .filter(Boolean).join(' ').toLowerCase();
+      return hay.indexOf(q) !== -1;
+    }
+
+    // Group the (filtered) conversations into a collapsible tree by Type / Person, or flat.
+    function renderChatTree() {
+      if (!chatConvList) return;
+      const total = chatAdminConvs.length;
+      const q = (chatSearch && chatSearch.value || '').trim().toLowerCase();
+      const groupBy = (chatGroupBy && chatGroupBy.value) || 'type';
+      const shown = chatAdminConvs.filter((c) => chatConvMatches(c, q));
+      chatConvList.innerHTML = '';
+      if (chatAdminStatus) {
+        chatAdminStatus.textContent = q ? (shown.length + ' of ' + total + ' conversation(s)') : (total + ' conversation(s)');
+      }
+      if (!shown.length) {
+        const empty = document.createElement('div');
+        empty.className = 'meta';
+        empty.textContent = total ? 'No chats match your search.' : 'No conversations yet.';
+        chatConvList.appendChild(empty);
+        return;
+      }
+      if (groupBy === 'none') {
+        shown.slice().sort(chatConvSort).forEach((c) => chatConvList.appendChild(renderChatConvCard(c)));
+        return;
+      }
+      // Build key -> conversations. Type = one bucket each; Person = a bucket per member.
+      const groups = new Map();
+      const add = (key, conv) => { if (!groups.has(key)) groups.set(key, []); groups.get(key).push(conv); };
+      shown.forEach((conv) => {
+        if (groupBy === 'person') {
+          const members = conv.memberUsernames || [];
+          if (!members.length) add('◆ System / no members', conv);
+          else members.forEach((m) => add(m, conv));
+        } else {
+          if (conv.adminOnly) add('◆ System / admin feeds', conv);
+          else add(conv.kind === 'group' ? 'Groups' : (conv.kind === 'project' ? 'Projects' : 'Direct messages'), conv);
+        }
+      });
+      // System buckets last, otherwise alphabetical.
+      const keys = Array.from(groups.keys()).sort((a, b) => {
+        const sa = a.charAt(0) === '◆' ? 1 : 0, sb = b.charAt(0) === '◆' ? 1 : 0;
+        return sa !== sb ? sa - sb : a.toLowerCase().localeCompare(b.toLowerCase());
+      });
+      keys.forEach((key) => {
+        const list = groups.get(key).slice().sort(chatConvSort);
+        chatConvList.appendChild(renderChatGroup(key, list, q));
+      });
+    }
+
+    function chatConvSort(a, b) {
+      return String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || ''));
+    }
+
+    function renderChatGroup(key, convs, q) {
+      const wrap = document.createElement('div');
+      wrap.className = 'chat-group';
+      // Auto-expand while searching; otherwise honor the collapsed set.
+      const collapsed = !q && chatTreeCollapsed.has(key);
+      if (collapsed) wrap.classList.add('collapsed');
+      const head = document.createElement('div');
+      head.className = 'chat-group-head';
+      const caret = document.createElement('span');
+      caret.className = 'caret';
+      const label = document.createElement('span');
+      label.textContent = key;
+      const count = document.createElement('span');
+      count.className = 'chat-group-count';
+      count.textContent = convs.length + (convs.length === 1 ? ' chat' : ' chats');
+      head.appendChild(caret);
+      head.appendChild(label);
+      head.appendChild(count);
+      head.addEventListener('click', () => {
+        if (wrap.classList.toggle('collapsed')) chatTreeCollapsed.add(key);
+        else chatTreeCollapsed.delete(key);
+      });
+      wrap.appendChild(head);
+      const body = document.createElement('div');
+      body.className = 'chat-group-body';
+      convs.forEach((c) => body.appendChild(renderChatConvCard(c)));
+      wrap.appendChild(body);
+      return wrap;
     }
 
     function renderChatConvCard(conv) {
@@ -1796,6 +1903,14 @@
     }
 
     if (chatRefreshBtn) chatRefreshBtn.addEventListener('click', () => loadChatAdmin());
+    if (chatSearch) chatSearch.addEventListener('input', () => renderChatTree());
+    if (chatGroupBy) chatGroupBy.addEventListener('change', () => renderChatTree());
+    if (chatExpandAll) chatExpandAll.addEventListener('click', () => { chatTreeCollapsed.clear(); renderChatTree(); });
+    if (chatCollapseAll) chatCollapseAll.addEventListener('click', () => {
+      // Collapse every currently-rendered group.
+      document.querySelectorAll('#chatConvList .chat-group .chat-group-head > span:nth-child(2)').forEach((el) => chatTreeCollapsed.add(el.textContent));
+      renderChatTree();
+    });
     if (fbRefreshBtn) fbRefreshBtn.addEventListener('click', () => loadFeedbackAdmin());
     if (fbKindFilter) fbKindFilter.addEventListener('change', () => loadFeedbackAdmin());
 
