@@ -3577,6 +3577,113 @@ app.post('/api/chat/conversations/:id/mute', (req, res) => {
   return res.json({ ok: true, ...conversationPayload(conv, user.username) });
 });
 
+// --- Conversation-level actions: delete / leave / report (iOS issue #1 note 337) ---
+// Hard-remove a conversation (index entry + message log + attachment dir).
+function hardRemoveConversation(index, idx) {
+  const [removed] = index.splice(idx, 1);
+  saveChatIndex(index);
+  try { const p = chatMessagesPath(removed.id); if (fs.existsSync(p)) fs.unlinkSync(p); } catch (e) { /* best-effort */ }
+  try { const d = path.join(CHAT_ATTACH_DIR, chatSanitizeId(removed.id)); if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
+  return removed;
+}
+// Who may delete a conversation: any portal admin (Vladimir's main ask), either party of a
+// direct thread, or the creator/owner of a group. Admin-only feeds → admins only.
+function canDeleteConversation(conv, user) {
+  if (!conv || !user) return false;
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
+  if (conv.adminOnly) return false;
+  if (conv.kind === 'direct') return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(user.username);
+  return conv.ownerUsername ? conv.ownerUsername === user.username : false;
+}
+
+// Admin-only feed that reported conversations land in (mirrors the feedback feed).
+const CHAT_REPORTS_CONV_ID = 'chat-reports';
+function ensureChatReportsConversation() {
+  const index = loadChatIndex();
+  let conv = index.find((c) => c.id === CHAT_REPORTS_CONV_ID);
+  if (!conv) {
+    conv = { id: CHAT_REPORTS_CONV_ID, kind: 'group', adminOnly: true, title: '🚩 Reported chats', memberUsernames: [], reads: {}, createdAt: new Date().toISOString() };
+    index.push(conv);
+    saveChatIndex(index);
+  }
+  return conv;
+}
+function postChatReport(reporter, reportedConv, reason) {
+  try {
+    ensureChatReportsConversation();
+    const lines = [
+      `🚩 Report from ${formatChatAuthor(reporter)}`,
+      `Conversation: ${reportedConv.title || reportedConv.id} (${reportedConv.kind}, id ${reportedConv.id})`,
+      `Members: ${(reportedConv.memberUsernames || []).join(', ') || '—'}`,
+      `Reason: ${reason || 'spam'}`,
+    ];
+    const message = {
+      id: `m${Date.now().toString(36)}${crypto.randomBytes(3).toString('hex')}`,
+      conversationId: CHAT_REPORTS_CONV_ID,
+      authorId: reporter.username,
+      authorDisplayName: formatChatAuthor(reporter),
+      kind: 'text',
+      body: lines.join('\n').slice(0, CHAT_BODY_MAX),
+      createdAt: new Date().toISOString(),
+      report: { conversationId: reportedConv.id, reason: reason || 'spam' },
+    };
+    appendChatMessage(CHAT_REPORTS_CONV_ID, message);
+    const index = loadChatIndex();
+    const conv = index.find((c) => c.id === CHAT_REPORTS_CONV_ID);
+    if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
+    for (const c of sseClients) {
+      if (isAdminUsername(c.user)) ssePush(c, 'chat', { conversationId: CHAT_REPORTS_CONV_ID, message });
+    }
+  } catch (err) { console.warn('[hub] postChatReport failed', err && err.message); }
+}
+
+// Delete a conversation. Removes it for everyone (groups) / both parties (direct); admins any.
+app.delete('/api/chat/conversations/:id', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const idx = index.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canDeleteConversation(index[idx], user)) return res.status(403).json({ ok: false, error: 'forbidden' });
+  hardRemoveConversation(index, idx);
+  return res.status(204).end();
+});
+
+// Leave a conversation: drop the caller from the members; the thread stays for the rest.
+// If the last member leaves, the conversation is removed entirely.
+app.post('/api/chat/conversations/:id/leave', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const index = loadChatIndex();
+  const idx = index.findIndex((c) => c.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  const conv = index[idx];
+  if (!Array.isArray(conv.memberUsernames) || !conv.memberUsernames.includes(user.username)) {
+    return res.status(403).json({ ok: false, error: 'not_member' });
+  }
+  conv.memberUsernames = conv.memberUsernames.filter((u) => u !== user.username);
+  if (conv.reads) delete conv.reads[user.username];
+  if (conv.mutes) delete conv.mutes[user.username];
+  if (!conv.memberUsernames.length) hardRemoveConversation(index, idx);
+  else saveChatIndex(index);
+  return res.status(204).end();
+});
+
+// Report a conversation to portal admins (surfaced in the admin-only "🚩 Reported chats" feed).
+app.post('/api/chat/conversations/:id/report', (req, res) => {
+  setNoCache(res);
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const conv = loadChatIndex().find((c) => c.id === req.params.id);
+  if (!conv) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+  const reason = typeof (req.body && req.body.reason) === 'string' ? req.body.reason.trim().slice(0, 500) : 'spam';
+  postChatReport(user, conv, reason);
+  return res.json({ ok: true });
+});
+
 // P10-B: member directory for the DM username picker. Excludes the requester and
 // blocked accounts (they cannot use any service). Superadmin is always included.
 app.get('/api/chat/members', (req, res) => {
