@@ -33,9 +33,11 @@ const IS_PROD = (process.env.NODE_ENV || '').toLowerCase() === 'production';
 const ADMIN_AUTH_COOKIE = 'hub_admin_auth';
 const ADMIN_AUTH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const USER_ROLE_ADMIN = 'admin';
-const USER_ROLE_MANAGER = 'manager';
+const USER_ROLE_MANAGER = 'manager';   // shown in the admin UI as "Engineer" (fills/submits reports)
+const USER_ROLE_PLANNER = 'planner';   // shown in the admin UI as "Manager" — plans work for the team;
+                                       // (future) creates calendar tasks. Auto-grants file + chat access.
 const USER_ROLE_BLOCKED = 'blocked';
-const USER_ROLE_SET = new Set([USER_ROLE_ADMIN, USER_ROLE_MANAGER, USER_ROLE_BLOCKED]);
+const USER_ROLE_SET = new Set([USER_ROLE_ADMIN, USER_ROLE_MANAGER, USER_ROLE_PLANNER, USER_ROLE_BLOCKED]);
 
 // Trust reverse proxy (Traefik) so secure cookies work behind TLS
 app.set('trust proxy', 1);
@@ -463,7 +465,8 @@ function normalizeFilesAccess(value, fallback = false) {
 }
 
 function resolveFilesAccess(role, isSuperadmin, canViewFiles) {
-  if (isSuperadmin || role === USER_ROLE_ADMIN) return true;
+  // Manager (planner) auto-grants file access (view / generate links / delete) like admin.
+  if (isSuperadmin || role === USER_ROLE_ADMIN || role === USER_ROLE_PLANNER) return true;
   if (role === USER_ROLE_BLOCKED) return false;
   return Boolean(canViewFiles);
 }
@@ -471,7 +474,7 @@ function resolveFilesAccess(role, isSuperadmin, canViewFiles) {
 // Chat access defaults to ENABLED for managers (undefined -> true); admins always
 // on, blocked always off. Differs from file perms, which default off.
 function resolveChatAccess(role, isSuperadmin, canUseChat) {
-  if (isSuperadmin || role === USER_ROLE_ADMIN) return true;
+  if (isSuperadmin || role === USER_ROLE_ADMIN || role === USER_ROLE_PLANNER) return true;
   if (role === USER_ROLE_BLOCKED) return false;
   return canUseChat !== false;
 }
@@ -718,7 +721,7 @@ function isServiceAllowed(service, allowedSet, user) {
 function canUserViewFiles(user) {
   if (!user) return false;
   if (user.role === USER_ROLE_BLOCKED) return false;
-  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
+  if (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_PLANNER) return true;
   return Boolean(user.canViewFiles);
 }
 
@@ -734,7 +737,7 @@ function requireFilesAccess(req, res, next) {
 
 function requireFilesAdminAccess(req, res, next) {
   const user = getSessionUser(req);
-  if (user && canUserViewFiles(user) && (user.isSuperadmin || user.role === USER_ROLE_ADMIN)) {
+  if (user && canUserViewFiles(user) && (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_PLANNER)) {
     return next();
   }
   const accept = req.headers.accept || '';
@@ -2269,7 +2272,7 @@ function isOnline(entry) {
 // admin OR manager (not blocked) — managers get the dashboard on their phone.
 function requireDashboardAccess(req, res, next) {
   const user = getSessionUser(req);
-  if (user && (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_MANAGER)) {
+  if (user && (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_MANAGER || user.role === USER_ROLE_PLANNER)) {
     return next();
   }
   return res.status(403).json({ ok: false, error: 'forbidden' });

@@ -88,6 +88,7 @@
     .role-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; margin-left: 8px; vertical-align: middle; }
     .role-badge.admin { background: #e3edff; color: #1d4fd7; }
     .role-badge.manager { background: #e2f6e9; color: #1d7a3f; }
+    .role-badge.planner { background: #efe6ff; color: #6b28c9; }
     .role-badge.blocked { background: #fde3e3; color: #c02929; }
     .user-summary { color: #33414e; font-size: 0.85rem; margin: 4px 0 2px; }
     .perm-label { display: flex; gap: 8px; align-items: flex-start; font-size: 0.9rem; }
@@ -543,6 +544,7 @@
     const ROLE_OPTIONS = [
       { value: 'admin', label: 'Admin', desc: 'Full access: all services, all files, user management.' },
       { value: 'manager', label: 'Engineer', desc: 'Signs in and creates/submits report forms. Extra permissions below are optional.' },
+      { value: 'planner', label: 'Manager', desc: 'Plans work and schedules the team (calendar coming soon). Full file access + chat, and can delete files. Assign the services below.' },
       { value: 'blocked', label: 'Blocked', desc: 'Cannot use any service. Pick this only to shut an account off.' },
     ];
     const ROLE_SET = new Set(ROLE_OPTIONS.map((role) => role.value));
@@ -576,11 +578,12 @@
         });
       }
       
-      const disableFiles = role === 'admin' || role === 'blocked';
+      // Manager (planner) auto-grants all file/chat permissions — show them checked + locked.
+      const disableFiles = role === 'admin' || role === 'blocked' || role === 'planner';
       const applyPermission = (input) => {
         if (!input) return;
         input.disabled = disableFiles;
-        if (role === 'admin') input.checked = true;
+        if (role === 'admin' || role === 'planner') input.checked = true;
         if (role === 'blocked') input.checked = false;
       };
       
@@ -651,6 +654,7 @@
     ];
     function summarizeUser(roleValue, user) {
       if (roleValue === 'admin') return 'Full access to everything.';
+      if (roleValue === 'planner') return 'Plans/schedules the team. Full file access + chat; can delete files.';
       if (roleValue === 'blocked') return 'Cannot use any service.';
       const extras = [];
       if (user.canViewFiles) extras.push('views files archive');
@@ -758,7 +762,7 @@
         });
       }
       if (newUserPermSection) newUserPermSection.classList.toggle('is-hidden', current !== 'manager');
-      if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager');
+      if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager' && current !== 'planner');
     }
     [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat].forEach((cb) => {
       if (cb) cb.addEventListener('change', () => refreshNewUserSummary());
@@ -1173,7 +1177,7 @@
             canUseChat: canUseChatInput.checked,
           });
           permSection.classList.toggle('is-hidden', currentRole !== 'manager');
-          servicesSection.classList.toggle('is-hidden', currentRole !== 'manager');
+          servicesSection.classList.toggle('is-hidden', currentRole !== 'manager' && currentRole !== 'planner');
         };
         [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput].forEach((cb) => {
           cb.addEventListener('change', refreshSummary);
