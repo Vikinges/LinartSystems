@@ -1548,6 +1548,10 @@ app.get('/api/auth/me', (req, res) => {
     ok: true,
     user: {
       username: user.username,
+      // Self-service chat display name: `displayName` is the raw set value (empty if unset),
+      // `name` is the effective label (displayName or username) for convenient rendering.
+      displayName: getChatDisplayName(user.username),
+      name: getChatDisplayName(user.username) || user.username,
       isSuperadmin: user.isSuperadmin,
       role: user.role,
       canViewFiles: user.canViewFiles,
@@ -3150,12 +3154,18 @@ function conversationPayload(conv, username) {
     (n, m) => n + ((!lastReadAt || m.createdAt > lastReadAt) && m.authorId !== username ? 1 : 0),
     0
   );
+  // DM titles are stored from usernames ("Beatus & admin"); render them with display names
+  // when set ("Beatus & Vladimir"). Group/project rooms keep their custom title.
+  let title = conv.title;
+  if (conv.kind === 'direct' && Array.isArray(conv.memberUsernames) && conv.memberUsernames.length) {
+    title = conv.memberUsernames.map((u) => getChatDisplayName(u) || u).join(' & ');
+  }
   return {
     id: conv.id,
     kind: conv.kind,
     ...(conv.projectKey ? { projectKey: conv.projectKey } : {}),
     ...(conv.ownerUsername ? { ownerUsername: conv.ownerUsername } : {}),
-    title: conv.title,
+    title,
     memberUsernames: conv.memberUsernames || [],
     lastMessage: last,
     unreadCount,
