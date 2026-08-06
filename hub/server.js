@@ -3739,6 +3739,49 @@ app.get('/api/chat/admin/conversations', requireChatAdmin, (req, res) => {
   return res.json({ ok: true, conversations });
 });
 
+// Build a short snippet of text around the first case-insensitive match of q.
+function chatSearchSnippet(text, q) {
+  const s = String(text || '');
+  const i = s.toLowerCase().indexOf(q);
+  if (i < 0) return s.slice(0, 100);
+  const start = Math.max(0, i - 32);
+  const end = Math.min(s.length, i + q.length + 48);
+  return (start > 0 ? '…' : '') + s.slice(start, end).replace(/\s+/g, ' ').trim() + (end < s.length ? '…' : '');
+}
+
+// Full-text search across every conversation's message bodies (admin moderation). Returns the
+// matching conversations with a match count + a few sample snippets. Deleted messages are skipped.
+app.get('/api/chat/admin/search', requireChatAdmin, (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  if (q.length < 2) return res.json({ ok: true, query: q, results: [] });
+  const MAX_SAMPLES = 3;
+  const results = [];
+  for (const conv of loadChatIndex()) {
+    let msgs;
+    try { msgs = readChatMessages(conv.id); } catch (e) { continue; }
+    const samples = [];
+    let count = 0;
+    for (const m of msgs) {
+      if (m.deletedAt) continue;
+      const body = String(m.body || '');
+      if (body && body.toLowerCase().indexOf(q) !== -1) {
+        count += 1;
+        if (samples.length < MAX_SAMPLES) {
+          samples.push({
+            messageId: m.id,
+            authorDisplayName: m.authorDisplayName || m.authorId || '',
+            createdAt: m.createdAt || null,
+            snippet: chatSearchSnippet(body, q),
+          });
+        }
+      }
+    }
+    if (count) results.push({ conversationId: conv.id, title: conv.title || conv.id, kind: conv.kind, count, samples });
+  }
+  results.sort((a, b) => b.count - a.count);
+  return res.json({ ok: true, query: q, results: results.slice(0, 100) });
+});
+
 // Read any conversation's messages (bypasses membership) for the admin viewer.
 app.get('/api/chat/admin/conversations/:id/messages', requireChatAdmin, (req, res) => {
   const conv = loadChatIndex().find((c) => c.id === req.params.id);

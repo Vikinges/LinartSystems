@@ -124,6 +124,7 @@
     .chat-group-count { margin-left: auto; font-weight: 500; color: #64748b; font-size: 0.8rem; }
     .chat-group > .chat-group-body { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; }
     .chat-group.collapsed > .chat-group-body { display: none; }
+    .chat-match { margin-top: 4px; font-size: 0.82rem; color: #7a5b00; background: #fff7e0; border-radius: 6px; padding: 4px 8px; }
     .chat-viewer { margin-top: 16px; border: 1px solid #dbe2ee; border-radius: 10px; padding: 16px; background: #fff; }
     .chat-viewer-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .chat-msgs { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow: auto; }
@@ -392,7 +393,7 @@
         <span id="chatAdminStatus" class="meta"></span>
       </div>
       <div class="chat-toolbar">
-        <input type="search" id="chatSearch" class="chat-search" placeholder="Search chats — name or member…" autocomplete="off">
+        <input type="search" id="chatSearch" class="chat-search" placeholder="Search chats — name, member, or message text…" autocomplete="off">
         <label class="chat-groupby">Group by
           <select id="chatGroupBy">
             <option value="type">Type</option>
@@ -1473,6 +1474,8 @@
     const chatCollapseAll = document.getElementById('chatCollapseAll');
     let chatAdminConvs = [];
     const chatTreeCollapsed = new Set(); // group keys the admin has collapsed
+    let chatContentMatches = new Map();  // convId -> { count, samples } from message-content search
+    let chatSearchTimer = null;
 
     // --- Feedback & reports (in-app bug/idea/submit_failure) ---
     const fbList = document.getElementById('fbList');
@@ -1672,7 +1675,8 @@
       if (!q) return true;
       const hay = [conv.title, conv.id, conv.kind, (conv.memberUsernames || []).join(' ')]
         .filter(Boolean).join(' ').toLowerCase();
-      return hay.indexOf(q) !== -1;
+      if (hay.indexOf(q) !== -1) return true;
+      return chatContentMatches.has(conv.id); // matched inside a message body
     }
 
     // Group the (filtered) conversations into a collapsible tree by Type / Person, or flat.
@@ -1777,6 +1781,16 @@
       stats.textContent = (conv.messageCount || 0) + ' messages · ' + (conv.attachmentCount || 0)
         + ' attachments · last ' + (chatFmtTime(conv.lastMessageAt) || '—');
       info.appendChild(stats);
+      // When a message-content search matched inside this conversation, show why.
+      const match = chatContentMatches.get(conv.id);
+      if (match) {
+        const hit = document.createElement('div');
+        hit.className = 'chat-match';
+        const sample = (match.samples && match.samples[0]) || null;
+        hit.textContent = '💬 ' + match.count + ' message match' + (match.count === 1 ? '' : 'es')
+          + (sample ? ' — ' + (sample.authorDisplayName || '') + ': “' + sample.snippet + '”' : '');
+        info.appendChild(hit);
+      }
       card.appendChild(info);
 
       const actions = document.createElement('div');
@@ -1903,7 +1917,22 @@
     }
 
     if (chatRefreshBtn) chatRefreshBtn.addEventListener('click', () => loadChatAdmin());
-    if (chatSearch) chatSearch.addEventListener('input', () => renderChatTree());
+    if (chatSearch) chatSearch.addEventListener('input', () => {
+      renderChatTree(); // instant client-side filter (name / member / id)
+      clearTimeout(chatSearchTimer);
+      const q = chatSearch.value.trim();
+      if (q.length < 2) { if (chatContentMatches.size) { chatContentMatches = new Map(); renderChatTree(); } return; }
+      chatSearchTimer = setTimeout(async () => {
+        try {
+          const data = await fetchJson('/api/chat/admin/search?q=' + encodeURIComponent(q));
+          if (chatSearch.value.trim() !== q) return; // a newer query superseded this one
+          const m = new Map();
+          (data.results || []).forEach((r) => m.set(r.conversationId, { count: r.count, samples: r.samples || [] }));
+          chatContentMatches = m;
+          renderChatTree();
+        } catch (e) { /* keep the client-side filter on error */ }
+      }, 300);
+    });
     if (chatGroupBy) chatGroupBy.addEventListener('change', () => renderChatTree());
     if (chatExpandAll) chatExpandAll.addEventListener('click', () => { chatTreeCollapsed.clear(); renderChatTree(); });
     if (chatCollapseAll) chatCollapseAll.addEventListener('click', () => {
