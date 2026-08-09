@@ -3587,11 +3587,13 @@ function hardRemoveConversation(index, idx) {
   return removed;
 }
 // Who may delete a conversation: any portal admin (Vladimir's main ask), either party of a
-// direct thread, or the creator/owner of a group. Admin-only feeds → admins only.
+// direct thread, or the creator/owner of a group. System conversations (admin-only feeds and
+// the AI Assistant DM) aren't user-owned rooms — never deletable via this route, not even by
+// an admin (iOS issue #1, note 2026-08-09: a deleted assistant thread lost its history for good).
 function canDeleteConversation(conv, user) {
   if (!conv || !user) return false;
+  if (conv.adminOnly || conv.assistant) return false;
   if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
-  if (conv.adminOnly) return false;
   if (conv.kind === 'direct') return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(user.username);
   return conv.ownerUsername ? conv.ownerUsername === user.username : false;
 }
@@ -3660,6 +3662,9 @@ app.post('/api/chat/conversations/:id/leave', (req, res) => {
   const idx = index.findIndex((c) => c.id === req.params.id);
   if (idx < 0) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
   const conv = index[idx];
+  // System conversations can't be left either — the AI Assistant DM would just get
+  // wiped once its sole member "leaves" (see canDeleteConversation above).
+  if (conv.adminOnly || conv.assistant) return res.status(403).json({ ok: false, error: 'forbidden' });
   if (!Array.isArray(conv.memberUsernames) || !conv.memberUsernames.includes(user.username)) {
     return res.status(403).json({ ok: false, error: 'not_member' });
   }
