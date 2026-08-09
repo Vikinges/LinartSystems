@@ -16,3 +16,4 @@ service2/data/people.json
 
 # local editor/agent config
 .claude/
+.env.local
