@@ -1079,12 +1079,20 @@ const bundleUpload = multer({
   },
 });
 
-let dynamicProxies = [];
+// Express can't unmount middleware, so every reload appends a fresh layer per service and
+// the old ones stay in the stack forever. Each layer therefore checks itself against the
+// current service list and steps aside when it's stale — otherwise a deleted service kept
+// proxying and an edited target kept hitting the old host until the hub was restarted.
+let activeServices = [];
 function registerProxies(app){
-  // remove previous proxies by reloading express stack is non-trivial; for simplicity we will not remove old handlers in runtime
-  const services = loadServices();
-  services.forEach(s => {
-    app.use(s.prefix, stripClientHubHeaders, createProxyMiddleware({ target: s.target, changeOrigin: true, pathRewrite: { ['^'+s.prefix]: '' }, logLevel: 'warn' }));
+  activeServices = loadServices();
+  activeServices.forEach(s => {
+    const proxy = createProxyMiddleware({ target: s.target, changeOrigin: true, pathRewrite: { ['^'+s.prefix]: '' }, logLevel: 'warn' });
+    app.use(s.prefix, (req, res, next) => {
+      const live = activeServices.find(x => x.prefix === s.prefix);
+      if (!live || live.target !== s.target) return next();
+      return stripClientHubHeaders(req, res, (err) => (err ? next(err) : proxy(req, res, next)));
+    });
   });
 }
 
@@ -1647,7 +1655,6 @@ app.post('/admin/services', requireSuperadmin, requireSameOrigin, (req, res) => 
 
   list.push(service);
   saveServices(list);
-  // naive: register proxies again (may duplicate in memory but acceptable for minimal admin)
   registerProxies(app);
   res.json({ ok: true, service });
 });
@@ -1696,6 +1703,7 @@ app.delete('/admin/services/:name', requireSuperadmin, requireSameOrigin, (req, 
   let list = loadServices();
   list = list.filter(s=>s.name !== name);
   saveServices(list);
+  registerProxies(app);
   res.json({ ok: true });
 });
 

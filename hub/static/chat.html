@@ -187,8 +187,9 @@
     let convCache = [];
     let lastMsgIds = new Set();
 
+    const disabledTextDefault = document.getElementById('disabledText').textContent;
     function showDisabled(text) {
-      if (text) document.getElementById('disabledText').textContent = text;
+      document.getElementById('disabledText').textContent = text || disabledTextDefault;
       disabledOverlay.classList.remove('is-hidden');
     }
 
@@ -604,7 +605,16 @@
         const meResp = await api('/api/auth/me');
         me = meResp.user || null;
         if (me && me.canUseChat === false) { showDisabled(); return; }
-      } catch (e) { return; }
+      } catch (e) {
+        // 401 already redirected to login and chat_disabled already showed the overlay;
+        // anything else is transient (offline, 5xx, proxy hiccup) and used to leave a blank
+        // page with no pollers, so nothing ever recovered without a manual reload.
+        if (e && (e.message === 'unauthorized' || e.message === 'chat_disabled')) return;
+        showDisabled('Connection problem — retrying...');
+        setTimeout(boot, 5000);
+        return;
+      }
+      disabledOverlay.classList.add('is-hidden');
       await loadConversations();
       // Deep link: ?c=<conversationId> opens that conversation directly.
       const deepId = new URLSearchParams(location.search).get('c');
