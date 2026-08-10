@@ -3202,201 +3202,6 @@ function collectPartsRowUsage(body) {
 
 }
 
-
-
-function parseLocalDateTime(value) {
-
-  if (typeof value !== 'string') return null;
-
-  const trimmed = value.trim();
-
-  if (!trimmed) return null;
-
-  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(trimmed);
-
-  if (!match) return null;
-
-  const [year, month, day, hour, minute, second] = match.slice(1).map((item) => Number(item));
-
-  if (
-
-    [year, month, day, hour, minute].some((item) => Number.isNaN(item)) ||
-
-    (second !== undefined && Number.isNaN(second))
-
-  ) {
-
-    return null;
-
-  }
-
-  const date = new Date(year, month - 1, day, hour, minute, second || 0, 0);
-
-  if (Number.isNaN(date.getTime())) return null;
-
-  if (
-
-    date.getFullYear() !== year ||
-
-    date.getMonth() !== month - 1 ||
-
-    date.getDate() !== day ||
-
-    date.getHours() !== hour ||
-
-    date.getMinutes() !== minute
-
-  ) {
-
-    return null;
-
-  }
-
-  return date;
-
-}
-
-
-
-function formatEmployeeDateTime(value) {
-
-  const parsed = parseLocalDateTime(value);
-
-  if (!parsed) {
-
-    return typeof value === 'string' ? value.trim() : '';
-
-  }
-
-  const pad = (input) => String(input).padStart(2, '0');
-
-  return (
-
-    `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ` +
-
-    `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
-
-  );
-
-}
-
-
-
-function formatIsoFromDate(date) {
-
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-
-    return '';
-
-  }
-
-  const pad = (input) => String(input).padStart(2, '0');
-
-  return (
-
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-
-  );
-
-}
-
-
-
-function formatEmployeeDuration(minutes) {
-
-  if (!Number.isFinite(minutes) || minutes <= 0) return '0m';
-
-  const rounded = Math.round(minutes);
-
-  const hours = Math.floor(rounded / 60);
-
-  const mins = rounded % 60;
-
-  const parts = [];
-
-  if (hours > 0) parts.push(`${hours}h`);
-
-  if (mins > 0) parts.push(`${mins}m`);
-
-  return parts.length ? parts.join(' ') : '0m';
-
-}
-
-
-
-function determineBreakRequirement(minutes) {
-
-  if (!Number.isFinite(minutes) || minutes <= 0) {
-
-    return { code: 'UNKNOWN', minutes: 0, label: 'Pending (set arrival and departure)' };
-
-  }
-
-  if (minutes <= 6 * 60) {
-
-    return { code: 'NONE', minutes: 0, label: 'No mandatory break (<=6h)' };
-
-  }
-
-  if (minutes <= 9 * 60) {
-
-    return { code: 'MIN30', minutes: 30, label: '>=30m (6-9h, 2x15m allowed)' };
-
-  }
-
-  return { code: 'MIN45', minutes: 45, label: '>=45m (>9h)' };
-
-}
-
-
-
-function formatBreakStatsSummary(breakStats) {
-
-  if (!breakStats || typeof breakStats !== 'object') {
-
-    return '';
-
-  }
-
-  const descriptors = [
-
-    { key: 'MIN45', label: '>=45m (>9h)' },
-
-    { key: 'MIN30', label: '>=30m (6-9h, 2x15m)' },
-
-    { key: 'NONE', label: 'no mandatory break (<=6h)' },
-
-  ];
-
-  const parts = [];
-
-  descriptors.forEach(({ key, label }) => {
-
-    const count = Number(breakStats[key] || 0);
-
-    if (count > 0) {
-
-      parts.push(`${count} x ${label}`);
-
-    }
-
-  });
-
-  const pendingCount = Number(breakStats.UNKNOWN || 0);
-
-  if (pendingCount > 0 && parts.length) {
-
-    parts.push(`${pendingCount} x pending`);
-
-  }
-
-  return parts.join(', ');
-
-}
-
-
 function normalizeEmployeeToken(value) {
   return String(value || '')
     .trim()
@@ -3428,52 +3233,6 @@ function computeUniqueEmployeeCount(entries) {
   });
   return seen.size;
 }
-
-function addPageNumbers(pdfDoc, font, options = {}) {
-
-  if (!pdfDoc || !font) return;
-
-  const pages = pdfDoc.getPages();
-
-  if (!pages.length) return;
-
-  const color = options.color || rgb(0.25, 0.25, 0.3);
-
-  const size = options.fontSize || 9;
-
-  const xMargin = options.margin || 18;
-
-  const footerY = options.footerY || 10;
-
-  const total = pages.length;
-
-  pages.forEach((page, index) => {
-
-    const label = `Page ${index + 1} of ${total}`;
-
-    const width = font.widthOfTextAtSize(label, size);
-
-    page.drawText(label, {
-
-      x: page.getWidth() - xMargin - width,
-
-      y: footerY,
-
-      size,
-
-      font,
-
-      color,
-
-    });
-
-  });
-
-}
-
-
-
-
 
 function parseLocalDateTime(value) {
 
@@ -3561,7 +3320,7 @@ function formatEmployeeDateTime(value) {
 
   return (
 
-    `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())} ` +
+    `${pad(parsed.getDate())}.${pad(parsed.getMonth() + 1)}.${parsed.getFullYear()} ` +
 
     `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
 
@@ -3570,6 +3329,17 @@ function formatEmployeeDateTime(value) {
 }
 
 
+
+// Display-only: turn an ISO `yyyy-mm-dd[THH:MM]` into German `dd.mm.yyyy[ HH:MM]`.
+// Stored values, filenames and the wire contract stay ISO — this is for drawn/rendered text.
+function formatDisplayDate(value) {
+  const str = String(value || '').trim();
+  if (!str) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(str);
+  if (!m) return str;
+  const date = `${m[3]}.${m[2]}.${m[1]}`;
+  return m[4] ? `${date} ${m[4]}:${m[5]}` : date;
+}
 
 function formatIsoFromDate(date) {
 
@@ -5068,6 +4838,9 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const val = (key) => toSingleValue(body?.[key]) || '';
 
+  // Date fields arrive ISO from type="date" inputs; non-ISO values ('unknown') pass through.
+  const dateVal = (key) => formatDisplayDate(val(key));
+
 
 
   setCurrentPage(page, headingTitle);
@@ -5082,7 +4855,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   ]);
   drawBlockRow([
     { label: 'Client', value: val('end_customer_name') || val('customer_company') },
-    { label: 'Completion', value: val('completion_date') },
+    { label: 'Completion', value: dateVal('completion_date') },
   ]);
 
 
@@ -5099,7 +4872,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   drawSectionTitle('Acceptance');
 
   drawBlockRow(
-    [{ label: 'Appointment date', value: val('acceptance_date') || val('date_of_service') }],
+    [{ label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') }],
     { fullWidth: true },
   );
 
@@ -5152,8 +4925,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   );
 
   drawBlockRow([
-    { label: 'Defects to be remediated before', value: val('defects_deadline'), height: 30 },
-    { label: 'Remaining activities to be remediated before', value: val('remaining_deadline'), height: 30 },
+    { label: 'Defects to be remediated before', value: dateVal('defects_deadline'), height: 30 },
+    { label: 'Remaining activities to be remediated before', value: dateVal('remaining_deadline'), height: 30 },
   ]);
   drawBlockRow(
     [
@@ -5203,10 +4976,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   drawBlockRow([
     { label: 'Warranty (years)', value: val('warranty_years') },
-    { label: 'Warranty begins on', value: val('warranty_begin'), height: 28 },
+    { label: 'Warranty begins on', value: dateVal('warranty_begin'), height: 28 },
   ]);
   drawBlockRow(
-    [{ label: 'Warranty ends on', value: val('warranty_end'), height: 28 }],
+    [{ label: 'Warranty ends on', value: dateVal('warranty_end'), height: 28 }],
     { fullWidth: true },
   );
 
@@ -5232,7 +5005,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       drawSectionTitle('Annex 1');
     }
     drawBlockRow([
-      { label: 'Annex 1 date', value: val('annex1_date') || val('acceptance_date'), height: 28 },
+      { label: 'Annex 1 date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
       { label: 'Building project', value: val('annex1_building_project') || val('building_project'), height: 32 },
     ]);
 
@@ -5315,7 +5088,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       drawSectionTitle('Annex 2 (Spare parts)');
     }
     drawBlockRow([
-      { label: 'Acceptance date', value: val('annex1_date') || val('acceptance_date'), height: 28 },
+      { label: 'Acceptance date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
       {
         label: 'Building project',
         value: val('annex1_building_project') || val('building_project') || val('building_project_acceptance'),
@@ -5934,7 +5707,7 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
       { label: 'Project number', value: projectNumber },
 
-      { label: 'Report date', value: reportDate },
+      { label: 'Report date', value: formatDisplayDate(reportDate) },
 
     ],
 
@@ -7110,7 +6883,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'LSC Project number', value: toSingleValue(body?.batch_number) || '' },
 
-    { label: 'Date of service', value: toSingleValue(body?.date_of_service) || '' },
+    { label: 'Date of service', value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
 
     { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
 
@@ -7590,7 +7363,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'On-site engineer company', value: toSingleValue(body?.engineer_company) || '' },
 
-    { label: 'Engineer date & time', value: toSingleValue(body?.engineer_datetime) || '' },
+    { label: 'Engineer date & time', value: formatDisplayDate(toSingleValue(body?.engineer_datetime)) },
 
     { label: 'Engineer name', value: toSingleValue(body?.engineer_name) || '' },
 
@@ -7600,7 +7373,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'Customer company', value: toSingleValue(body?.customer_company) || '' },
 
-    { label: 'Customer date & time', value: toSingleValue(body?.customer_datetime) || '' },
+    { label: 'Customer date & time', value: formatDisplayDate(toSingleValue(body?.customer_datetime)) },
 
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
 
@@ -8170,11 +7943,11 @@ function generateIndexHtml() {
 
       actualType = 'text';
 
-      resolvedPlaceholder = 'YYYY-MM-DD HH:MM';
+      resolvedPlaceholder = 'DD.MM.YYYY HH:MM';
 
       extraAttrs =
 
-        ' data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM"';
+        ' data-datetime-text step="60" lang="de-DE" inputmode="numeric" pattern="[0-9]{2}[.][0-9]{2}[.][0-9]{4} [0-2][0-9]:[0-5][0-9]" title="Use 24-hour format DD.MM.YYYY HH:MM"';
 
     }
 
@@ -16545,73 +16318,85 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-          let match = /(\\d{4})-(\\d{1,2})-(\\d{1,2})\\s+([0-2]?\\d):([0-5]?\\d)$/.exec(cleaned);
+          // Typed/displayed as dd.mm.yyyy HH:MM; ISO yyyy-mm-dd is still accepted so a
+          // pasted or previously-stored value round-trips. The submitted value stays ISO.
+          let year;
 
-          if (!match) {
+          let month;
 
-            const digitsOnly = cleaned.replace(/\\D/g, '');
+          let day;
 
-            if (digitsOnly.length === 12) {
+          let hours;
 
-              match = [
+          let minutes;
 
-                '',
+          let match = /^(\\d{1,2})-(\\d{1,2})-(\\d{4})\\s+([0-2]?\\d):([0-5]?\\d)$/.exec(cleaned);
 
-                digitsOnly.slice(0, 4),
+          if (match) {
 
-                digitsOnly.slice(4, 6),
+            day = match[1];
 
-                digitsOnly.slice(6, 8),
+            month = match[2];
 
-                digitsOnly.slice(8, 10),
+            year = match[3];
 
-                digitsOnly.slice(10, 12),
+          } else {
 
-              ];
+            match = /^(\\d{4})-(\\d{1,2})-(\\d{1,2})\\s+([0-2]?\\d):([0-5]?\\d)$/.exec(cleaned);
 
-            } else {
+            if (match) {
 
-              return { iso: '', display: cleaned };
+              year = match[1];
+
+              month = match[2];
+
+              day = match[3];
 
             }
 
           }
 
+          if (match) {
+
+            hours = match[4];
+
+            minutes = match[5];
+
+          } else {
+
+            const digitsOnly = cleaned.replace(/\\D/g, '');
+
+            if (digitsOnly.length !== 12) {
+
+              return { iso: '', display: cleaned };
+
+            }
+
+            day = digitsOnly.slice(0, 2);
+
+            month = digitsOnly.slice(2, 4);
+
+            year = digitsOnly.slice(4, 8);
+
+            hours = digitsOnly.slice(8, 10);
+
+            minutes = digitsOnly.slice(10, 12);
+
+          }
 
 
-          const year = clampNumber(Number(match[1]), 1970, 9999);
 
-          const month = clampNumber(Number(match[2]), 1, 12);
+          const yyyy = String(clampNumber(Number(year), 1970, 9999)).padStart(4, '0');
 
-          const day = clampNumber(Number(match[3]), 1, 31);
+          const mm = String(clampNumber(Number(month), 1, 12)).padStart(2, '0');
 
-          const hours = clampNumber(Number(match[4]), 0, 23);
+          const dd = String(clampNumber(Number(day), 1, 31)).padStart(2, '0');
 
-          const minutes = clampNumber(Number(match[5]), 0, 59);
+          const hh = String(clampNumber(Number(hours), 0, 23)).padStart(2, '0');
 
-          const iso =
+          const min = String(clampNumber(Number(minutes), 0, 59)).padStart(2, '0');
 
-            String(year).padStart(4, '0') +
-
-            '-' +
-
-            String(month).padStart(2, '0') +
-
-            '-' +
-
-            String(day).padStart(2, '0') +
-
-            'T' +
-
-            String(hours).padStart(2, '0') +
-
-            ':' +
-
-            String(minutes).padStart(2, '0');
-
-          const display = iso.slice(0, 10) + ' ' + iso.slice(11, 16);
-
-          return { iso, display };
+          return { iso: yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + min, display: dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min };
 
         };
 
@@ -16631,7 +16416,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               input.classList.add('is-invalid');
 
-              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              input.setCustomValidity('Use DD.MM.YYYY HH:MM');
 
             } else {
 
@@ -16647,7 +16432,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           input.addEventListener('input', () => {
 
-            input.value = input.value.replace(/[^0-9 T:-]/g, '');
+            input.value = input.value.replace(/[^0-9 T:.-]/g, '');
 
           });
 
@@ -21275,7 +21060,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               input.classList.add('is-invalid');
 
-              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              input.setCustomValidity('Use DD.MM.YYYY HH:MM');
 
               return true;
 
@@ -21293,7 +21078,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             if (statusEl) {
 
-              statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
+              statusEl.textContent = 'Check date/time fields (use DD.MM.YYYY HH:MM).';
 
             }
 
@@ -25532,11 +25317,11 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
       const footerPage = pages[pages.length - 1];
 
-      const submittedAt = new Date().toISOString();
+      const submittedAt = formatIsoFromDate(new Date());
 
       const submitterName = detectSubmitterName(req.body || {});
 
-      const footerText = `Submitted by ${submitterName} at ${submittedAt}`;
+      const footerText = `Submitted by ${submitterName} at ${formatDisplayDate(submittedAt)}`;
 
       footerPage.drawText(footerText, {
 

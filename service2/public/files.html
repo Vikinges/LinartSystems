@@ -513,11 +513,24 @@
       if (params.has('q')) queryInput.value = params.get('q');
       if (params.has('limit')) limitSelect.value = params.get('limit');
 
+      // Dates are always rendered dd.mm.yyyy (German field-service standard), never the
+      // viewer's browser locale — the same order the PDFs and the iOS app use.
+      const pad2 = (n) => String(n).padStart(2, '0');
+      const dmy = (date) => `${pad2(date.getDate())}.${pad2(date.getMonth() + 1)}.${date.getFullYear()}`;
+      const hms = (date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+
       const formatDate = (value) => {
         if (!value) return '-';
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return value;
-        return date.toLocaleString();
+        return `${dmy(date)} ${hms(date)}`;
+      };
+
+      // Date-only strings (report date) are stored ISO yyyy-mm-dd; flip without a Date to
+      // avoid the timezone shift new Date('2026-08-01') would introduce.
+      const formatIsoDateOnly = (value) => {
+        const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+        return m ? `${m[3]}.${m[2]}.${m[1]}` : value;
       };
 
       // Split date/time so the Created column can stack them on two lines and stay narrow.
@@ -525,7 +538,7 @@
         if (!value) return { date: '-', time: '' };
         const date = new Date(value);
         if (Number.isNaN(date.getTime())) return { date: value, time: '' };
-        return { date: date.toLocaleDateString(), time: date.toLocaleTimeString() };
+        return { date: dmy(date), time: hms(date) };
       };
 
       const setStatus = (message, isError = false) => {
@@ -643,7 +656,7 @@
           const cellsBefore = [
             file.templateType || '-',
             daily.projectNumber || '-',
-            daily.reportDate || '-',
+            formatIsoDateOnly(daily.reportDate) || '-',
             daily.submitterName || '-',
           ];
 

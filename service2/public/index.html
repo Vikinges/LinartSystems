@@ -8,7 +8,7 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v0.41 Lin</title>
+    <title>PDF forms generator - v0.73 Lin</title>
 
     <link
 
@@ -902,6 +902,28 @@
 
       }
 
+      .photo-slot.drag-over {
+
+        border-color: #2563eb;
+
+        border-style: solid;
+
+        background: #eef2ff;
+
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+
+      }
+
+      .photo-drop-hint {
+
+        color: #6b7280;
+
+        font-size: 0.8rem;
+
+        font-weight: 500;
+
+      }
+
       .upload-button {
 
         display: inline-flex;
@@ -1011,6 +1033,458 @@
         word-break: break-word;
 
       }
+
+      .photo-item-thumb {
+
+        position: relative;
+
+        line-height: 0;
+
+      }
+
+      .photo-item-remove,
+      .photo-item-zoom {
+
+        position: absolute;
+
+        border: none;
+
+        color: #ffffff;
+
+        cursor: pointer;
+
+        opacity: 0;
+
+        transition: opacity 0.15s ease, background 0.15s ease;
+
+        z-index: 2;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 0;
+
+      }
+
+      .photo-item-remove {
+
+        top: 6px;
+
+        right: 6px;
+
+        width: 24px;
+
+        height: 24px;
+
+        border-radius: 50%;
+
+        background: rgba(17, 24, 39, 0.72);
+
+        font-size: 16px;
+
+      }
+
+      .photo-item-remove:hover {
+
+        background: #dc2626;
+
+      }
+
+      .photo-item-zoom {
+
+        top: 50%;
+
+        left: 50%;
+
+        transform: translate(-50%, -50%);
+
+        width: 40px;
+
+        height: 40px;
+
+        border-radius: 50%;
+
+        background: rgba(17, 24, 39, 0.6);
+
+        font-size: 18px;
+
+      }
+
+      .photo-item-zoom:hover {
+
+        background: rgba(17, 24, 39, 0.88);
+
+      }
+
+      .photo-item-thumb:hover .photo-item-remove,
+      .photo-item-thumb:hover .photo-item-zoom,
+      .photo-item-thumb:focus-within .photo-item-remove,
+      .photo-item-thumb:focus-within .photo-item-zoom {
+
+        opacity: 1;
+
+      }
+
+      .photo-lightbox {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 1000;
+
+        background: rgba(0, 0, 0, 0.82);
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 24px;
+
+      }
+
+      .photo-lightbox[hidden] {
+
+        display: none;
+
+      }
+
+      .photo-lightbox img {
+
+        max-width: 95vw;
+
+        max-height: 90vh;
+
+        border-radius: 8px;
+
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+
+      }
+
+      .photo-lightbox-close {
+
+        position: absolute;
+
+        top: 16px;
+
+        right: 20px;
+
+        width: 40px;
+
+        height: 40px;
+
+        border-radius: 50%;
+
+        border: none;
+
+        background: rgba(255, 255, 255, 0.16);
+
+        color: #ffffff;
+
+        font-size: 24px;
+
+        cursor: pointer;
+
+      }
+
+      .fb-fab {
+
+        position: fixed;
+
+        right: 20px;
+
+        bottom: 20px;
+
+        width: 58px;
+
+        height: 58px;
+
+        border: none;
+
+        background: transparent;
+
+        cursor: pointer;
+
+        z-index: 900;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.25));
+
+        transition: transform 0.12s ease;
+
+      }
+
+      .fb-fab:hover { transform: translateY(-2px) scale(1.04); }
+
+      .fb-fab-tri { width: 58px; height: 58px; }
+
+      .fb-fab-hand {
+
+        position: absolute;
+
+        top: 54%;
+
+        left: 50%;
+
+        transform: translate(-50%, -50%);
+
+        font-size: 20px;
+
+        pointer-events: none;
+
+      }
+
+      .fb-overlay {
+
+        position: fixed;
+
+        inset: 0;
+
+        z-index: 1000;
+
+        background: rgba(15, 23, 42, 0.55);
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        padding: 16px;
+
+      }
+
+      .fb-overlay[hidden] { display: none; }
+
+      .fb-dialog {
+
+        width: 100%;
+
+        max-width: 480px;
+
+        background: #ffffff;
+
+        border-radius: 14px;
+
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+
+        overflow: hidden;
+
+        max-height: 90vh;
+
+        display: flex;
+
+        flex-direction: column;
+
+      }
+
+      .fb-dialog-head {
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: space-between;
+
+        padding: 14px 16px;
+
+        background: #c8102e;
+
+        color: #ffffff;
+
+      }
+
+      .fb-close {
+
+        border: none;
+
+        background: transparent;
+
+        color: #ffffff;
+
+        font-size: 22px;
+
+        cursor: pointer;
+
+        line-height: 1;
+
+      }
+
+      .fb-dialog-body {
+
+        padding: 16px;
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 12px;
+
+        overflow-y: auto;
+
+      }
+
+      .fb-types { display: flex; gap: 8px; }
+
+      .fb-type {
+
+        flex: 1;
+
+        padding: 0.5rem 0.75rem;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 999px;
+
+        background: #f9fafb;
+
+        cursor: pointer;
+
+        font-weight: 600;
+
+      }
+
+      .fb-type.is-active { background: #c8102e; color: #ffffff; border-color: #c8102e; }
+
+      .fb-dialog-body textarea {
+
+        width: 100%;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 10px;
+
+        padding: 0.6rem 0.75rem;
+
+        font: inherit;
+
+        resize: vertical;
+
+        min-height: 84px;
+
+      }
+
+      .fb-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+      .fb-attach-btn {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 6px;
+
+        padding: 0.5rem 0.9rem;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 999px;
+
+        background: #f3f4f6;
+
+        cursor: pointer;
+
+        font-weight: 500;
+
+        font-size: 0.9rem;
+
+      }
+
+      .fb-attach-btn.is-recording { background: #fee2e2; border-color: #dc2626; color: #b91c1c; }
+
+      .fb-attach-preview { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+      .fb-attach-preview img {
+
+        width: 64px;
+
+        height: 64px;
+
+        object-fit: cover;
+
+        border-radius: 8px;
+
+        border: 1px solid #e5e7eb;
+
+      }
+
+      .fb-attach-preview audio { height: 36px; max-width: 220px; }
+
+      .fb-hint {
+
+        margin: 0;
+
+        font-size: 0.8rem;
+
+        color: #6b7280;
+
+        background: #f3f4f6;
+
+        border-radius: 8px;
+
+        padding: 8px 10px;
+
+      }
+
+      .fb-hint b { color: #374151; }
+
+      .fb-chip {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 6px;
+
+        background: #eef2ff;
+
+        border-radius: 999px;
+
+        padding: 2px 6px 2px 10px;
+
+        font-size: 0.8rem;
+
+      }
+
+      .fb-chip button { border: none; background: transparent; cursor: pointer; font-size: 14px; color: #6b7280; }
+
+      .fb-actions { display: flex; align-items: center; gap: 12px; }
+
+      .fb-send {
+
+        padding: 0.6rem 1.2rem;
+
+        border: none;
+
+        border-radius: 999px;
+
+        background: #c8102e;
+
+        color: #ffffff;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+      }
+
+      .fb-send:disabled { opacity: 0.6; cursor: default; }
+
+      .fb-status { font-size: 0.85rem; color: #6b7280; }
+
+      .fb-status.error { color: #dc2626; }
+
+      .fb-status.ok { color: #059669; }
 
       .signature-info {
 
@@ -1252,7 +1726,7 @@
 
       }
 
-      /* ── Mobile‑mode signature overlay ── */
+      /* â”€â”€ Mobileâ€‘mode signature overlay â”€â”€ */
 
       body.mobile-mode .signature-overlay {
 
@@ -1744,7 +2218,7 @@
 
       }
 
-      /* ── Rotation lock popup ── */
+      /* â”€â”€ Rotation lock popup â”€â”€ */
 
       .rotation-lock-popup {
 
@@ -2788,7 +3262,7 @@
 
         <button type="button" class="admin-launch" data-admin-open>Admin</button>
 
-        <h1>PDF forms generator - v0.41 Lin</h1>
+        <h1>PDF forms generator - v0.73 Lin</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
@@ -2996,13 +3470,53 @@
         </label>
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
-        <label class="field" for="led-display-model">
-
-          <span>LED display model / batch</span>
-
-          <input type="text" id="led-display-model" name="led_display_model" placeholder="LED display model / batch" />
-
-        </label>
+<div class="field" data-form-types="service_report,maintenance">
+  <label for="led-code-select">LED model picker (type &rarr; number)</label>
+  <div style="display:flex;gap:8px;">
+    <select id="led-code-select" style="flex:1;min-width:0;">
+      <option value="">Type&hellip;</option>
+      <option value="LD-E">LD-E</option><option value="LD-FE">LD-FE</option><option value="LD-FA">LD-FA</option><option value="LD-EC">LD-EC</option><option value="LD-D">LD-D</option>
+    </select>
+    <select id="led-number-select" style="flex:1;min-width:0;" disabled>
+      <option value="">Model No.&hellip;</option>
+    </select>
+  </div>
+</div>
+<!-- led_display_model is derived from the picker above; kept as a hidden field so the
+     user does not re-enter the same value (was a visible duplicate). -->
+<input type="hidden" name="led_display_model" id="led-display-model-hidden" />
+<script>
+(function () {
+  var CAT = [{"code":"LD-E","numbers":[{"number":"121","model":"LD-E121","pitchMm":1.2,"version":1,"label":"121 - 1.2 mm (V1)"},{"number":"151","model":"LD-E151","pitchMm":1.5,"version":1,"label":"151 - 1.5 mm (V1)"},{"number":"181","model":"LD-E181","pitchMm":1.8,"version":1,"label":"181 - 1.8 mm (V1)"},{"number":"251","model":"LD-E251","pitchMm":2.5,"version":1,"label":"251 - 2.5 mm (V1)"}]},{"code":"LD-FE","numbers":[{"number":"092","model":"LD-FE092","pitchMm":0.9,"version":2,"label":"092 - 0.9 mm (V2)"},{"number":"093","model":"LD-FE093","pitchMm":0.9,"version":3,"label":"093 - 0.9 mm (V3)"},{"number":"122","model":"LD-FE122","pitchMm":1.2,"version":2,"label":"122 - 1.2 mm (V2)"},{"number":"123","model":"LD-FE123","pitchMm":1.2,"version":3,"label":"123 - 1.2 mm (V3)"},{"number":"152","model":"LD-FE152","pitchMm":1.5,"version":2,"label":"152 - 1.5 mm (V2)"},{"number":"153","model":"LD-FE153","pitchMm":1.5,"version":3,"label":"153 - 1.5 mm (V3)"},{"number":"192","model":"LD-FE192","pitchMm":1.9,"version":2,"label":"192 - 1.9 mm (V2)"},{"number":"193","model":"LD-FE193","pitchMm":1.9,"version":3,"label":"193 - 1.9 mm (V3)"},{"number":"252","model":"LD-FE252","pitchMm":2.5,"version":2,"label":"252 - 2.5 mm (V2)"},{"number":"312","model":"LD-FE312","pitchMm":3.1,"version":2,"label":"312 - 3.1 mm (V2)"},{"number":"382","model":"LD-FE382","pitchMm":3.8,"version":2,"label":"382 - 3.8 mm (V2)"}]},{"code":"LD-FA","numbers":[{"number":"092","model":"LD-FA092","pitchMm":0.9,"version":2,"label":"092 - 0.9 mm (V2)"},{"number":"093","model":"LD-FA093","pitchMm":0.9,"version":3,"label":"093 - 0.9 mm (V3)"},{"number":"122","model":"LD-FA122","pitchMm":1.2,"version":2,"label":"122 - 1.2 mm (V2)"},{"number":"123","model":"LD-FA123","pitchMm":1.2,"version":3,"label":"123 - 1.2 mm (V3)"},{"number":"152","model":"LD-FA152","pitchMm":1.5,"version":2,"label":"152 - 1.5 mm (V2)"},{"number":"153","model":"LD-FA153","pitchMm":1.5,"version":3,"label":"153 - 1.5 mm (V3)"},{"number":"192","model":"LD-FA192","pitchMm":1.9,"version":2,"label":"192 - 1.9 mm (V2)"},{"number":"193","model":"LD-FA193","pitchMm":1.9,"version":3,"label":"193 - 1.9 mm (V3)"},{"number":"252","model":"LD-FA252","pitchMm":2.5,"version":2,"label":"252 - 2.5 mm (V2)"},{"number":"312","model":"LD-FA312","pitchMm":3.1,"version":2,"label":"312 - 3.1 mm (V2)"},{"number":"382","model":"LD-FA382","pitchMm":3.8,"version":2,"label":"382 - 3.8 mm (V2)"}]},{"code":"LD-EC","numbers":[{"number":"091","model":"LD-EC091 & EC019-H","pitchMm":0.9,"version":1,"label":"091 - 0.9 mm (V1)"},{"number":"121","model":"LD-EC121 & EC121-H","pitchMm":1.2,"version":1,"label":"121 - 1.2 mm (V1)"},{"number":"151","model":"LD-EC151 & EC151-H","pitchMm":1.5,"version":1,"label":"151 - 1.5 mm (V1)"},{"number":"181","model":"LD-EC181 & EC181-H","pitchMm":1.8,"version":1,"label":"181 - 1.8 mm (V1)"}]},{"code":"LD-D","numbers":[{"number":"091","model":"LD-D091","pitchMm":0.9,"version":1,"label":"091 - 0.9 mm (V1)"},{"number":"121","model":"LD-D121","pitchMm":1.2,"version":1,"label":"121 - 1.2 mm (V1)"},{"number":"151","model":"LD-D151","pitchMm":1.5,"version":1,"label":"151 - 1.5 mm (V1)"}]}];
+  function init() {
+    var cs = document.getElementById('led-code-select');
+    var ns = document.getElementById('led-number-select');
+    var input = document.querySelector('input[name="led_display_model"]');
+    if (!cs || !ns || !input) return;
+    cs.addEventListener('change', function () {
+      ns.innerHTML = '<option value="">Model No.\u2026</option>';
+      var g = null;
+      for (var i = 0; i < CAT.length; i++) { if (CAT[i].code === cs.value) { g = CAT[i]; break; } }
+      if (!g) { ns.disabled = true; return; }
+      g.numbers.forEach(function (n) {
+        var o = document.createElement('option');
+        o.value = n.model;
+        o.textContent = n.label || n.number;
+        ns.appendChild(o);
+      });
+      ns.disabled = false;
+    });
+    ns.addEventListener('change', function () {
+      if (!ns.value) return;
+      input.value = ns.value;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();
+</script>
 
         <label class="field" for="batch-number">
 
@@ -3490,6 +4004,65 @@
           <datalist id="suggest-employee-name" data-suggest-list="employee_name"></datalist>
 
           <datalist id="suggest-employee-role" data-suggest-list="employee_role"></datalist>
+
+          <script>
+          (function () {
+            // Person autofill: picking a known name fills the paired role (on-site team)
+            // or company (engineer/customer) from that person's last form â€” so a worker
+            // only types their name and the rest is filled in. Never overwrites edits.
+            var PMAP = {};
+            function pkey(s) { return String(s || '').trim().toLowerCase(); }
+            function loadPeople() {
+              fetch('/api/people', { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                  if (!d || !d.ok || !Array.isArray(d.people)) return;
+                  d.people.forEach(function (p) { if (p && p.name) PMAP[pkey(p.name)] = p; });
+                })
+                .catch(function () {});
+            }
+            function setIfEmpty(el, val) {
+              if (el && val && !String(el.value || '').trim()) {
+                el.value = val;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }
+            }
+            function autofill(input) {
+              var p = PMAP[pkey(input.value)];
+              if (!p) return;
+              if (input.getAttribute('data-suggest-field') === 'employee_name') {
+                var box = input.closest('.employee-person-fields, .employee-name-dialog, tr') || input.parentElement;
+                var roleEl = box && box.querySelector('[data-suggest-field="employee_role"]');
+                if (p.role) setIfEmpty(roleEl, p.role);
+              } else if (input.name === 'engineer_name') {
+                if (p.company) setIfEmpty(document.querySelector('[name="engineer_company"]'), p.company);
+              } else if (input.name === 'customer_name' || input.name === 'customer_representative') {
+                if (p.company) setIfEmpty(document.querySelector('[name="customer_company"]'), p.company);
+              }
+            }
+            // The client is named once at the top (End customer name) â€” mirror it into the
+            // Signatures "Customer company" so it is not entered twice.
+            function syncCustomerCompany() {
+              var ecn = document.querySelector('[name="end_customer_name"]');
+              var cc = document.querySelector('[name="customer_company"]');
+              if (ecn && cc && String(ecn.value || '').trim()) setIfEmpty(cc, String(ecn.value).trim());
+            }
+            document.addEventListener('change', function (e) {
+              var t = e.target;
+              if (!t) return;
+              if (t.name === 'end_customer_name') { syncCustomerCompany(); return; }
+              if (t.tagName !== 'INPUT') return;
+              if (t.getAttribute('data-suggest-field') === 'employee_name'
+                  || t.name === 'engineer_name' || t.name === 'customer_name' || t.name === 'customer_representative') {
+                autofill(t);
+              }
+            }, true);
+            function boot() { loadPeople(); syncCustomerCompany(); }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+            else boot();
+          })();
+          </script>
 
         </section>
 
@@ -4501,7 +5074,7 @@
 
           <span>Engineer date &amp; time</span>
 
-          <input type="text" id="engineer-datetime" name="engineer_datetime" placeholder="YYYY-MM-DD HH:MM" data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM" />
+          <input type="text" id="engineer-datetime" name="engineer_datetime" placeholder="DD.MM.YYYY HH:MM" data-datetime-text step="60" lang="de-DE" inputmode="numeric" pattern="[0-9]{2}[.][0-9]{2}[.][0-9]{4} [0-2][0-9]:[0-5][0-9]" title="Use 24-hour format DD.MM.YYYY HH:MM" />
 
         </label>
 
@@ -4527,7 +5100,7 @@
 
           <span>Customer date &amp; time</span>
 
-          <input type="text" id="customer-datetime" name="customer_datetime" placeholder="YYYY-MM-DD HH:MM" data-datetime-text step="60" lang="en-GB" inputmode="numeric" pattern="[0-9]{4}-[0-9]{2}-[0-9]{2}[ T][0-2][0-9]:[0-5][0-9]" title="Use 24-hour format YYYY-MM-DD HH:MM" />
+          <input type="text" id="customer-datetime" name="customer_datetime" placeholder="DD.MM.YYYY HH:MM" data-datetime-text step="60" lang="de-DE" inputmode="numeric" pattern="[0-9]{2}[.][0-9]{2}[.][0-9]{4} [0-2][0-9]:[0-5][0-9]" title="Use 24-hour format DD.MM.YYYY HH:MM" />
 
         </label>
 
@@ -4801,7 +5374,7 @@
 
 
         const statusEl = document.getElementById('status');
-        const APP_VERSION = '0.41';
+        const APP_VERSION = '0.73';
         const versionLabel = document.querySelector('[data-app-version]');
         if (versionLabel) {
           versionLabel.textContent = 'Version ' + APP_VERSION;
@@ -5091,7 +5664,7 @@
 
               '<div class="rotation-lock-popup__body">' +
 
-              '<h3 class="rotation-lock-popup__title">📱 Enable Rotation Lock</h3>' +
+              '<h3 class="rotation-lock-popup__title">ðŸ“± Enable Rotation Lock</h3>' +
 
               '<p class="rotation-lock-popup__text">' +
 
@@ -5403,7 +5976,7 @@
 
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
 
-          // Ð—Ð°Ð¿Ð¾Ð»Ð½ÑÐµÐ¼ Ð¿Ð¾ÑÐ»ÐµÐ´Ð½ÑŽÑŽ Ð¾Ñ‚ÐºÑ€Ñ‹Ñ‚ÑƒÑŽ ÑÑ‚Ñ€Ð¾ÐºÑƒ (Ð¾Ð±Ñ‹Ñ‡Ð½Ð¾ Ñ‚Ð¾Ð»ÑŒÐºÐ¾ Ñ‡Ñ‚Ð¾ Ð´Ð¾Ð±Ð°Ð²Ð»ÐµÐ½Ð½Ð°Ñ)
+          // Ãâ€”ÃÂ°ÃÂ¿ÃÂ¾ÃÂ»ÃÂ½Ã‘ÂÃÂµÃÂ¼ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµÃÂ´ÃÂ½Ã‘Å½Ã‘Å½ ÃÂ¾Ã‘â€šÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃ‘Æ’Ã‘Å½ Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂºÃ‘Æ’ (ÃÂ¾ÃÂ±Ã‘â€¹Ã‘â€¡ÃÂ½ÃÂ¾ Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ Ã‘â€¡Ã‘â€šÃÂ¾ ÃÂ´ÃÂ¾ÃÂ±ÃÂ°ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½ÃÂ°Ã‘Â)
 
           return rows.length ? rows[rows.length - 1] : null;
 
@@ -7501,7 +8074,7 @@
 
             const uploaded = tpl.uploadedAt ? new Date(tpl.uploadedAt).toLocaleString() : 'Unknown date';
 
-            meta.textContent = size + ' â€¢ ' + uploaded;
+            meta.textContent = size + ' Ã¢â‚¬Â¢ ' + uploaded;
 
             colInfo.appendChild(nameSpan);
 
@@ -8587,73 +9160,85 @@
 
 
 
-          let match = /(\d{4})-(\d{1,2})-(\d{1,2})\s+([0-2]?\d):([0-5]?\d)$/.exec(cleaned);
+          // Typed/displayed as dd.mm.yyyy HH:MM; ISO yyyy-mm-dd is still accepted so a
+          // pasted or previously-stored value round-trips. The submitted value stays ISO.
+          let year;
 
-          if (!match) {
+          let month;
 
-            const digitsOnly = cleaned.replace(/\D/g, '');
+          let day;
 
-            if (digitsOnly.length === 12) {
+          let hours;
 
-              match = [
+          let minutes;
 
-                '',
+          let match = /^(\d{1,2})-(\d{1,2})-(\d{4})\s+([0-2]?\d):([0-5]?\d)$/.exec(cleaned);
 
-                digitsOnly.slice(0, 4),
+          if (match) {
 
-                digitsOnly.slice(4, 6),
+            day = match[1];
 
-                digitsOnly.slice(6, 8),
+            month = match[2];
 
-                digitsOnly.slice(8, 10),
+            year = match[3];
 
-                digitsOnly.slice(10, 12),
+          } else {
 
-              ];
+            match = /^(\d{4})-(\d{1,2})-(\d{1,2})\s+([0-2]?\d):([0-5]?\d)$/.exec(cleaned);
 
-            } else {
+            if (match) {
 
-              return { iso: '', display: cleaned };
+              year = match[1];
+
+              month = match[2];
+
+              day = match[3];
 
             }
 
           }
 
+          if (match) {
+
+            hours = match[4];
+
+            minutes = match[5];
+
+          } else {
+
+            const digitsOnly = cleaned.replace(/\D/g, '');
+
+            if (digitsOnly.length !== 12) {
+
+              return { iso: '', display: cleaned };
+
+            }
+
+            day = digitsOnly.slice(0, 2);
+
+            month = digitsOnly.slice(2, 4);
+
+            year = digitsOnly.slice(4, 8);
+
+            hours = digitsOnly.slice(8, 10);
+
+            minutes = digitsOnly.slice(10, 12);
+
+          }
 
 
-          const year = clampNumber(Number(match[1]), 1970, 9999);
 
-          const month = clampNumber(Number(match[2]), 1, 12);
+          const yyyy = String(clampNumber(Number(year), 1970, 9999)).padStart(4, '0');
 
-          const day = clampNumber(Number(match[3]), 1, 31);
+          const mm = String(clampNumber(Number(month), 1, 12)).padStart(2, '0');
 
-          const hours = clampNumber(Number(match[4]), 0, 23);
+          const dd = String(clampNumber(Number(day), 1, 31)).padStart(2, '0');
 
-          const minutes = clampNumber(Number(match[5]), 0, 59);
+          const hh = String(clampNumber(Number(hours), 0, 23)).padStart(2, '0');
 
-          const iso =
+          const min = String(clampNumber(Number(minutes), 0, 59)).padStart(2, '0');
 
-            String(year).padStart(4, '0') +
-
-            '-' +
-
-            String(month).padStart(2, '0') +
-
-            '-' +
-
-            String(day).padStart(2, '0') +
-
-            'T' +
-
-            String(hours).padStart(2, '0') +
-
-            ':' +
-
-            String(minutes).padStart(2, '0');
-
-          const display = iso.slice(0, 10) + ' ' + iso.slice(11, 16);
-
-          return { iso, display };
+          return { iso: yyyy + '-' + mm + '-' + dd + 'T' + hh + ':' + min, display: dd + '.' + mm + '.' + yyyy + ' ' + hh + ':' + min };
 
         };
 
@@ -8673,7 +9258,7 @@
 
               input.classList.add('is-invalid');
 
-              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              input.setCustomValidity('Use DD.MM.YYYY HH:MM');
 
             } else {
 
@@ -8689,7 +9274,7 @@
 
           input.addEventListener('input', () => {
 
-            input.value = input.value.replace(/[^0-9 T:-]/g, '');
+            input.value = input.value.replace(/[^0-9 T:.-]/g, '');
 
           });
 
@@ -9477,7 +10062,107 @@
 
         }
 
+        // Remove one photo (by index) from a field's real <input type=file> via a
+        // DataTransfer, then refresh the preview — mirrors how photos are added.
+        function removePhotoAt(fieldName, index) {
+          const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+          if (!input) return;
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          const mode = (container && container.dataset.photoMode) || (input.multiple ? 'multi' : 'single');
+          const kept = Array.prototype.slice.call(input.files || []).filter(function (_f, i) { return i !== index; });
+          let dt;
+          try { dt = new DataTransfer(); } catch (e) { return; }
+          kept.forEach(function (f) { dt.items.add(f); });
+          input.files = dt.files;
+          handleFileSelection(fieldName, input.files, mode);
+        }
 
+        // Full-size preview overlay (single reused element). Click backdrop/×/Esc to close.
+        function openPhotoLightbox(src, name) {
+          let ov = document.querySelector('[data-photo-lightbox]');
+          if (!ov) {
+            ov = document.createElement('div');
+            ov.dataset.photoLightbox = 'true';
+            ov.className = 'photo-lightbox';
+            ov.hidden = true;
+            const img = document.createElement('img');
+            img.dataset.photoLightboxImg = 'true';
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'photo-lightbox-close';
+            close.setAttribute('aria-label', 'Close');
+            close.textContent = '×';
+            ov.appendChild(close);
+            ov.appendChild(img);
+            document.body.appendChild(ov);
+            // Clear the src on close so the overlay never keeps a blob URL that a later
+            // photo removal revokes (which would log a broken-image error).
+            const hide = function () { ov.hidden = true; img.removeAttribute('src'); };
+            ov.addEventListener('click', function (e) { if (e.target === ov || e.target === close) hide(); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !ov.hidden) hide(); });
+          }
+          const img = ov.querySelector('[data-photo-lightbox-img]');
+          img.src = src;
+          img.alt = name || '';
+          ov.hidden = false;
+        }
+
+        // Build one preview tile: thumbnail + hover controls (× remove, magnifier preview)
+        // + caption. Pushes the created object URL into urls for later revocation.
+        function buildPhotoPreviewItem(fieldName, file, mode, index, urls) {
+          const item = document.createElement('div');
+          item.className = 'photo-preview-item';
+
+          const thumb = document.createElement('div');
+          thumb.className = 'photo-item-thumb';
+
+          const img = document.createElement('img');
+          const url = URL.createObjectURL(file);
+          urls.push(url);
+          img.src = url;
+          img.alt = file.name;
+          img.onerror = function () {
+            URL.revokeObjectURL(url);
+            const reader = new FileReader();
+            reader.onload = function () { img.src = reader.result; };
+            reader.readAsDataURL(file);
+          };
+
+          const zoomBtn = document.createElement('button');
+          zoomBtn.type = 'button';
+          zoomBtn.className = 'photo-item-zoom';
+          zoomBtn.title = 'Preview';
+          zoomBtn.setAttribute('aria-label', 'Preview photo');
+          zoomBtn.textContent = '🔍';
+          zoomBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            openPhotoLightbox(img.src, file.name);
+          });
+
+          const removeBtn = document.createElement('button');
+          removeBtn.type = 'button';
+          removeBtn.className = 'photo-item-remove';
+          removeBtn.title = 'Remove';
+          removeBtn.setAttribute('aria-label', 'Remove photo');
+          removeBtn.textContent = '×';
+          removeBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            removePhotoAt(fieldName, index);
+          });
+
+          thumb.appendChild(img);
+          thumb.appendChild(zoomBtn);
+          thumb.appendChild(removeBtn);
+
+          const caption = document.createElement('span');
+          caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
+
+          item.appendChild(thumb);
+          item.appendChild(caption);
+          return item;
+        }
 
         function renderPreview(fieldName, files, mode) {
 
@@ -9485,9 +10170,11 @@
 
           if (!container) return;
 
-          revokePreviewUrls(fieldName);
-
+          // Clear the DOM first, then revoke the old object URLs — revoking while the old
+          // <img> tags are still attached makes the browser log ERR_FILE_NOT_FOUND for them.
           container.innerHTML = '';
+
+          revokePreviewUrls(fieldName);
 
           if (!files || !files.length) {
 
@@ -9513,47 +10200,9 @@
 
             list.className = 'photo-preview-list';
 
-            files.forEach((file) => {
+            files.forEach((file, index) => {
 
-              const item = document.createElement('div');
-
-              item.className = 'photo-preview-item';
-
-              const img = document.createElement('img');
-
-              const url = URL.createObjectURL(file);
-
-              urls.push(url);
-
-              img.src = url;
-
-              img.alt = file.name;
-
-              img.onerror = () => {
-
-                URL.revokeObjectURL(url);
-
-                const reader = new FileReader();
-
-                reader.onload = () => {
-
-                  img.src = reader.result;
-
-                };
-
-                reader.readAsDataURL(file);
-
-              };
-
-              const caption = document.createElement('span');
-
-              caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
-
-              item.appendChild(img);
-
-              item.appendChild(caption);
-
-              list.appendChild(item);
+              list.appendChild(buildPhotoPreviewItem(fieldName, file, mode, index, urls));
 
             });
 
@@ -9563,45 +10212,7 @@
 
             const file = files[0];
 
-            const item = document.createElement('div');
-
-            item.className = 'photo-preview-item';
-
-            const img = document.createElement('img');
-
-            const url = URL.createObjectURL(file);
-
-            urls.push(url);
-
-            img.src = url;
-
-            img.alt = file.name;
-
-            img.onerror = () => {
-
-              URL.revokeObjectURL(url);
-
-              const reader = new FileReader();
-
-              reader.onload = () => {
-
-                img.src = reader.result;
-
-              };
-
-              reader.readAsDataURL(file);
-
-            };
-
-            const caption = document.createElement('span');
-
-            caption.textContent = file.name + ' (' + formatBytes(file.size || 0) + ')';
-
-            item.appendChild(img);
-
-            item.appendChild(caption);
-
-            container.appendChild(item);
+            container.appendChild(buildPhotoPreviewItem(fieldName, file, mode, 0, urls));
 
           }
 
@@ -11800,6 +12411,44 @@
 
         }
 
+        let activePhotoField = null;
+
+        function isPhotoElementVisible(el) {
+          return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length));
+        }
+
+        // Add dropped/pasted images to a photo field's real <input type=file> (the source of
+        // truth for submission) via a DataTransfer, then refresh the preview. multi appends,
+        // single replaces. Non-image items are ignored; nameless pastes get a filename.
+        function addFilesToPhotoField(fieldName, newFiles) {
+          const input = formEl.querySelector('[data-photo-input="' + fieldName + '"]');
+          if (!input) return;
+          const container = document.querySelector('[data-photo-preview="' + fieldName + '"]');
+          const mode = (container && container.dataset.photoMode) || (input.multiple ? 'multi' : 'single');
+
+          const images = Array.prototype.slice.call(newFiles || [])
+            .filter(function (f) { return f && f.type && f.type.indexOf('image/') === 0; })
+            .map(function (f) {
+              if (f.name) return f;
+              const ext = (f.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+              try {
+                return new File([f], 'pasted-' + Date.now() + '.' + ext, { type: f.type, lastModified: Date.now() });
+              } catch (e) { return f; }
+            });
+          if (!images.length) return;
+
+          let dt;
+          try { dt = new DataTransfer(); } catch (e) { return; }
+          if (mode === 'multi') {
+            Array.prototype.slice.call(input.files || []).forEach(function (f) { dt.items.add(f); });
+            images.forEach(function (f) { dt.items.add(f); });
+          } else {
+            dt.items.add(images[images.length - 1]);
+          }
+          input.files = dt.files;
+          handleFileSelection(fieldName, input.files, mode);
+        }
+
         function setupPhotoUploads() {
 
           document.querySelectorAll('[data-photo-preview]').forEach((container) => {
@@ -11818,7 +12467,73 @@
 
             input.addEventListener('change', () => handleFileSelection(fieldName, input.files, mode));
 
+            // Drag & drop onto the whole slot; also mark it active so Ctrl+V routes here.
+            const zone = container.closest('[data-photo-slot]') || container;
+            if (zone.dataset.dropWired !== '1') {
+              zone.dataset.dropWired = '1';
+              const markActive = () => { activePhotoField = fieldName; };
+              zone.addEventListener('mouseenter', markActive);
+              zone.addEventListener('click', markActive);
+              ['dragenter', 'dragover'].forEach((ev) => zone.addEventListener(ev, (e) => {
+                e.preventDefault();
+                if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+                zone.classList.add('drag-over');
+                activePhotoField = fieldName;
+              }));
+              ['dragleave', 'dragend'].forEach((ev) => zone.addEventListener(ev, (e) => {
+                if (ev === 'dragend' || !zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+              }));
+              zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                const files = e.dataTransfer && e.dataTransfer.files;
+                if (files && files.length) addFilesToPhotoField(fieldName, files);
+              });
+              const hint = document.createElement('div');
+              hint.className = 'photo-drop-hint';
+              hint.textContent = 'Tip: drag & drop photos here, or paste them with Ctrl+V.';
+              const uploadBtn = zone.querySelector('.upload-button');
+              if (uploadBtn && uploadBtn.parentNode) {
+                uploadBtn.parentNode.insertBefore(hint, uploadBtn.nextSibling);
+              } else {
+                zone.appendChild(hint);
+              }
+            }
+
           });
+
+          // Paste an image anywhere on the form → route it to the active (or first visible)
+          // photo field. Wired once. Non-image pastes fall through to normal text paste.
+          if (!document.__photoPasteWired) {
+            document.__photoPasteWired = true;
+            document.addEventListener('paste', (e) => {
+              const items = (e.clipboardData && e.clipboardData.items) || null;
+              if (!items) return;
+              const imgs = [];
+              for (let i = 0; i < items.length; i += 1) {
+                const it = items[i];
+                if (it && it.kind === 'file' && it.type && it.type.indexOf('image/') === 0) {
+                  const f = it.getAsFile();
+                  if (f) imgs.push(f);
+                }
+              }
+              if (!imgs.length) return;
+              let field = null;
+              if (activePhotoField) {
+                const activeSlot = document.querySelector('[data-photo-slot="' + activePhotoField + '"]');
+                if (activeSlot && isPhotoElementVisible(activeSlot)) field = activePhotoField;
+              }
+              if (!field) {
+                const firstVisible = Array.prototype.slice.call(document.querySelectorAll('[data-photo-slot]'))
+                  .find((slot) => isPhotoElementVisible(slot));
+                if (firstVisible) field = firstVisible.dataset.photoSlot;
+              }
+              if (field) {
+                e.preventDefault();
+                addFilesToPhotoField(field, imgs);
+              }
+            });
+          }
 
         }
 
@@ -12933,7 +13648,7 @@
 
 
 
-            // Ð»Ð¾ÐºÐ°Ð»ÑŒÐ½Ñ‹Ðµ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð½Ð° Ð¾ÑÐ½Ð¾Ð²Ðµ ÑƒÐ¶Ðµ Ð²Ð²ÐµÐ´Ñ‘Ð½Ð½Ñ‹Ñ… Ð·Ð½Ð°Ñ‡ÐµÐ½Ð¸Ð¹ (Ð²ÐºÐ»ÑŽÑ‡Ð°Ñ Ð²Ð¾ÑÑÑ‚Ð°Ð½Ð¾Ð²Ð»ÐµÐ½Ð½Ñ‹Ð¹ Ð´Ñ€Ð°Ñ„Ñ‚)
+            // ÃÂ»ÃÂ¾ÃÂºÃÂ°ÃÂ»Ã‘Å’ÃÂ½Ã‘â€¹ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ½ÃÂ° ÃÂ¾Ã‘ÂÃÂ½ÃÂ¾ÃÂ²ÃÂµ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ²ÃÂ²ÃÂµÃÂ´Ã‘â€˜ÃÂ½ÃÂ½Ã‘â€¹Ã‘â€¦ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂ¹ (ÃÂ²ÃÂºÃÂ»Ã‘Å½Ã‘â€¡ÃÂ°Ã‘Â ÃÂ²ÃÂ¾Ã‘ÂÃ‘ÂÃ‘â€šÃÂ°ÃÂ½ÃÂ¾ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ´Ã‘â‚¬ÃÂ°Ã‘â€žÃ‘â€š)
 
             const localSeeds = [];
 
@@ -12947,7 +13662,7 @@
 
               localSeeds.push(next);
 
-              // Ð¾Ñ‚Ð¿Ñ€Ð°Ð²Ð»ÑÐµÐ¼ Ð½Ð° ÑÐµÑ€Ð²ÐµÑ€, Ñ‡Ñ‚Ð¾Ð±Ñ‹ Ð¿Ð¾Ð´ÑÐºÐ°Ð·ÐºÐ¸ Ð±Ñ‹Ð»Ð¸ Ð¾Ð±Ñ‰Ð¸Ð¼Ð¸
+              // ÃÂ¾Ã‘â€šÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃÂµÃÂ¼ ÃÂ½ÃÂ° Ã‘ÂÃÂµÃ‘â‚¬ÃÂ²ÃÂµÃ‘â‚¬, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ±Ã‘â€¹ÃÂ»ÃÂ¸ ÃÂ¾ÃÂ±Ã‘â€°ÃÂ¸ÃÂ¼ÃÂ¸
 
               if (next.length >= 1) {
 
@@ -13187,7 +13902,7 @@
 
               input.classList.add('is-invalid');
 
-              input.setCustomValidity('Use YYYY-MM-DD HH:MM');
+              input.setCustomValidity('Use DD.MM.YYYY HH:MM');
 
               return true;
 
@@ -13205,7 +13920,7 @@
 
             if (statusEl) {
 
-              statusEl.textContent = 'Check date/time fields (use YYYY-MM-DD HH:MM).';
+              statusEl.textContent = 'Check date/time fields (use DD.MM.YYYY HH:MM).';
 
             }
 
@@ -13629,6 +14344,224 @@
 
       })();
 
+    </script>
+
+    <button type="button" id="fb-fab" class="fb-fab" title="Report a problem or idea" aria-label="Report a problem or idea">
+      <svg class="fb-fab-tri" viewBox="0 0 40 36" aria-hidden="true"><path d="M20 3 L37 32 H3 Z" fill="#ffffff" stroke="#c8102e" stroke-width="2.6" stroke-linejoin="round"/></svg>
+      <span class="fb-fab-hand" aria-hidden="true">&#9995;</span>
+    </button>
+    <div id="fb-overlay" class="fb-overlay" hidden>
+      <div class="fb-dialog" role="dialog" aria-modal="true" aria-label="Send feedback to support">
+        <div class="fb-dialog-head">
+          <strong>Report a problem or idea</strong>
+          <button type="button" class="fb-close" id="fb-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="fb-dialog-body">
+          <div class="fb-types">
+            <button type="button" class="fb-type is-active" data-fb-kind="bug">&#128736; Problem</button>
+            <button type="button" class="fb-type" data-fb-kind="idea">&#128161; Idea</button>
+          </div>
+          <textarea id="fb-message" rows="4" placeholder="Describe the problem or your idea..."></textarea>
+          <div class="fb-row">
+            <label class="fb-attach-btn">&#128247; Add photos<input type="file" id="fb-photos" accept="image/*" multiple hidden></label>
+            <button type="button" class="fb-attach-btn" id="fb-record">&#127908; Record voice</button>
+            <label class="fb-attach-btn">&#127911; Audio file<input type="file" id="fb-audio-file" accept="audio/*" hidden></label>
+          </div>
+          <p class="fb-hint">&#128161; Tip: copy an image or file and press <b>Ctrl+V</b> here to attach it. On Windows, press <b>Win+Shift+S</b> to capture part of the screen, then <b>Ctrl+V</b> in this window.</p>
+          <div id="fb-attach-preview" class="fb-attach-preview"></div>
+          <div class="fb-actions">
+            <button type="button" class="fb-send" id="fb-send">Send to support</button>
+            <span id="fb-status" class="fb-status"></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        const fab = document.getElementById('fb-fab');
+        const overlay = document.getElementById('fb-overlay');
+        if (!fab || !overlay) return;
+        const closeBtn = document.getElementById('fb-close');
+        const messageEl = document.getElementById('fb-message');
+        const photosInput = document.getElementById('fb-photos');
+        const audioFileInput = document.getElementById('fb-audio-file');
+        const recordBtn = document.getElementById('fb-record');
+        const preview = document.getElementById('fb-attach-preview');
+        const sendBtn = document.getElementById('fb-send');
+        const statusEl = document.getElementById('fb-status');
+        const typeBtns = Array.prototype.slice.call(document.querySelectorAll('.fb-type'));
+
+        let kind = 'bug';
+        let photos = [];      // File[]
+        let photoUrls = [];   // object URLs currently shown (revoked on re-render)
+        let audioBlob = null; // Blob (recorded or picked)
+        let audioName = '';
+        let mediaRecorder = null;
+        let recChunks = [];
+        let recUrl = null;
+
+        const setStatus = (msg, cls) => { statusEl.textContent = msg || ''; statusEl.className = 'fb-status' + (cls ? ' ' + cls : ''); };
+
+        const open = () => { overlay.hidden = false; setStatus(''); messageEl.focus(); };
+        const close = () => {
+          overlay.hidden = true;
+          if (mediaRecorder && mediaRecorder.state === 'recording') { try { mediaRecorder.stop(); } catch (e) {} }
+        };
+        fab.addEventListener('click', open);
+        closeBtn.addEventListener('click', close);
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
+
+        typeBtns.forEach((b) => b.addEventListener('click', () => {
+          kind = b.dataset.fbKind || 'bug';
+          typeBtns.forEach((x) => x.classList.toggle('is-active', x === b));
+        }));
+
+        const revokeRec = () => { if (recUrl) { URL.revokeObjectURL(recUrl); recUrl = null; } };
+
+        function renderPreview() {
+          // Clear the DOM first, then revoke the previous object URLs (revoking while the
+          // old <img> tags are still attached logs broken-image errors on quick re-renders).
+          preview.innerHTML = '';
+          photoUrls.forEach((u) => URL.revokeObjectURL(u));
+          photoUrls = [];
+          photos.forEach((file, i) => {
+            const wrap = document.createElement('span');
+            wrap.className = 'fb-chip';
+            const img = document.createElement('img');
+            const u = URL.createObjectURL(file);
+            photoUrls.push(u);
+            img.src = u;
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.textContent = '\u00d7';
+            rm.title = 'Remove';
+            rm.addEventListener('click', () => { photos.splice(i, 1); renderPreview(); });
+            wrap.appendChild(img);
+            wrap.appendChild(rm);
+            preview.appendChild(wrap);
+          });
+          if (audioBlob) {
+            const chip = document.createElement('span');
+            chip.className = 'fb-chip';
+            const audio = document.createElement('audio');
+            audio.controls = true;
+            revokeRec();
+            recUrl = URL.createObjectURL(audioBlob);
+            audio.src = recUrl;
+            const rm = document.createElement('button');
+            rm.type = 'button';
+            rm.textContent = '\u00d7';
+            rm.title = 'Remove voice';
+            rm.addEventListener('click', () => { audioBlob = null; audioName = ''; revokeRec(); renderPreview(); });
+            chip.appendChild(audio);
+            chip.appendChild(rm);
+            preview.appendChild(chip);
+          }
+        }
+
+        photosInput.addEventListener('change', () => {
+          Array.prototype.slice.call(photosInput.files || []).forEach((f) => { if (photos.length < 10) photos.push(f); });
+          photosInput.value = '';
+          renderPreview();
+        });
+        audioFileInput.addEventListener('change', () => {
+          const f = (audioFileInput.files || [])[0];
+          if (f) { audioBlob = f; audioName = f.name || 'audio'; }
+          audioFileInput.value = '';
+          renderPreview();
+        });
+
+        // Paste (Ctrl+V) an image/file from the clipboard while the dialog is open — e.g. a
+        // screenshot taken with Win+Shift+S. Non-file pastes fall through to normal text paste.
+        document.addEventListener('paste', (e) => {
+          if (overlay.hidden) return;
+          const items = (e.clipboardData && e.clipboardData.items) || null;
+          if (!items) return;
+          let added = 0;
+          for (let i = 0; i < items.length; i += 1) {
+            const it = items[i];
+            if (!it || it.kind !== 'file') continue;
+            const f = it.getAsFile();
+            if (!f) continue;
+            const type = String(f.type || '').toLowerCase();
+            if (type.indexOf('image/') === 0) {
+              if (photos.length < 10) { photos.push(f); added += 1; }
+            } else if (type.indexOf('audio/') === 0) {
+              audioBlob = f; audioName = f.name || 'audio'; added += 1;
+            }
+          }
+          if (added) {
+            e.preventDefault();
+            renderPreview();
+            setStatus(added + ' attachment(s) pasted.', 'ok');
+          }
+        });
+
+        recordBtn.addEventListener('click', async () => {
+          if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
+          if (!navigator.mediaDevices || !window.MediaRecorder) { setStatus('Recording not supported in this browser — attach an audio file instead.', 'error'); return; }
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            recChunks = [];
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+              stream.getTracks().forEach((t) => t.stop());
+              audioBlob = new Blob(recChunks, { type: (mediaRecorder.mimeType || 'audio/webm') });
+              audioName = 'voice-message';
+              recordBtn.classList.remove('is-recording');
+              recordBtn.innerHTML = '\ud83c\udf99 Record voice';
+              renderPreview();
+            };
+            mediaRecorder.start();
+            recordBtn.classList.add('is-recording');
+            recordBtn.innerHTML = '\u23f9 Stop recording';
+            setStatus('Recording... tap Stop when done.');
+          } catch (e) {
+            setStatus('Microphone access denied.', 'error');
+          }
+        });
+
+        sendBtn.addEventListener('click', async () => {
+          const message = (messageEl.value || '').trim();
+          if (!message && !photos.length && !audioBlob) { setStatus('Add a message, a photo, or a voice note.', 'error'); return; }
+          sendBtn.disabled = true;
+          setStatus('Sending...');
+          try {
+            const fd = new FormData();
+            fd.append('kind', kind);
+            fd.append('message', message);
+            let formType = '';
+            try { const el = document.querySelector('[name="template_type"]'); if (el) formType = el.value || ''; } catch (e) {}
+            fd.append('context', JSON.stringify({ source: 'web_form', formType: formType, page: location.pathname, userAgent: navigator.userAgent }));
+            photos.forEach((f, i) => fd.append('photo_' + i, f, f.name || ('photo_' + i + '.jpg')));
+            if (audioBlob) {
+              let fname;
+              if (audioName && /.[a-z0-9]{2,4}$/i.test(audioName)) {
+                fname = audioName; // picked file already carries an extension
+              } else {
+                const ext = (audioBlob.type && audioBlob.type.indexOf('mp4') >= 0) ? 'm4a' : (audioBlob.type && audioBlob.type.indexOf('ogg') >= 0 ? 'ogg' : 'webm');
+                fname = (audioName || 'voice') + '.' + ext;
+              }
+              fd.append('voice', audioBlob, fname);
+            }
+            const fbUrl = new URL('api/feedback', new URL('.', window.location.href)).toString();
+            const resp = await fetch(fbUrl, { method: 'POST', body: fd, credentials: 'same-origin' });
+            const data = await resp.json().catch(() => ({}));
+            if (!resp.ok || !data.ok) throw new Error((data && data.error) || ('HTTP ' + resp.status));
+            setStatus('Sent — thank you!', 'ok');
+            messageEl.value = '';
+            photos = []; audioBlob = null; audioName = ''; revokeRec();
+            renderPreview();
+            setTimeout(close, 900);
+          } catch (e) {
+            setStatus('Could not send: ' + (e && e.message ? e.message : 'error'), 'error');
+          } finally {
+            sendBtn.disabled = false;
+          }
+        });
+      })();
     </script>
 
   </body>
