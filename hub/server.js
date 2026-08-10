@@ -3477,7 +3477,9 @@ app.post('/api/chat/conversations/:id/messages', requireChatMember, chatUpload.s
   // AI Assistant DM: relay the user's message to the platform and post the answer back
   // (fire-and-forget so the user's own message returns immediately).
   if (conv.assistant && message.authorId !== ASSISTANT_AUTHOR && text) {
-    relayToAssistant(conv.id, text, user.username);
+    relayToAssistant(conv.id, text, user.username).catch((err) => {
+      console.warn('[hub] relayToAssistant failed', err && err.message);
+    });
   }
   return res.json({ ok: true, ...message });
 });
