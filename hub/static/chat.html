@@ -40,6 +40,8 @@
     .msg-author { font-size: 0.74rem; color: #9fb4d6; margin-bottom: 2px; font-weight: 600; }
     .msg.mine .msg-author { color: #d6e2ff; }
     .msg-body { white-space: pre-wrap; word-break: break-word; font-size: 0.92rem; line-height: 1.35; }
+    .msg-body a { color: #2563eb; text-decoration: underline; }
+    .msg.mine .msg-body a { color: #fff; }
     .msg-time { font-size: 0.68rem; color: #8595ad; margin-top: 3px; text-align: right; }
     .msg.mine .msg-time { color: #cdd9f5; }
     .msg-att img { max-width: 240px; max-height: 240px; border-radius: 10px; display: block; margin-top: 4px; cursor: pointer; }
@@ -347,6 +349,54 @@
       if (scroll || nearBottom) messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    // The AI Assistant answers with URLs (and sometimes markdown links) in plain text, and
+    // people paste links into chats. Turn both into real anchors. Built as DOM nodes rather
+    // than innerHTML so a message body can never inject markup, and only http(s) is linked.
+    const MD_LINK_RE = /\[([^\]\n]{1,200})\]\((https?:\/\/[^\s)]+)\)/g;
+    const URL_RE = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+
+    function appendLink(parent, href, label) {
+      let url = href;
+      if (/^www\./i.test(url)) url = 'https://' + url;
+      if (!/^https?:\/\//i.test(url)) { parent.appendChild(document.createTextNode(label)); return; }
+      // Trailing punctuation usually belongs to the sentence, not the URL.
+      let trail = '';
+      const m = /[.,:;!?)\]}"']+$/.exec(url);
+      if (m && label === href) { trail = m[0]; url = url.slice(0, -trail.length); }
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = label === href ? url : label;
+      parent.appendChild(a);
+      if (trail) parent.appendChild(document.createTextNode(trail));
+    }
+
+    function appendTextWithLinks(parent, text) {
+      URL_RE.lastIndex = 0;
+      let last = 0;
+      let match;
+      while ((match = URL_RE.exec(text)) !== null) {
+        if (match.index > last) parent.appendChild(document.createTextNode(text.slice(last, match.index)));
+        appendLink(parent, match[0], match[0]);
+        last = match.index + match[0].length;
+      }
+      if (last < text.length) parent.appendChild(document.createTextNode(text.slice(last)));
+    }
+
+    function renderBodyWithLinks(parent, text) {
+      const src = String(text == null ? '' : text);
+      MD_LINK_RE.lastIndex = 0;
+      let last = 0;
+      let match;
+      while ((match = MD_LINK_RE.exec(src)) !== null) {
+        if (match.index > last) appendTextWithLinks(parent, src.slice(last, match.index));
+        appendLink(parent, match[2], match[1]);
+        last = match.index + match[0].length;
+      }
+      if (last < src.length) appendTextWithLinks(parent, src.slice(last));
+    }
+
     function renderMessage(m) {
       const mine = m.authorId === (me && me.username);
       const el = document.createElement('div');
@@ -360,7 +410,7 @@
       if (m.body) {
         const body = document.createElement('div');
         body.className = 'msg-body';
-        body.textContent = m.body;
+        renderBodyWithLinks(body, m.body);
         el.appendChild(body);
       }
       if (m.attachment && m.attachment.url) {

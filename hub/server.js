@@ -3102,6 +3102,12 @@ function ensureAssistantConversation(username) {
     };
     index.push(conv);
     saveChatIndex(index);
+  } else if (!conv.assistant || !conv.title) {
+    // Threads created before the flag existed: mark them so they're protected from
+    // deletion and keep their own title instead of being relabelled with the user's name.
+    conv.assistant = true;
+    if (!conv.title) conv.title = 'AI Assistant';
+    saveChatIndex(index);
   }
   return conv;
 }
@@ -3169,8 +3175,11 @@ function conversationPayload(conv, username) {
   );
   // DM titles are stored from usernames ("Beatus & admin"); render them with display names
   // when set ("Beatus & Vladimir"). Group/project rooms keep their custom title.
+  // The AI Assistant DM is exempt: its only member is the user themself, so this rule
+  // relabelled it with the user's own name and the consultant looked like it had vanished
+  // from the chat list. It keeps its stored "AI Assistant" title.
   let title = conv.title;
-  if (conv.kind === 'direct' && Array.isArray(conv.memberUsernames) && conv.memberUsernames.length) {
+  if (!conv.assistant && conv.kind === 'direct' && Array.isArray(conv.memberUsernames) && conv.memberUsernames.length) {
     title = conv.memberUsernames.map((u) => getChatDisplayName(u) || u).join(' & ');
   }
   return {
@@ -3178,6 +3187,10 @@ function conversationPayload(conv, username) {
     kind: conv.kind,
     ...(conv.projectKey ? { projectKey: conv.projectKey } : {}),
     ...(conv.ownerUsername ? { ownerUsername: conv.ownerUsername } : {}),
+    ...(conv.assistant ? { assistant: true } : {}),
+    // Service thread: mutable (mute) but never deletable. Lets clients show only
+    // Mute/Hide for exactly the threads the server protects, without guessing id prefixes.
+    ...(isSystemConversation(conv) ? { system: true } : {}),
     title,
     memberUsernames: conv.memberUsernames || [],
     lastMessage: last,
@@ -3596,13 +3609,23 @@ function hardRemoveConversation(index, idx) {
   try { const d = path.join(CHAT_ATTACH_DIR, chatSanitizeId(removed.id)); if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true }); } catch (e) { /* best-effort */ }
   return removed;
 }
+// System conversations are service threads, not user-owned rooms: the AI Assistant DM and
+// the admin-only feeds. They can be muted, never deleted or left — deleting one destroys its
+// history for good (iOS issue #1, note 2026-08-09). Matched by flag, with an id-prefix
+// fallback so threads created before the flags existed are protected too.
+function isSystemConversation(conv) {
+  if (!conv) return false;
+  if (conv.adminOnly || conv.assistant) return true;
+  const id = String(conv.id || '');
+  return id.startsWith('assistant_') || id === FEEDBACK_CONV_ID || id === CHAT_REPORTS_CONV_ID;
+}
+
 // Who may delete a conversation: any portal admin (Vladimir's main ask), either party of a
-// direct thread, or the creator/owner of a group. System conversations (admin-only feeds and
-// the AI Assistant DM) aren't user-owned rooms — never deletable via this route, not even by
-// an admin (iOS issue #1, note 2026-08-09: a deleted assistant thread lost its history for good).
+// direct thread, or the creator/owner of a group. System conversations are never deletable,
+// not even by an admin.
 function canDeleteConversation(conv, user) {
   if (!conv || !user) return false;
-  if (conv.adminOnly || conv.assistant) return false;
+  if (isSystemConversation(conv)) return false;
   if (user.isSuperadmin || user.role === USER_ROLE_ADMIN) return true;
   if (conv.kind === 'direct') return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(user.username);
   return conv.ownerUsername ? conv.ownerUsername === user.username : false;
@@ -3674,7 +3697,7 @@ app.post('/api/chat/conversations/:id/leave', (req, res) => {
   const conv = index[idx];
   // System conversations can't be left either — the AI Assistant DM would just get
   // wiped once its sole member "leaves" (see canDeleteConversation above).
-  if (conv.adminOnly || conv.assistant) return res.status(403).json({ ok: false, error: 'forbidden' });
+  if (isSystemConversation(conv)) return res.status(403).json({ ok: false, error: 'forbidden' });
   if (!Array.isArray(conv.memberUsernames) || !conv.memberUsernames.includes(user.username)) {
     return res.status(403).json({ ok: false, error: 'not_member' });
   }
@@ -3870,6 +3893,9 @@ app.delete('/api/chat/admin/conversations/:id', requireChatAdmin, (req, res) => 
   const index = loadChatIndex();
   const idx = index.findIndex((c) => c.id === req.params.id);
   if (idx < 0) return res.status(404).json({ ok: false, error: 'conversation_not_found' });
+  // Moderation must not be a back door around the system-thread guard: this route is how
+  // the AI Assistant DM got wiped from an admin's own chat list.
+  if (isSystemConversation(index[idx])) return res.status(403).json({ ok: false, error: 'system_conversation' });
   const [removed] = index.splice(idx, 1);
   saveChatIndex(index);
   try { const p = chatMessagesPath(removed.id); if (fs.existsSync(p)) fs.unlinkSync(p); }
