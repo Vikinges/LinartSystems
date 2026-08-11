@@ -13,6 +13,7 @@ const fs = require('fs');
 const fsExtra = require('fs-extra');
 
 const crypto = require('crypto');
+const zlib = require('zlib');
 const archiver = require('archiver');
 
 const express = require('express');
@@ -237,10 +238,11 @@ function normalizeReportStatus(s) {
   return REPORT_STATUSES.includes(s) ? s : 'submitted';
 }
 
-// Count the distinct signatures present on a report from its meta — a signature is
-// "present" if it was drawn (signaturePlacements) or persisted for edit (signatureFiles).
-// Returns 0..2 (engineer_signature, customer_signature).
-function countReportSignatures(meta) {
+// Which signature slots are present on a report, from its meta — a signature counts as
+// present if it was drawn (signaturePlacements) or persisted for edit (signatureFiles).
+// Blank pads never reach the meta: they're dropped at submit (see isBlankSignatureImage).
+const SIGNATURE_SLOTS = { engineer: 'engineer_signature', customer: 'customer_signature' };
+function reportSignatureSlots(meta) {
   const names = new Set();
   if (meta && Array.isArray(meta.signaturePlacements)) {
     meta.signaturePlacements.forEach((s) => { if (s && s.acroName) names.add(String(s.acroName)); });
@@ -248,7 +250,93 @@ function countReportSignatures(meta) {
   if (meta && meta.signatureFiles && typeof meta.signatureFiles === 'object') {
     Object.keys(meta.signatureFiles).forEach((k) => names.add(String(k)));
   }
-  return names.size;
+  const has = (acroName) => [...names].some((n) => new RegExp(acroName, 'i').test(n));
+  return { engineer: has(SIGNATURE_SLOTS.engineer), customer: has(SIGNATURE_SLOTS.customer) };
+}
+// Returns 0..2 (engineer_signature, customer_signature).
+function countReportSignatures(meta) {
+  const slots = reportSignatureSlots(meta);
+  return (slots.engineer ? 1 : 0) + (slots.customer ? 1 : 0);
+}
+
+// A signature pad that was never drawn on still produces a perfectly valid PNG — fully
+// transparent, but a real `data:image/png` all the same. Those used to be persisted and
+// counted, so web reports looked signed with visibly empty boxes (iOS issue #1 note 394).
+// Detect and drop them at submit. Only uncompressed-friendly PNGs are inspected; anything
+// we can't decode (JPEG, interlaced, exotic bit depth) is treated as a real signature.
+function isBlankSignatureImage(dataUrl) {
+  try {
+    const m = /^data:image\/png;base64,([A-Za-z0-9+/=]+)$/i.exec(String(dataUrl || '').trim());
+    if (!m) return false;
+    const buf = Buffer.from(m[1], 'base64');
+    if (buf.length < 8 || buf.readUInt32BE(0) !== 0x89504e47) return false;
+
+    let offset = 8;
+    let width = 0; let height = 0; let bitDepth = 0; let colorType = -1; let interlace = 0;
+    const idat = [];
+    while (offset + 8 <= buf.length) {
+      const len = buf.readUInt32BE(offset);
+      const type = buf.toString('ascii', offset + 4, offset + 8);
+      const dataStart = offset + 8;
+      if (dataStart + len > buf.length) break;
+      if (type === 'IHDR') {
+        width = buf.readUInt32BE(dataStart);
+        height = buf.readUInt32BE(dataStart + 4);
+        bitDepth = buf[dataStart + 8];
+        colorType = buf[dataStart + 9];
+        interlace = buf[dataStart + 12];
+      } else if (type === 'IDAT') {
+        idat.push(buf.subarray(dataStart, dataStart + len));
+      } else if (type === 'IEND') break;
+      offset = dataStart + len + 4;
+    }
+
+    const channelsByColorType = { 0: 1, 2: 3, 4: 2, 6: 4 };
+    const channels = channelsByColorType[colorType];
+    if (!channels || bitDepth !== 8 || interlace !== 0 || !width || !height || !idat.length) return false;
+
+    const raw = zlib.inflateSync(Buffer.concat(idat));
+    const stride = width * channels;
+    if (raw.length < (stride + 1) * height) return false;
+
+    // Un-filter scanlines in place, then compare every pixel against the first one.
+    const prev = Buffer.alloc(stride);
+    const cur = Buffer.alloc(stride);
+    let first = null;
+    const hasAlpha = colorType === 4 || colorType === 6;
+    for (let y = 0; y < height; y += 1) {
+      const rowStart = y * (stride + 1);
+      const filter = raw[rowStart];
+      raw.copy(cur, 0, rowStart + 1, rowStart + 1 + stride);
+      for (let i = 0; i < stride; i += 1) {
+        const a = i >= channels ? cur[i - channels] : 0;
+        const b = prev[i];
+        const c = i >= channels ? prev[i - channels] : 0;
+        let recon = cur[i];
+        if (filter === 1) recon += a;
+        else if (filter === 2) recon += b;
+        else if (filter === 3) recon += (a + b) >> 1;
+        else if (filter === 4) {
+          const p = a + b - c;
+          const pa = Math.abs(p - a); const pb = Math.abs(p - b); const pc = Math.abs(p - c);
+          recon += (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+        } else if (filter !== 0) return false;
+        cur[i] = recon & 0xff;
+      }
+      for (let x = 0; x < width; x += 1) {
+        const px = cur.subarray(x * channels, x * channels + channels);
+        if (hasAlpha && px[channels - 1] !== 0) {
+          // Any non-transparent pixel: fall through to the uniform-colour comparison.
+        }
+        if (first === null) { first = Buffer.from(px); continue; }
+        if (!px.equals(first)) return false;
+      }
+      cur.copy(prev);
+    }
+    return true; // every pixel identical → nothing was drawn
+  } catch (err) {
+    return false; // never reject a signature because we failed to parse it
+  }
 }
 
 function buildFileListEntry(meta, type, fallbackFilename) {
@@ -287,8 +375,10 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
     photoCount: Array.isArray(meta.photoFiles) ? meta.photoFiles.length : 0,
-    // Distinct signatures actually present on the report (engineer/customer) → 0, 1 or 2.
+    // Distinct signatures actually present on the report (engineer/customer) → 0, 1 or 2,
+    // plus which slot each one is so the apps can name the party still missing.
     signatureCount: countReportSignatures(meta),
+    signatures: reportSignatureSlots(meta),
     submittedBy: (function () {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
@@ -672,6 +762,61 @@ async function listTrashEntries() {
   }
   out.sort((a, b) => Date.parse(b.deletedAt || 0) - Date.parse(a.deletedAt || 0));
   return out;
+}
+
+// One-shot migration: until blank pads were rejected at submit, an untouched signature pad
+// was persisted and counted, so reports showed as signed with visibly empty boxes (iOS
+// issue #1 note 394). Re-check the persisted signature images once and drop the blank ones
+// so signatureCount/signatures tell the truth for reports created before that fix.
+// Only slots with a persisted image can be judged; older reports without one are left alone.
+async function backfillBlankSignatures() {
+  const marker = path.join(DATA_DIR, '.signature-backfill-v1.done');
+  if (fs.existsSync(marker)) return;
+  let scanned = 0;
+  let cleanedReports = 0;
+  let clearedSlots = 0;
+  try {
+    const types = await fs.promises.readdir(OUTPUT_DIR, { withFileTypes: true });
+    for (const type of types) {
+      if (!type.isDirectory()) continue;
+      const metaDir = path.join(OUTPUT_DIR, type.name, 'meta');
+      const sigDir = path.join(OUTPUT_DIR, type.name, 'signatures');
+      let metaFiles = [];
+      try { metaFiles = await fs.promises.readdir(metaDir); } catch (err) { continue; }
+      for (const metaFile of metaFiles) {
+        if (!metaFile.endsWith('.json')) continue;
+        const metaPath = path.join(metaDir, metaFile);
+        let meta = null;
+        try { meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8')); } catch (err) { continue; }
+        if (!meta || !meta.signatureFiles || typeof meta.signatureFiles !== 'object') continue;
+        scanned += 1;
+        const blank = [];
+        for (const [acroName, sigFile] of Object.entries(meta.signatureFiles)) {
+          try {
+            const buf = await fs.promises.readFile(path.join(sigDir, sigFile));
+            const mime = /\.png$/i.test(sigFile) ? 'png' : 'jpeg';
+            if (isBlankSignatureImage(`data:image/${mime};base64,${buf.toString('base64')}`)) blank.push(acroName);
+          } catch (err) { /* image missing — can't judge, leave the slot as-is */ }
+        }
+        if (!blank.length) continue;
+        blank.forEach((name) => { delete meta.signatureFiles[name]; });
+        if (Array.isArray(meta.signaturePlacements)) {
+          meta.signaturePlacements = meta.signaturePlacements.filter(
+            (p) => !(p && blank.some((name) => new RegExp(name, 'i').test(String(p.acroName || '')))),
+          );
+        }
+        if (!Object.keys(meta.signatureFiles).length) delete meta.signatureFiles;
+        await fs.promises.writeFile(metaPath, JSON.stringify(meta, null, 2));
+        cleanedReports += 1;
+        clearedSlots += blank.length;
+      }
+    }
+    await fs.promises.mkdir(DATA_DIR, { recursive: true });
+    await fs.promises.writeFile(marker, new Date().toISOString(), 'utf8');
+    console.log(`[server] signature backfill: cleared ${clearedSlots} blank signature(s) across ${cleanedReports} report(s) (scanned ${scanned})`);
+  } catch (err) {
+    console.warn('[server] signature backfill failed:', err && err.message);
+  }
 }
 
 // Permanently purge trashed reports whose expiresAt has passed. Runs on a daily timer.
@@ -5719,9 +5864,11 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
   drawSectionTitle('Report text');
 
-  const availableTextHeight = cursorY - margin - 180;
+  // A daily report is a one-way status update — no signatures, so nothing needs reserving
+  // below the text box any more (iOS issue #1 note 394); the text gets that space instead.
+  const availableTextHeight = cursorY - margin - 24;
 
-  const textBoxHeight = clampNumber(availableTextHeight, 140, 280);
+  const textBoxHeight = clampNumber(availableTextHeight, 140, 460);
 
   const textRect = {
 
@@ -5815,99 +5962,6 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
   });
 
-  // --- Signatures (engineer + customer) ---
-  // Drawn in the space reserved below the report-text box (availableTextHeight above
-  // keeps ~180px clear). Recording each box into options.signatureSlots lets a remote
-  // customer signature be drawn into the exact customer box later, matching service
-  // reports (drawSignOffPage) instead of the appendix fallback in /internal/sign-completed.
-  const sigColumnWidth = (page.getWidth() - margin * 2 - 12) / 2;
-  const resolveDailyPageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
-  const dailySignatureImages = Array.isArray(options.signatureImages) ? options.signatureImages : [];
-
-  const sigTitleY = textRect.y - 22;
-  page.drawText('Signatures', {
-    x: margin,
-    y: sigTitleY,
-    size: 12,
-    font,
-    color: headingColor,
-  });
-
-  const sigBoxTop = sigTitleY - 22;
-  const sigBoxHeight = Math.max(56, Math.min(84, sigBoxTop - margin - 8));
-  const sigBoxBottom = sigBoxTop - sigBoxHeight;
-
-  const dailySignatureBoxes = [
-    { label: 'Engineer signature', acroName: 'engineer_signature', x: margin },
-    { label: 'Customer signature', acroName: 'customer_signature', x: margin + sigColumnWidth + 12 },
-  ];
-
-  for (const box of dailySignatureBoxes) {
-    const boxRect = { x: box.x, y: sigBoxBottom, width: sigColumnWidth, height: sigBoxHeight };
-
-    if (Array.isArray(options.signatureSlots)) {
-      options.signatureSlots.push({
-        acroName: box.acroName,
-        page: resolveDailyPageNumber(),
-        x: Number(boxRect.x.toFixed(2)),
-        y: Number(boxRect.y.toFixed(2)),
-        width: Number(boxRect.width.toFixed(2)),
-        height: Number(boxRect.height.toFixed(2)),
-      });
-    }
-
-    page.drawText(box.label, {
-      x: boxRect.x,
-      y: boxRect.y + boxRect.height + 6,
-      size: 10,
-      font,
-      color: headingColor,
-    });
-
-    page.drawRectangle({
-      x: boxRect.x,
-      y: boxRect.y,
-      width: boxRect.width,
-      height: boxRect.height,
-      borderWidth: TABLE_BORDER_WIDTH,
-      borderColor: TABLE_BORDER_COLOR,
-      color: rgb(1, 1, 1),
-    });
-
-    const entry = dailySignatureImages.find((item) =>
-      new RegExp(box.acroName, 'i').test(item.acroName),
-    );
-    if (entry) {
-      try {
-        const decoded = decodeImageDataUrl(entry.data);
-        if (decoded) {
-          const image =
-            decoded.mimeType === 'image/png'
-              ? await pdfDoc.embedPng(decoded.buffer)
-              : await pdfDoc.embedJpg(decoded.buffer);
-          const availableWidth = boxRect.width - 12;
-          const availableHeight = boxRect.height - 12;
-          const scale = Math.min(availableWidth / image.width, availableHeight / image.height);
-          const drawWidth = image.width * scale;
-          const drawHeight = image.height * scale;
-          page.drawImage(image, {
-            x: boxRect.x + 6 + (availableWidth - drawWidth) / 2,
-            y: boxRect.y + 6 + (availableHeight - drawHeight) / 2,
-            width: drawWidth,
-            height: drawHeight,
-          });
-          signaturePlacements.push({
-            acroName: entry.acroName,
-            page: resolveDailyPageNumber(),
-            width: Number(drawWidth.toFixed(2)),
-            height: Number(drawHeight.toFixed(2)),
-          });
-        }
-      } catch (err) {
-        console.warn(`[server] Unable to draw daily signature for ${box.label}: ${err.message}`);
-      }
-    }
-  }
 
   return signaturePlacements;
 
@@ -23999,6 +24053,7 @@ async function readFileDataResponse(type, filename) {
     remoteSigned: meta.remoteSigned === true,
     remoteSignedAt: meta.remoteSignedAt || null,
     signatureCount: countReportSignatures(meta),
+    signatures: reportSignatureSlots(meta),
     photos,
     fields: rb,
   };
@@ -24721,6 +24776,14 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
     if (typeof raw === 'string' && raw.startsWith('data:image/')) {
 
+      // An untouched signature pad still serialises to a valid, fully transparent PNG.
+      // Treat that as "not signed" so it isn't drawn, persisted or counted.
+      if (isBlankSignatureImage(raw)) {
+        console.log(`[server] ignoring blank ${sigName} (empty signature pad)`);
+        if (req.body) req.body[sigName] = '';
+        return;
+      }
+
       signatureImages.push({ acroName: sigName, data: raw });
 
     }
@@ -25012,7 +25075,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
                   : null;
 
-            if (/signature/i.test(descriptor.acroName) && signatureData && signatureData.startsWith('data:image/')) {
+            if (/signature/i.test(descriptor.acroName) && signatureData && signatureData.startsWith('data:image/') && !isBlankSignatureImage(signatureData)) {
 
               signatureImages.push({ acroName: descriptor.acroName, data: signatureData });
 
@@ -25218,12 +25281,8 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
               : null,
 
-          // Draw engineer/customer signature boxes and record their geometry so a
-          // remote customer signature lands in the exact box (mirrors service reports)
-          // instead of the appendix fallback in /internal/sign-completed.
-          signatureImages,
-
-          signatureSlots,
+          // No signature boxes on a daily report — it's a one-way status update
+          // (iOS issue #1 note 394), so nothing signature-related is passed in.
 
         },
 
@@ -26123,6 +26182,11 @@ function start() {
   const runSweep = () => { sweepTrash().catch((err) => console.warn('[server] trash sweep failed:', err && err.message)); };
   setTimeout(runSweep, 60 * 1000).unref();
   setInterval(runSweep, 24 * 60 * 60 * 1000).unref();
+
+  // One-shot, off the boot path so a large archive never delays listening.
+  setTimeout(() => {
+    backfillBlankSignatures().catch((err) => console.warn('[server] signature backfill failed:', err && err.message));
+  }, 15 * 1000).unref();
 
   return server;
 
