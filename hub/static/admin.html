@@ -95,6 +95,17 @@
     .perm-label input { margin-top: 3px; }
     .perm-label .perm-hint { display: block; color: #7a8794; font-size: 0.76rem; line-height: 1.25; }
     .section-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: #8a96a4; margin: 10px 0 4px; }
+    .pw-row { display: flex; gap: 6px; align-items: stretch; }
+    .pw-row input { flex: 1 1 auto; min-width: 0; }
+    /* Buttons here are secondary (white), so the global white button text must be overridden. */
+    .pw-btn { flex: 0 0 auto; padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; color: #1f2937; border-radius: 8px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; }
+    .pw-btn:hover { background: #f1f5f9; color: #1f2937; }
+    .handoff { grid-column: 1 / -1; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 10px; padding: 12px 14px; }
+    .handoff-title { font-weight: 600; margin-bottom: 8px; }
+    .handoff-text { margin: 0 0 10px; padding: 10px; background: #fff; border: 1px solid #d1fae5; border-radius: 8px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; }
+    .handoff-actions { display: flex; gap: 10px; align-items: center; }
+    .handoff-state { font-size: 0.82rem; color: #047857; }
+    .handoff-hint { margin-top: 8px; font-size: 0.76rem; color: #6b7280; }
     .role-options label.inline { flex-direction: row; align-items: center; gap: 6px; }
     .user-card { display: flex; flex-direction: column; gap: 6px; border: 1px solid #e6eef8; border-radius: 10px; padding: 16px; background: #fafcff; }
     .user-card .info strong { font-size: 1.05rem; display: flex; align-items: center; gap: 4px; }
@@ -342,8 +353,20 @@
         </label>
         <label>
           Password
-          <input type="password" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required>
+          <span class="pw-row">
+            <input type="text" id="newUserPassword" placeholder="Min 4 chars" minlength="4" required autocomplete="off" spellcheck="false">
+            <button type="button" id="newUserGenerate" class="pw-btn" title="Generate a strong password">Generate</button>
+          </span>
         </label>
+        <div id="newUserHandoff" class="handoff" hidden>
+          <div class="handoff-title">✅ User created — send them these credentials</div>
+          <pre id="newUserHandoffText" class="handoff-text"></pre>
+          <div class="handoff-actions">
+            <button type="button" id="newUserCopy" class="pw-btn">📋 Copy login &amp; password</button>
+            <span id="newUserCopyState" class="handoff-state"></span>
+          </div>
+          <div class="handoff-hint">Shown once — the password is not stored anywhere in readable form. The user can change it later in the app under Account.</div>
+        </div>
         <div style="grid-column: 1 / -1;">
           <div class="section-label">Role</div>
           <div id="newUserRoles" class="role-options"></div>
@@ -1995,6 +2018,76 @@
       }
     }
 
+    // --- Credential hand-off ---------------------------------------------------------
+    // The password is only ever known here, in the browser, at creation time — the server
+    // stores a bcrypt hash and never gives it back. So offer it for copying once, right
+    // after creation, and keep it in a local variable only (never localStorage).
+    const newUserGenerateBtn = document.getElementById('newUserGenerate');
+    const handoffBox = document.getElementById('newUserHandoff');
+    const handoffText = document.getElementById('newUserHandoffText');
+    const handoffCopyBtn = document.getElementById('newUserCopy');
+    const handoffState = document.getElementById('newUserCopyState');
+
+    function generatePassword(length = 14) {
+      // Ambiguous glyphs (O/0, l/1/I) removed: these get read aloud and retyped on a phone.
+      const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+      const bytes = new Uint32Array(length);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, (n) => alphabet[n % alphabet.length]).join('');
+    }
+
+    if (newUserGenerateBtn && newUserPasswordInput) {
+      newUserGenerateBtn.addEventListener('click', () => {
+        newUserPasswordInput.value = generatePassword();
+        newUserPasswordInput.focus();
+        newUserPasswordInput.select();
+      });
+    }
+
+    function buildHandoffText(username, password) {
+      return [
+        'LSC LED Portal: ' + location.origin,
+        'Login: ' + username,
+        'Password: ' + password,
+        '',
+        'Please change your password after the first login (Account → Change password).',
+      ].join('\n');
+    }
+
+    function showHandoff(username, password) {
+      if (!handoffBox || !handoffText) return;
+      handoffText.textContent = buildHandoffText(username, password);
+      handoffBox.hidden = false;
+      if (handoffState) handoffState.textContent = '';
+    }
+
+    async function copyHandoff() {
+      if (!handoffText) return;
+      const text = handoffText.textContent;
+      let copied = false;
+      try {
+        // Only available over HTTPS/localhost; falls back below on plain HTTP.
+        await navigator.clipboard.writeText(text);
+        copied = true;
+      } catch (err) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { copied = document.execCommand('copy'); } catch (e) { copied = false; }
+        document.body.removeChild(ta);
+      }
+      if (handoffState) {
+        handoffState.textContent = copied ? 'Copied to clipboard' : 'Copy failed — select the text above manually';
+        handoffState.style.color = copied ? '#047857' : '#b91c1c';
+      }
+    }
+
+    if (handoffCopyBtn) handoffCopyBtn.addEventListener('click', copyHandoff);
+
     if (addUserForm) {
       addUserForm.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -2022,6 +2115,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, allowedServices: selectedServices })
           });
+          showHandoff(username, password);
           newUserPasswordInput.value = '';
           if (newUserServices) {
             newUserServices.querySelectorAll('input[type="checkbox"][data-service-id]').forEach((cb) => (cb.checked = false));

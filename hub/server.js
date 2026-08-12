@@ -566,6 +566,13 @@ function getBearerAuthToken(req) {
 
 function getSessionUser(req) {
   if (req.session && req.session.user) {
+    // Web sessions opened before the password changed are revoked too (mirrors tokens).
+    const openedAt = Number(req.session.authAt || 0);
+    if (openedAt && openedAt < passwordChangedAt(req.session.user.username)) {
+      req.session.user = null;
+      req.session.authenticated = false;
+      return null;
+    }
     const normalized = normalizeSessionUser(req.session.user);
     if (normalized && (!req.session.user.role || req.session.user.role !== normalized.role)) {
       req.session.user = normalized;
@@ -592,6 +599,7 @@ function getSessionUser(req) {
 function setSessionUser(req, user) {
   if (req.session) {
     req.session.user = normalizeSessionUser(user);
+    req.session.authAt = Date.now(); // compared against passwordChangedAt on every request
   }
 }
 
@@ -660,6 +668,8 @@ function parseAdminAuthToken(token) {
   }
   if (!data || !data.u || !data.t) return null;
   if (Date.now() - Number(data.t) > ADMIN_AUTH_TTL_MS) return null;
+  // Issued before the account's password was last changed → revoked (other devices).
+  if (Number(data.t) < passwordChangedAt(data.u)) return null;
   const isSuperadmin = data.a === 1;
   const role = normalizeUserRole(data.r, isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
   const canViewFiles = normalizeFilesAccess(data.f, false);
@@ -1609,6 +1619,102 @@ app.post('/api/account/delete-request', (req, res) => {
   res.clearCookie(ADMIN_AUTH_COOKIE, adminCookieOptions());
 
   return res.json({ ok: true, scheduledFor });
+});
+
+// Self-service password change. Any signed-in user (app or web) can rotate their own
+// password without an admin — they authenticate with the current one, so a borrowed
+// unlocked device can't lock the owner out. Admin-set passwords may be as short as 4
+// chars (they're one-time hand-offs); a password the user picks themselves must be
+// longer, since it is the one that sticks.
+const SELF_PASSWORD_MIN_LENGTH = 8;
+
+// Brute-forcing the *current* password through this endpoint has to be throttled, but not
+// on the login limiter: that one is keyed by IP, so a whole office behind one NAT address
+// shares its budget. Key by account instead — it's the thing being attacked — and clear the
+// bucket on success so a legitimate change never leaves residue.
+const passwordChangeAttempts = new Map();
+const PASSWORD_CHANGE_WINDOW_MS = 15 * 60 * 1000;
+const PASSWORD_CHANGE_MAX_ATTEMPTS = 5;
+function rateLimitPasswordChange(req, res, next) {
+  const user = getSessionUser(req);
+  const key = (user && user.username) || clientIp(req) || 'unknown';
+  const now = Date.now();
+  const bucket = passwordChangeAttempts.get(key) || { count: 0, ts: now };
+  if (now - bucket.ts > PASSWORD_CHANGE_WINDOW_MS) { bucket.count = 0; bucket.ts = now; }
+  bucket.count += 1;
+  passwordChangeAttempts.set(key, bucket);
+  if (bucket.count > PASSWORD_CHANGE_MAX_ATTEMPTS) {
+    const retryAfter = Math.max(1, Math.ceil((bucket.ts + PASSWORD_CHANGE_WINDOW_MS - now) / 1000));
+    res.set('Retry-After', String(retryAfter));
+    return res.status(429).json({ ok: false, error: 'too_many_attempts', retryAfter });
+  }
+  req.clearPasswordChangeAttempts = () => passwordChangeAttempts.delete(key);
+  return next();
+}
+
+// Locate the stored record behind a session/token username. The superadmin lives in its
+// own slot, everyone else in the users array.
+function findCredentialRecord(username) {
+  const name = String(username || '').trim();
+  if (!name) return null;
+  const superadmin = adminCredentials.superadmin;
+  if (superadmin && (superadmin.username || DEFAULT_ADMIN_USERNAME) === name) {
+    return { record: superadmin, isSuperadmin: true };
+  }
+  if (Array.isArray(adminCredentials.users)) {
+    const record = adminCredentials.users.find((u) => u && String(u.username || '').trim() === name);
+    if (record) return { record, isSuperadmin: false };
+  }
+  return null;
+}
+
+// Tokens and sessions issued before the password changed are dead: rotating the password
+// signs the account out everywhere else. The caller gets a fresh token in the response.
+function passwordChangedAt(username) {
+  const found = findCredentialRecord(username);
+  const at = found && found.record ? Date.parse(found.record.passwordChangedAt || '') : NaN;
+  return Number.isFinite(at) ? at : 0;
+}
+
+app.post('/api/account/password', rateLimitPasswordChange, async (req, res) => {
+  setNoCache(res);
+  const current = getSessionUser(req);
+  if (!current) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+  const body = req.body || {};
+  const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword : '';
+  const newPassword = typeof body.newPassword === 'string' ? body.newPassword : '';
+
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ ok: false, error: 'missing_fields' });
+  }
+  if (newPassword.length < SELF_PASSWORD_MIN_LENGTH) {
+    return res.status(400).json({ ok: false, error: 'weak_password', minLength: SELF_PASSWORD_MIN_LENGTH });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ ok: false, error: 'same_password' });
+  }
+
+  // Re-authenticate rather than trusting the session alone.
+  const verified = await authenticateCredentials(current.username, currentPassword);
+  if (!verified) {
+    appendAudit('password_change_denied', { actor: current.username, ip: clientIp(req) });
+    return res.status(403).json({ ok: false, error: 'invalid_current_password' });
+  }
+
+  const found = findCredentialRecord(current.username);
+  if (!found) return res.status(404).json({ ok: false, error: 'not_found' });
+
+  found.record.passwordHash = await bcrypt.hash(newPassword, 10);
+  found.record.passwordChangedAt = new Date().toISOString();
+  saveAdminCredentials(adminCredentials);
+  appendAudit('password_changed', { actor: current.username, ip: clientIp(req) });
+  if (typeof req.clearPasswordChangeAttempts === 'function') req.clearPasswordChangeAttempts();
+
+  // Keep the caller signed in on this device with a token minted after the change.
+  const refreshed = normalizeSessionUser({ ...current, ...verified });
+  setSessionUser(req, refreshed);
+  return res.json(buildTokenResponse(refreshed));
 });
 
 function requireAuth(req, res, next){
