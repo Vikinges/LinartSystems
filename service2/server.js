@@ -4948,18 +4948,23 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       if (item.value) {
 
-        page.drawText('Ã¢Å“â€œ', {
-
-          x: margin + 2,
-
-          y: cursorY - rowHeight + 6,
-
-          size: 10,
-
-          font,
-
+        // Drawn as two strokes rather than a glyph: this used to be a '✓' literal that a
+        // re-encoding of this file mangled into 'Ã¢Å“â€œ', which is what actually printed
+        // on the acceptance certificate. A tick can't be written with the standard font
+        // anyway — WinAnsi has no U+2713 — so vectors keep it correct whatever the font.
+        const boxX = margin;
+        const boxY = cursorY - rowHeight + 4;
+        page.drawLine({
+          start: { x: boxX + 2.5, y: boxY + 6 },
+          end: { x: boxX + 4.8, y: boxY + 3.2 },
+          thickness: 1.6,
           color: rgb(1, 1, 1),
-
+        });
+        page.drawLine({
+          start: { x: boxX + 4.8, y: boxY + 3.2 },
+          end: { x: boxX + 9.5, y: boxY + 9 },
+          thickness: 1.6,
+          color: rgb(1, 1, 1),
         });
 
       }
@@ -7223,6 +7228,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const siteInfoRows = [
 
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
+
+    // Collected by the form (and by the app) but drawn nowhere until now — the person who
+    // received the work on site was missing from the document entirely.
+    { label: 'Customer representative', value: toSingleValue(body?.customer_representative) || '' },
 
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
 
