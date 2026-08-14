@@ -20508,11 +20508,20 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const { x, y } = overlayGetPoint(event);
 
-            if (!overlayState.hasDrawn && (!overlayState.hiddenInput || !overlayState.hiddenInput.value)) {
-              overlayCtx.save();
-              overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
-              overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
-              overlayCtx.restore();
+            // hasDrawn gates whether Apply keeps the drawing, so it must be set for ANY
+            // stroke. It used to be set only when the hidden field was empty — and the pad
+            // wrote a blank PNG there on page load, so the field was never empty: the
+            // engineer drew in fullscreen, saw the ink, pressed Apply and the signature was
+            // silently discarded. Same story when re-signing a report that already has one.
+            if (!overlayState.hasDrawn) {
+              // Only wipe the canvas when starting from nothing; an existing signature is
+              // drawn on top of, not erased.
+              if (!overlayState.hiddenInput || !overlayState.hiddenInput.value) {
+                overlayCtx.save();
+                overlayCtx.setTransform(1, 0, 0, 1, 0, 0);
+                overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+                overlayCtx.restore();
+              }
               overlayState.hasDrawn = true;
             }
 
