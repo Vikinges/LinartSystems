@@ -5034,6 +5034,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     { label: 'Client', value: val('end_customer_name') || val('customer_company') },
     { label: 'Completion', value: dateVal('completion_date') },
   ]);
+  // The certificate names the display that was installed — same picker, same key as the
+  // service and maintenance documents. (Acceptance location stays in the Acceptance block.)
+  drawBlockRow(
+    [{ label: 'LED display model', value: val('led_display_model') }],
+    { fullWidth: true },
+  );
 
 
 
@@ -8249,6 +8255,10 @@ function generateIndexHtml() {
       suggestField = null,
       listId = null,
       listOptions = null,
+      // Restrict a single field to certain form types. Needed where the same server key is
+      // asked for by two different sections: two enabled inputs with one name submit twice
+      // and the LAST one wins, so an empty duplicate silently wipes what was typed.
+      dataFormTypes = null,
     } = {},
 
   ) => {
@@ -8269,13 +8279,15 @@ function generateIndexHtml() {
 
     const requiredAttr = required ? ' required' : '';
 
+    const formTypesAttr = dataFormTypes ? ` data-form-types="${escapeHtml(dataFormTypes)}"` : '';
+
     if (textarea) {
 
       const rows = type === 'textarea-lg' ? 8 : 4;
 
       const content = initial ? escapeHtml(initial) : '';
 
-      return `        <label class="field" for="${id}">
+      return `        <label class="field"${formTypesAttr} for="${id}">
 
           <span>${escapeHtml(label)}</span>
 
@@ -8354,7 +8366,7 @@ function generateIndexHtml() {
 
     }
 
-    return `        <label class="field" for="${id}">
+    return `        <label class="field"${formTypesAttr} for="${id}">
 
           <span>${escapeHtml(label)}</span>
 
@@ -12047,7 +12059,25 @@ ${renderTextInput('site_location', 'Site location')}
 ${renderTextInput('customer_representative', 'Customer representative', { allowUnknown: true })}
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
-<div class="field" data-form-types="service_report,maintenance">
+${renderTextInput('batch_number', 'LSC Project number')}
+
+${renderTextInput('service_company_name', 'Service company name')}
+
+${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
+
+          </div>
+
+        </section>
+
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
+
+          <h2>Display model</h2>
+
+
+<!-- Wherever the document talks about the display, the engineer picks its model here —
+     acceptance certificates name the installed display too, so this belongs on the
+     installation form as well (only the daily report has no use for it). -->
+<div class="field" data-form-types="service_report,maintenance,installation_report">
   <label for="led-code-select">LED model picker (type &rarr; number)</label>
   <div style="display:flex;gap:8px;">
     <select id="led-code-select" style="flex:1;min-width:0;">
@@ -12095,15 +12125,8 @@ ${renderTextInput('customer_representative', 'Customer representative', { allowU
 })();
 </script>
 
-${renderTextInput('batch_number', 'LSC Project number')}
-
-${renderTextInput('service_company_name', 'Service company name')}
-
-${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
-
-          </div>
-
         </section>
+
 
         <section class="card" data-form-types="installation_report">
 
@@ -12713,7 +12736,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             ${renderTextInput('engineer_name', 'Engineer name')}
 
-            ${renderTextInput('customer_company', 'Customer company', { id: 'customer-company-signoff' })}
+            ${renderTextInput('customer_company', 'Customer company', { id: 'customer-company-signoff', dataFormTypes: 'service_report,maintenance' })}
 
             ${renderTextInput('customer_datetime', 'Customer date & time', { type: 'datetime-local' })}
 
