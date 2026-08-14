@@ -1181,6 +1181,11 @@ app.get('/service2/api/feedback/admin/:id/form_archive', requireSuperadmin, atta
 app.get('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
 app.delete('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
 
+// The liveness probe stays public: it returns nothing but status/service/version/uptime, and
+// scripts/deploy.ps1 polls it from outside the network to confirm a restart landed. Must be
+// registered before the gate below, which would otherwise 403 it.
+app.get('/service2/health', service2FeedbackProxy);
+
 // Everything else under /service2 is closed by default. registerProxies' catch-all forwards
 // a service prefix without ever consulting isServiceAllowed, so only the routes explicitly
 // listed above were protected — the report archive, the stored report data, the generated
