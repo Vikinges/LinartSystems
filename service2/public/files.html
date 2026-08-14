@@ -879,6 +879,37 @@
           } else {
             actionsCell.textContent = '-';
           }
+          // Labelling a throwaway submission is a delete-level action but never deletes:
+          // it only flags the row so the archive shows what is real and what was a trial.
+          if (canDeleteFiles) {
+            const testBtn = document.createElement('button');
+            testBtn.type = 'button';
+            testBtn.className = 'button ghost';
+            testBtn.textContent = file.test ? 'Unmark test' : 'Mark as test';
+            testBtn.title = file.test
+              ? 'Remove the TEST label from this report'
+              : 'Label this report as a test submission (it is not deleted)';
+            testBtn.addEventListener('click', async () => {
+              testBtn.disabled = true;
+              try {
+                const res = await fetchWithAdminToken(
+                  'api/files/' + encodeURIComponent(file.templateType) + '/' + encodeURIComponent(file.filename) + '/test',
+                  {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ test: !file.test }),
+                  },
+                );
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadFiles();
+              } catch (err) {
+                testBtn.disabled = false;
+                testBtn.textContent = 'Failed — retry';
+              }
+            });
+            actionsCell.appendChild(testBtn);
+          }
           row.appendChild(actionsCell);
 
           tbody.appendChild(row);
