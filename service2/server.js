@@ -2788,6 +2788,8 @@ const PARTS_ROW_COUNT = 15;
 
 const PARTS_FIELD_PREFIXES = [
 
+  'parts_type_',
+
   'parts_removed_desc_',
 
   'parts_removed_part_',
@@ -2796,6 +2798,18 @@ const PARTS_FIELD_PREFIXES = [
 
   'parts_used_serial_',
 
+];
+
+// What kind of part a row is about. Offered as a dropdown so the common ones are one tap,
+// but the control is a free-text input bound to a datalist — an engineer can still type
+// something specific that isn't on the list instead of being blocked by it.
+const SPARE_PART_TYPES = [
+  { code: 'RC', label: 'RC - Receiver card' },
+  { code: 'HB', label: 'HB - Hub board' },
+  { code: 'PX', label: 'PX - Pixel card' },
+  { code: 'PW', label: 'PW - Power supply' },
+  { code: 'AC Hub', label: 'AC Hub' },
+  { code: 'Removal tool', label: 'Removal tool' },
 ];
 
 
@@ -7492,7 +7506,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const isServiceParts = isService;
 
-    const columnWidths = (isServiceParts ? [0.4, 0.32, 0.1, 0.18] : [0.32, 0.18, 0.18, 0.18, 0.14]).map(
+    const columnWidths = (isServiceParts ? [0.12, 0.32, 0.28, 0.1, 0.18] : [0.1, 0.28, 0.16, 0.16, 0.16, 0.14]).map(
 
       (ratio) => tableWidth * ratio,
 
@@ -7504,9 +7518,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const headers = isServiceParts
 
-      ? ['Part number', 'Description', 'Quantity', 'Reason']
+      ? ['Type', 'Part number', 'Description', 'Quantity', 'Reason']
 
       : [
+
+          'Type',
 
           'Part removed (description)',
 
@@ -7606,9 +7622,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       usedRowsFiltered.forEach((row) => {
 
+        const partType = row.fields[`parts_type_${row.number}`] || '';
+
         const cellValues = isServiceParts
 
           ? [
+
+              partType,
 
               row.fields[`parts_used_part_${row.number}`] || '',
 
@@ -7621,6 +7641,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
             ]
 
           : [
+
+              partType,
 
               row.fields[`parts_removed_desc_${row.number}`] || '',
 
@@ -8484,6 +8506,16 @@ function generateIndexHtml() {
 
     const { isService = false, dataAttr = '' } = options;
 
+    // One datalist per section — both sections live in the DOM at once, so the id has to
+    // be unique even though only one is ever visible.
+    const typeListId = `spare-part-types-${toHtmlId(dataAttr) || 'parts'}`;
+
+    const renderTypeInput = (index) => `<input type="text" name="parts_type_${index}" list="${typeListId}" placeholder="Type" autocomplete="off" />`;
+
+    const typeDatalist = `          <datalist id="${typeListId}">
+${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t.code)}">${escapeHtml(t.label)}</option>`).join('\n')}
+          </datalist>`;
+
     const rows = [];
 
     for (let i = 1; i <= PARTS_ROW_COUNT; i += 1) {
@@ -8493,6 +8525,8 @@ function generateIndexHtml() {
       if (isService) {
 
         rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+
+              <td>${renderTypeInput(i)}</td>
 
               <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
 
@@ -8507,6 +8541,8 @@ function generateIndexHtml() {
       } else {
 
         rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+
+              <td>${renderTypeInput(i)}</td>
 
               <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
 
@@ -8524,9 +8560,9 @@ function generateIndexHtml() {
 
     const headers = isService
 
-      ? ['Part / Batch', 'Desc', 'Qty', 'Reason']
+      ? ['Type', 'Part / Batch', 'Desc', 'Qty', 'Reason']
 
-      : ['Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
+      : ['Type', 'Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
 
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
 
@@ -8535,6 +8571,8 @@ function generateIndexHtml() {
         <table class="parts-table" data-parts-table>
 
           ${isService ? `<colgroup>
+
+            <col data-col="type" />
 
             <col data-col="part" />
 
@@ -8546,17 +8584,13 @@ function generateIndexHtml() {
 
           </colgroup>` : ''}
 
+${typeDatalist}
+
           <thead>
 
             <tr>
 
-              <th>${headers[0]}</th>
-
-              <th>${headers[1]}</th>
-
-              <th>${headers[2]}</th>
-
-              <th>${headers[3]}</th>
+${headers.map((h) => `              <th>${escapeHtml(h)}</th>`).join('\n')}
 
             </tr>
 
@@ -9060,15 +9094,21 @@ ${rows.join('\n')}
 
       }
 
+      .parts-table colgroup col[data-col="type"] {
+
+        width: 14%;
+
+      }
+
       .parts-table colgroup col[data-col="part"] {
 
-        width: 40%;
+        width: 30%;
 
       }
 
       .parts-table colgroup col[data-col="desc"] {
 
-        width: 32%;
+        width: 28%;
 
       }
 
