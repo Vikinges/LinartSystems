@@ -4841,7 +4841,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     if (!field || !field.label) return null;
     const text = toSingleValue(field.value);
     const hasText = text !== undefined && text !== null && String(text).trim() !== '';
-    if (!hasText && field.allowEmpty === false) return null;
+    // This document is generated entirely by us — we mirror the original's set of blocks,
+    // not its layout — so a block only exists when it has something to say. Empty fields
+    // are dropped; pass allowEmpty: true for a box that must appear even when blank
+    // (e.g. something meant to be filled in by hand on the printed sheet).
+    if (!hasText && field.allowEmpty !== true) return null;
     return { ...field, text: text ?? '' };
   };
 
@@ -5033,21 +5037,32 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-  drawSectionTitle('Attendees');
+  // A heading with nothing under it is as wrong as an empty box, so each section is
+  // announced only when something was filled in for it.
+  const anyFilled = (...keys) => keys.some((key) => String(val(key) || '').trim() !== '' || boolVal(key));
 
-  drawBlockRow([
-    { label: 'For the client', value: val('attendee_client') || val('customer_name') },
-    { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') },
-  ]);
+  if (anyFilled('attendee_client', 'customer_name', 'attendee_supplier', 'engineer_name')) {
+
+    drawSectionTitle('Attendees');
+
+    drawBlockRow([
+      { label: 'For the client', value: val('attendee_client') || val('customer_name') },
+      { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') },
+    ]);
+
+  }
 
 
+
+  if (anyFilled('acceptance_date', 'date_of_service', 'acceptance_location', 'acceptance_overall', 'acceptance_partial')) {
 
   drawSectionTitle('Acceptance');
 
-  drawBlockRow(
-    [{ label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') }],
-    { fullWidth: true },
-  );
+  drawBlockRow([
+    { label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') },
+    // Where the handover took place — collected by the form but previously never printed.
+    { label: 'Acceptance location', value: val('acceptance_location') },
+  ]);
 
   drawCheckboxList(
 
@@ -5077,7 +5092,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     { fullWidth: true },
   );
 
+  }
 
+
+
+  if (anyFilled('defects_none', 'defects_annex', 'remaining_annex', 'defects_deadline', 'remaining_deadline', 'supplier_objections')) {
 
   drawSectionTitle('Notification of defects / remaining activity');
 
@@ -5115,7 +5134,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     { fullWidth: true },
   );
 
+  }
 
+
+
+  if (anyFilled('declaration_accepted', 'declaration_after_defects', 'declaration_not_accepted', 'declaration_reservations')) {
 
   drawSectionTitle('Declaration of the client');
 
@@ -5143,7 +5166,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   );
 
+  }
 
+
+
+  if (anyFilled('warranty_years', 'warranty_begin', 'warranty_end')) {
 
   drawSectionTitle('Warranty');
 
@@ -5155,6 +5182,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     [{ label: 'Warranty ends on', value: dateVal('warranty_end'), height: 28 }],
     { fullWidth: true },
   );
+
+  }
 
 
 
@@ -5469,6 +5498,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       name: val('attendee_client') || val('customer_name'),
 
+      company: val('customer_company'),
+
+      when: formatDisplayDate(val('customer_datetime')),
+
     },
 
     {
@@ -5480,6 +5513,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       x: margin + columnWidth + 12,
 
       name: val('attendee_supplier') || val('engineer_name'),
+
+      company: val('engineer_company'),
+
+      when: formatDisplayDate(val('engineer_datetime')),
 
     },
 
@@ -5509,13 +5546,19 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     });
 
-    if (box.name) {
+    // Name, company and the moment of signing, each printed only when it was filled in —
+    // an empty line is left out rather than shown blank.
+    const identityLines = [box.name, box.company, box.when]
+      .map((line) => String(line || '').trim())
+      .filter(Boolean);
 
-      page.drawText(String(box.name), {
+    identityLines.forEach((line, index) => {
+
+      page.drawText(line, {
 
         x: boxRect.x,
 
-        y: boxRect.y + boxRect.height - 10,
+        y: boxRect.y + boxRect.height - 10 - index * 11,
 
         size: 9,
 
@@ -5525,7 +5568,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       });
 
-    }
+    });
 
     page.drawRectangle({
 
