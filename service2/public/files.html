@@ -229,6 +229,12 @@
       vertical-align: bottom;
     }
 
+    .superseded-note {
+      font-size: 0.78rem;
+      color: #b45309;
+      margin-top: 2px;
+    }
+
     /* Created column: keep date and time on their own lines so the column stays
        narrow and predictable rather than wrapping mid-timestamp. */
     .cell-created {
@@ -693,6 +699,21 @@
           link.textContent = file.filename || 'Download';
           link.title = file.filename || '';
           linkCell.appendChild(link);
+          // This copy predates the customer's remote signature — the signed document is a
+          // separate file with a near-identical name. Without this note people download
+          // this one and report the signature as missing.
+          if (file.supersededBy) {
+            const note = document.createElement('div');
+            note.className = 'superseded-note';
+            note.append(document.createTextNode('Unsigned original — '));
+            const signedLink = document.createElement('a');
+            signedLink.href = buildAppUrl((file.downloadPath || '').replace(
+              encodeURIComponent(file.filename), encodeURIComponent(file.supersededBy),
+            ));
+            signedLink.textContent = 'open the signed copy';
+            note.appendChild(signedLink);
+            linkCell.appendChild(note);
+          }
           row.appendChild(linkCell);
 
           const actionsCell = document.createElement('td');

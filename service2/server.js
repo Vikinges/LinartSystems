@@ -443,6 +443,9 @@ async function listFileEntries(filters) {
   const scanTypes = selectedType ? [selectedType] : types;
 
   const entries = [];
+  // Every PDF seen during the scan, filters aside — used below to pair a report with its
+  // remote-signed copy even when the copy itself is filtered out of the current view.
+  const allFilenames = new Set();
   for (const type of scanTypes) {
     const metaDir = path.join(OUTPUT_DIR, type, 'meta');
     if (!fs.existsSync(metaDir)) {
@@ -467,14 +470,34 @@ async function listFileEntries(filters) {
       const fallbackFilename = file.replace(/\.json$/i, '.pdf');
       const entry = buildFileListEntry(meta, type, fallbackFilename);
       if (!entry) continue;
+      allFilenames.add(type + '/' + entry.filename);
       if (!entryMatchesFilters(entry, filters)) continue;
       entries.push(entry);
+    }
+  }
+
+  // A remote signature writes a SECOND pdf (<base>_remote-signed.pdf) and leaves the
+  // pre-signature original untouched — same timestamp, near-identical name, one row above
+  // it in the archive. People download the original and report the signature as missing
+  // (it was never in that file). Flag it so the UI can label it and sort it under its
+  // signed copy. Computed on read, so existing pairs are covered without a migration.
+  for (const entry of entries) {
+    const base = String(entry.filename || '').replace(/\.pdf$/i, '');
+    if (!base || /_remote-signed$/i.test(base)) continue;
+    const signedTwin = base + '_remote-signed.pdf';
+    if (allFilenames.has(entry.templateType + '/' + signedTwin)) {
+      entry.supersededBy = signedTwin;
     }
   }
 
   entries.sort((a, b) => {
     const diff = (b.createdAtMs || 0) - (a.createdAtMs || 0);
     if (diff !== 0) return diff;
+    // Same submission: the signed copy goes first, so the top row is the document
+    // people actually want.
+    const aSuperseded = a.supersededBy ? 1 : 0;
+    const bSuperseded = b.supersededBy ? 1 : 0;
+    if (aSuperseded !== bSuperseded) return aSuperseded - bSuperseded;
     return a.filename.localeCompare(b.filename);
   });
 
@@ -20810,7 +20833,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             });
 
-            syncHiddenValue();
+            // Deliberately NOT syncing here: an untouched pad still serialises to a valid
+            // (fully transparent) PNG, and syncing it on load made every submission look
+            // signed. The value is written on the first real stroke instead, so an unsigned
+            // report arrives unsigned.
 
 
 
@@ -21149,6 +21175,38 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             input.value = normalized.iso;
 
           });
+
+
+
+          // An untouched signature pad submits nothing, and the report used to go out
+          // looking signed while its box was empty. Ask once, by name, so nobody leaves
+          // the site believing a document was signed when it wasn't.
+          const unsignedPads = [];
+          formEl.querySelectorAll('.signature-pad').forEach((pad) => {
+            if (pad.offsetParent === null) return; // hidden for this report type
+            const hidden = pad.querySelector('input[type="hidden"]');
+            if (!hidden || hidden.disabled) return;
+            const value = (hidden.value || '').trim();
+            if (value.startsWith('data:image/')) return;
+            const labelEl = pad.querySelector('.signature-pad__label span');
+            let name = String((labelEl ? labelEl.textContent : '') || hidden.name || 'signature').trim();
+            // No regex here on purpose: this block is emitted through a template literal,
+            // so backslash escapes get eaten and a mangled pattern kills the whole page script.
+            while (name.endsWith('*')) name = name.slice(0, -1).trim();
+            unsignedPads.push(name);
+          });
+          if (unsignedPads.length) {
+            const list = unsignedPads.join(' and ');
+            const proceed = window.confirm(
+              'No signature was drawn for: ' + list + '.\\n\\n'
+              + 'The document will be submitted without it. Continue anyway?'
+            );
+            if (!proceed) {
+              if (statusEl) statusEl.textContent = 'Submission cancelled — signature missing.';
+              resetSubmitState();
+              return;
+            }
+          }
 
 
 
