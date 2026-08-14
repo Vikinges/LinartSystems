@@ -2788,6 +2788,18 @@ function getSuggestionsForField(fieldName, query) {
 
 const PARTS_ROW_COUNT = 15;
 
+// Project numbers are YY-NNNN. Both clients mask the input, but a masked field only decides
+// UX — an older build or a scripted POST can still store anything, so the value is normalised
+// here as well. Deliberately conservative: only a value that carries exactly six digits is
+// reformatted; anything else is stored untouched rather than mangled into a wrong number.
+const PROJECT_NUMBER_FIELDS = ['batch_number', 'lsc_project_number', 'daily_project_number'];
+function normalizeProjectNumber(value) {
+  const raw = String(value === undefined || value === null ? '' : value);
+  const digits = raw.replace(/\D+/g, '');
+  if (digits.length !== 6) return raw;
+  return `${digits.slice(0, 2)}-${digits.slice(2)}`;
+}
+
 const PARTS_FIELD_PREFIXES = [
 
   'parts_type_',
@@ -16260,6 +16272,49 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         debugState = { enabled: false, timeline: [] };
 
+        // Project numbers are YY-NNNN and the engineer never types the dash. Written without
+        // a regex on purpose: this whole script is emitted through a template literal, where
+        // backslash escapes get eaten and a mangled pattern kills the page.
+        const PROJECT_NUMBER_SELECTOR = 'input[name="batch_number"], input[name="lsc_project_number"], input[name="daily_project_number"]';
+
+        const maskProjectNumber = (raw) => {
+          const text = String(raw === undefined || raw === null ? '' : raw);
+          let digits = '';
+          for (let i = 0; i < text.length && digits.length < 6; i += 1) {
+            const ch = text.charAt(i);
+            if (ch >= '0' && ch <= '9') digits += ch;
+          }
+          if (digits.length <= 2) return digits;
+          return digits.slice(0, 2) + '-' + digits.slice(2);
+        };
+
+        const applyProjectNumberMask = (input) => {
+          if (!input) return;
+          const before = input.value;
+          const masked = maskProjectNumber(before);
+          if (masked === before) return;
+          // Keep the caret at the end — these fields are short and always typed left to right,
+          // so restoring an offset would fight the auto-inserted dash.
+          input.value = masked;
+          if (input === document.activeElement) {
+            try { input.setSelectionRange(masked.length, masked.length); } catch (err) { /* not selectable */ }
+          }
+        };
+
+        // Every write path, not just keystrokes: paste and autocomplete/OCR fire input/change,
+        // and the submit handler re-masks in case something wrote the value silently.
+        document.addEventListener('input', (event) => {
+          if (event.target && event.target.matches && event.target.matches(PROJECT_NUMBER_SELECTOR)) {
+            applyProjectNumberMask(event.target);
+          }
+        });
+
+        document.addEventListener('change', (event) => {
+          if (event.target && event.target.matches && event.target.matches(PROJECT_NUMBER_SELECTOR)) {
+            applyProjectNumberMask(event.target);
+          }
+        });
+
         const DATETIME_TEXT_SELECTOR = '[data-datetime-text]';
 
         const TIME_INPUT_SELECTOR = 'input[data-datetime-part="time"]';
@@ -21540,6 +21595,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          // Last line of defence: a value written programmatically without firing events
+          // would otherwise slip past the mask.
+          formEl.querySelectorAll(PROJECT_NUMBER_SELECTOR).forEach(applyProjectNumberMask);
+
           const dateTimeSnapshots = Array.from(formEl.querySelectorAll(DATETIME_TEXT_SELECTOR)).map((input) => ({
 
             input,
@@ -25153,6 +25212,20 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
   }
 
   const signatureImages = [];
+
+  // Enforce the YY-NNNN project number before anything reads it, so the stored value, the
+  // filename and the project grouping all agree no matter which client sent it.
+  if (req.body && typeof req.body === 'object') {
+    PROJECT_NUMBER_FIELDS.forEach((key) => {
+      const current = toSingleValue(req.body[key]);
+      if (current === undefined || current === null || String(current).trim() === '') return;
+      const normalized = normalizeProjectNumber(current);
+      if (normalized !== String(current)) {
+        console.log(`[server] project number ${key}: "${current}" -> "${normalized}"`);
+        req.body[key] = normalized;
+      }
+    });
+  }
 
   const sanitizedBody = {};
 
