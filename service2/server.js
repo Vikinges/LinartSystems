@@ -6719,6 +6719,276 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
+  // The iOS service form carries its own field set — LED inspection, control checkpoints
+  // and spare parts. None of those keys are in the AcroForm schema and no programmatic
+  // block looked at them, so a fully filled app report came out with only the generic
+  // client/dates/signatures/photos and the engineer's actual findings silently missing
+  // (iOS issue #1 note 409). Both dialects are valid, so this renders the app's one
+  // alongside the web's Service summary; each section is skipped when empty, which keeps
+  // web submissions unchanged.
+  const drawKeyValueSection = (title, rows) => {
+
+    const present = rows.filter((row) => row.value && String(row.value).trim());
+
+    if (!present.length) return;
+
+    const rowsPerCol = Math.ceil(present.length / 2);
+
+    const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
+
+    const headerHeight = 18;
+
+    const dataHeight = 36;
+
+    const rowHeight = headerHeight + dataHeight;
+
+    const blockHeight = rowsPerCol * rowHeight + 20;
+
+    const sectionLabel = ensureBlock(blockHeight, `${title} (cont.)`) ? `${title} (cont.)` : title;
+
+    drawSectionTitle(sectionLabel);
+
+    const colX = [margin, margin + columnWidth + 8];
+
+    present.forEach((row, idx) => {
+
+      const colIdx = idx < rowsPerCol ? 0 : 1;
+
+      const rowIdx = idx % rowsPerCol;
+
+      const x = colX[colIdx];
+
+      const y = cursorY - rowHeight * rowIdx;
+
+      const headerY = y - headerHeight;
+
+      const dataY = headerY - dataHeight;
+
+      page.drawRectangle({
+
+        x, y: headerY, width: columnWidth, height: headerHeight,
+
+        borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+
+        color: rgb(0.92, 0.95, 0.99),
+
+      });
+
+      drawCenteredTextBlock(
+
+        page, row.label, font,
+
+        { x, y: headerY, width: columnWidth, height: headerHeight },
+
+        { align: 'center', paddingX: 4, paddingY: 2, color: headingColor, fontSize: 8.5, minFontSize: 7.5, lineHeightMultiplier: 1.2 },
+
+      );
+
+      page.drawRectangle({
+
+        x, y: dataY, width: columnWidth, height: dataHeight,
+
+        borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+
+        color: rgb(1, 1, 1),
+
+      });
+
+      drawCenteredTextBlock(
+
+        page, String(row.value || ''), font,
+
+        { x, y: dataY, width: columnWidth, height: dataHeight },
+
+        { align: 'center', paddingX: 8, paddingY: 4, color: textColor, fontSize: 11, minFontSize: 9, lineHeightMultiplier: 1.15 },
+
+      );
+
+    });
+
+    cursorY -= rowsPerCol * rowHeight + 12;
+
+  };
+
+
+
+  // Free-text blocks (observations, notes, open issues) — same framed style as the
+  // Service summary so the two dialects look like one document.
+  const drawTextBlocks = (title, fields) => {
+
+    const present = fields.filter((field) => field.value && String(field.value).trim());
+
+    if (!present.length) return;
+
+    let sectionStarted = false;
+
+    present.forEach((field) => {
+
+      const content = String(field.value).trim();
+
+      const layout = layoutMultilineText(content, font, tableWidth - 12, {
+
+        fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+
+        minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+
+        lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+
+      });
+
+      let blockHeight = Math.max(40, Math.ceil(layout.totalHeight + 30));
+
+      if (!Number.isFinite(blockHeight) || blockHeight <= 0) blockHeight = 40;
+
+      if (ensureSpace(blockHeight + 8, `${title} (cont.)`)) sectionStarted = false;
+
+      if (!sectionStarted) {
+
+        drawSectionTitle(sectionStarted ? `${title} (cont.)` : title);
+
+        sectionStarted = true;
+
+      }
+
+      page.drawRectangle({
+
+        x: margin, y: cursorY - blockHeight, width: tableWidth, height: blockHeight,
+
+        color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+
+      });
+
+      page.drawText(field.label, {
+
+        x: margin + 6, y: cursorY - 14, size: 9, font, color: headingColor,
+
+      });
+
+      drawCenteredTextBlock(
+
+        page, content, font,
+
+        { x: margin, y: cursorY - blockHeight, width: tableWidth, height: blockHeight - 20 },
+
+        {
+
+          align: 'left', verticalAlign: 'top', paddingX: 6, paddingY: 6, color: textColor,
+
+          fontSize: layout.appliedFontSize || DEFAULT_TEXT_FIELD_STYLE.fontSize,
+
+          minFontSize: DEFAULT_TEXT_FIELD_STYLE.minFontSize,
+
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+
+        },
+
+      );
+
+      cursorY -= blockHeight + 8;
+
+    });
+
+  };
+
+
+
+  // Order mirrors the app's own composer so its preview and this document line up.
+  const CONTROL_CHECKPOINT_ROWS = [
+
+    { action: 'Power supply', checkbox: 'control_power_supply' },
+
+    { action: 'Grounding', checkbox: 'control_grounding' },
+
+    { action: 'Surge protection', checkbox: 'control_surge_protection' },
+
+    { action: 'Signal integrity', checkbox: 'control_signal_integrity' },
+
+    { action: 'Redundancy', checkbox: 'control_redundancy' },
+
+    { action: 'Firmware up to date', checkbox: 'control_firmware_up_to_date' },
+
+    { action: 'Software logs', checkbox: 'control_software_logs' },
+
+    { action: 'Remote access', checkbox: 'control_remote_access' },
+
+    { action: 'Environment', checkbox: 'control_environment' },
+
+    { action: 'Cleaning', checkbox: 'control_cleaning' },
+
+    { action: 'Fire safety', checkbox: 'control_fire_safety' },
+
+  ];
+
+
+
+  const drawIosServiceSections = () => {
+
+    drawKeyValueSection('LED inspection', [
+
+      { label: 'Display model', value: toSingleValue(body?.led_display_model) || '' },
+
+      { label: 'Controller / firmware', value: toSingleValue(body?.led_controller_firmware) || '' },
+
+      { label: 'Dead pixels', value: toSingleValue(body?.led_dead_pixels) || '' },
+
+      { label: 'Dead modules', value: toSingleValue(body?.led_dead_modules) || '' },
+
+      { label: 'Brightness uniformity', value: toSingleValue(body?.led_brightness_uniformity) || '' },
+
+      { label: 'Colour uniformity', value: toSingleValue(body?.led_color_uniformity) || '' },
+
+      { label: 'Cabling', value: toSingleValue(body?.led_cabling) || '' },
+
+      { label: 'Cooling', value: toSingleValue(body?.led_cooling) || '' },
+
+      { label: 'Cabinet issues', value: normalizeCheckboxValue(body?.led_cabinet_issues) ? 'Yes' : '' },
+
+    ]);
+
+    drawTextBlocks('LED inspection notes', [
+
+      { label: 'Observations', value: toSingleValue(body?.led_observations) || '' },
+
+    ]);
+
+    const anyCheckpoint = CONTROL_CHECKPOINT_ROWS.some((row) => normalizeCheckboxValue(body?.[row.checkbox]))
+
+      || String(toSingleValue(body?.control_open_issues) || '').trim();
+
+    if (anyCheckpoint) {
+
+      drawChecklistSection({ title: 'Control checkpoints', rows: CONTROL_CHECKPOINT_ROWS });
+
+      drawTextBlocks('Control checkpoints', [
+
+        { label: 'Open issues', value: toSingleValue(body?.control_open_issues) || '' },
+
+      ]);
+
+    }
+
+    drawKeyValueSection('Spare parts', [
+
+      { label: 'Parts replaced', value: toSingleValue(body?.spares_replaced_count) || '' },
+
+      { label: 'Warranty claim', value: normalizeCheckboxValue(body?.spares_warranty_claim) ? 'Yes' : '' },
+
+      { label: 'Invoice / RMA number', value: toSingleValue(body?.spares_invoice_number) || '' },
+
+    ]);
+
+    drawTextBlocks('Spare parts', [
+
+      { label: 'Parts list', value: toSingleValue(body?.spares_list) || '' },
+
+      { label: 'Notes', value: toSingleValue(body?.spares_notes) || '' },
+
+    ]);
+
+  };
+
+
+
   const drawServiceSummary = () => {
 
     const summaryFields = [
@@ -7129,6 +7399,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   if (isService) {
 
     drawServiceSummary();
+
+    drawIosServiceSections();
 
   }
 
