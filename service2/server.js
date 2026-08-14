@@ -5547,28 +5547,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     });
 
     // Name, company and the moment of signing, each printed only when it was filled in —
-    // an empty line is left out rather than shown blank.
+    // an empty line is left out rather than shown blank. Drawn AFTER the box below, because
+    // the box is filled white and painting it afterwards hid whatever was already there —
+    // which is why the signatory's name never actually appeared on this document.
     const identityLines = [box.name, box.company, box.when]
       .map((line) => String(line || '').trim())
       .filter(Boolean);
-
-    identityLines.forEach((line, index) => {
-
-      page.drawText(line, {
-
-        x: boxRect.x,
-
-        y: boxRect.y + boxRect.height - 10 - index * 11,
-
-        size: 9,
-
-        font,
-
-        color: textColor,
-
-      });
-
-    });
 
     page.drawRectangle({
 
@@ -5585,6 +5569,24 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       borderColor: TABLE_BORDER_COLOR,
 
       color: rgb(1, 1, 1),
+
+    });
+
+    identityLines.forEach((line, index) => {
+
+      page.drawText(line, {
+
+        x: boxRect.x + 6,
+
+        y: boxRect.y + boxRect.height - 12 - index * 11,
+
+        size: 9,
+
+        font,
+
+        color: textColor,
+
+      });
 
     });
 
