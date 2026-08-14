@@ -379,6 +379,8 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     // plus which slot each one is so the apps can name the party still missing.
     signatureCount: countReportSignatures(meta),
     signatures: reportSignatureSlots(meta),
+    // Marked as a throwaway test submission; kept until an admin deletes it.
+    ...(meta.test === true ? { test: true, testMarkedAt: meta.testMarkedAt || null } : {}),
     submittedBy: (function () {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
@@ -7292,6 +7294,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   // ÃÂ¡ÃÂ½ÃÂ°Ã‘â€¡ÃÂ°ÃÂ»ÃÂ° Site information (ÃÂ´ÃÂ²ÃÂµ ÃÂºÃÂ¾ÃÂ»ÃÂ¾ÃÂ½ÃÂºÃÂ¸)
 
+  // Only filled fields make it onto the page — an empty framed box says nothing and makes
+  // the document look half-finished. Checklists keep their own rule (a row shows when it is
+  // ticked or carries a note), so anything the engineer actually touched still prints.
   const siteInfoRows = [
 
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
@@ -7310,9 +7315,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
 
-  ];
+  ].filter((row) => row.value && String(row.value).trim());
 
-  const hasSiteInfo = siteInfoRows.some((row) => row.value && String(row.value).trim());
+  const hasSiteInfo = siteInfoRows.length > 0;
 
   if (hasSiteInfo) {
 
@@ -7800,7 +7805,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'Engineer name', value: toSingleValue(body?.engineer_name) || '' },
 
-  ];
+  ].filter((d) => d.value && String(d.value).trim());
 
   const customerDetails = [
 
@@ -7810,7 +7815,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
 
-  ];
+  ].filter((d) => d.value && String(d.value).trim());
 
   const hasSignoffDetails =
 
@@ -7822,7 +7827,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const detailHeight = 50;
 
-  const detailRows = engineerDetails.length;
+  // The two columns are filtered independently, so reserve for the taller one.
+  const detailRows = Math.max(engineerDetails.length, customerDetails.length);
 
   const signatureHeight = 180;
 
@@ -7844,7 +7850,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const baseDetailY = cursorY;
 
-    engineerDetails.forEach((detail, index) => {
+    // The two columns are filtered independently, so walk the taller one and draw each
+    // side only where it still has a row — indexing one by the other's length crashed here.
+    Array.from({ length: detailRows }, (unused, i) => i).forEach((index) => {
+
+      const detail = engineerDetails[index];
+
+      if (detail) {
 
       const engineerRect = {
 
@@ -7906,7 +7918,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
+      }
+
       const customer = customerDetails[index];
+
+      if (!customer) return;
 
       const customerRect = {
 
@@ -24765,6 +24781,31 @@ app.post(['/api/files/:type/:filename/trash', '/service2/api/files/:type/:filena
   } catch (err) {
     console.error('[server] trash move failed', err);
     return res.status(500).json({ ok: false, error: 'trash_failed' });
+  }
+});
+
+// Flag a report as a test so it is obvious in the archive which rows are throwaway.
+// Nothing is deleted here on purpose — an admin decides when they go, this only labels them.
+app.post(['/api/files/:type/:filename/test', '/service2/api/files/:type/:filename/test'], requireDeleteFiles, async (req, res) => {
+  try {
+    const metaPath = buildMetaPath(req.params.type, req.params.filename);
+    if (!metaPath || !fs.existsSync(metaPath)) return res.status(404).json({ ok: false, error: 'file_not_found' });
+    const meta = JSON.parse(await fs.promises.readFile(metaPath, 'utf8'));
+    const isTest = !(req.body && req.body.test === false);
+    if (isTest) {
+      meta.test = true;
+      meta.testMarkedAt = new Date().toISOString();
+      meta.testMarkedBy = req.headers['x-hub-user'] || (req.body && req.body.markedBy) || null;
+    } else {
+      delete meta.test;
+      delete meta.testMarkedAt;
+      delete meta.testMarkedBy;
+    }
+    await fs.promises.writeFile(metaPath, JSON.stringify(meta, null, 2));
+    return res.json({ ok: true, filename: req.params.filename, test: isTest });
+  } catch (err) {
+    console.error('[server] test flag failed', err);
+    return res.status(500).json({ ok: false, error: 'test_flag_failed' });
   }
 });
 

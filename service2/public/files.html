@@ -235,6 +235,19 @@
       margin-top: 2px;
     }
 
+    .test-badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #fee2e2;
+      color: #b91c1c;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      vertical-align: middle;
+    }
+
     /* Created column: keep date and time on their own lines so the column stays
        narrow and predictable rather than wrapping mid-timestamp. */
     .cell-created {
@@ -693,6 +706,17 @@
           row.appendChild(templateCell);
 
           const linkCell = document.createElement('td');
+          // Throwaway submissions are labelled, never auto-removed — deleting them is the
+          // admin's call.
+          if (file.test) {
+            const testBadge = document.createElement('span');
+            testBadge.className = 'test-badge';
+            testBadge.textContent = 'TEST';
+            testBadge.title = file.testMarkedAt
+              ? 'Marked as a test submission on ' + formatDate(file.testMarkedAt)
+              : 'Marked as a test submission';
+            linkCell.appendChild(testBadge);
+          }
           const link = document.createElement('a');
           link.className = 'file-link';
           link.href = buildAppUrl(file.downloadPath || '');
