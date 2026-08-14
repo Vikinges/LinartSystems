@@ -1181,6 +1181,15 @@ app.get('/service2/api/feedback/admin/:id/form_archive', requireSuperadmin, atta
 app.get('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
 app.delete('/service2/api/feedback/admin/:id', requireSuperadmin, attachHubProxyHeaders, service2FeedbackProxy);
 
+// Everything else under /service2 is closed by default. registerProxies' catch-all forwards
+// a service prefix without ever consulting isServiceAllowed, so only the routes explicitly
+// listed above were protected — the report archive, the stored report data, the generated
+// PDFs, the people registry and the autocomplete pool were all readable by anyone on the
+// internet (reported on issue #1 note 421, confirmed by downloading a signed report with no
+// cookies). Registered after the specific routes above, which have their own stricter gates,
+// and scoped to /service2 only so the customer-facing signing flow is untouched.
+app.use('/service2', requireServiceAccess('service2', '/service2'));
+
 // register once on startup
 registerProxies(app);
 
