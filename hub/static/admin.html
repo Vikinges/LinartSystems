@@ -1137,6 +1137,13 @@
         badge.className = 'role-badge ' + roleValue;
         badge.textContent = formatRoleLabel(roleValue);
         title.appendChild(badge);
+        if (user.twoFactorEnabled) {
+          const tfa = document.createElement('span');
+          tfa.className = 'role-badge planner';
+          tfa.textContent = '🔐 2FA';
+          tfa.title = 'Two-factor authentication is active for this account.';
+          title.appendChild(tfa);
+        }
         info.appendChild(title);
         const summary = document.createElement('div');
         summary.className = 'user-summary';
@@ -1300,6 +1307,27 @@
           }
         });
         actionsRow.appendChild(deleteBtn);
+
+        // 2FA reset — only offered when the user actually has a second factor set up.
+        // Without this an engineer who loses both phone and recovery codes is locked out
+        // permanently (the self-service disable route needs a valid code to work).
+        if (user.twoFactorEnabled) {
+          const twoFaBtn = document.createElement('button');
+          twoFaBtn.type = 'button';
+          twoFaBtn.className = 'secondary';
+          twoFaBtn.textContent = 'Reset 2FA';
+          twoFaBtn.title = 'Turn off two-factor for this user so they can sign in with just their password and set it up again.';
+          twoFaBtn.addEventListener('click', async () => {
+            if (!confirm(`Turn off two-factor authentication for "${user.username}"?\n\nThey will be able to sign in with their password alone until they set it up again.`)) return;
+            try {
+              await fetchJson(`/admin/users/${encodeURIComponent(user.username)}/2fa/reset`, { method: 'POST' });
+              await loadAll();
+            } catch (error) {
+              handleError(error);
+            }
+          });
+          actionsRow.appendChild(twoFaBtn);
+        }
         controls.appendChild(actionsRow);
 
         card.appendChild(controls);

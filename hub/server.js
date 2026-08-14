@@ -2223,9 +2223,42 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         canGenerateLinks: normalizeFilesAccess(u.canGenerateLinks, false),
         canDeleteFiles: normalizeFilesAccess(u.canDeleteFiles, false),
         canUseChat: u.canUseChat !== false,
+        // Read-only status so the admin UI / app can show a 2FA badge and offer a reset
+        // only where there is something to reset. The secret itself is never exposed.
+        twoFactorEnabled: !!(u.twoFactor && u.twoFactor.enabled),
+        pendingDeletion: u.pendingDeletion ? u.pendingDeletion.scheduledFor || true : null,
       }))
     : [];
   res.json({ ok: true, users });
+});
+
+// Admin 2FA reset — the missing half of self-service 2FA: a user who loses both their
+// authenticator and their recovery codes was previously locked out for good, fixable only
+// by hand-editing admin.json on the server. Deliberately NOT allowed against the superadmin:
+// requireSuperadmin also admits role=admin users, so that would let any admin strip the
+// superadmin's second factor.
+app.post('/admin/users/:username/2fa/reset', requireSuperadmin, requireSameOrigin, (req, res) => {
+  const username = typeof req.params.username === 'string' ? req.params.username.trim() : '';
+  if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
+    return res.status(400).json({ ok: false, error: 'invalid_username' });
+  }
+  const superName = adminCredentials.superadmin && adminCredentials.superadmin.username;
+  if (superName && username === superName) {
+    return res.status(403).json({ ok: false, error: 'cannot_reset_superadmin' });
+  }
+  if (!Array.isArray(adminCredentials.users)) adminCredentials.users = [];
+  const user = adminCredentials.users.find((u) => u && u.username === username);
+  if (!user) return res.status(404).json({ ok: false, error: 'not_found' });
+  const wasEnabled = !!(user.twoFactor && user.twoFactor.enabled);
+  user.twoFactor = { enabled: false };
+  saveAdminCredentials(adminCredentials);
+  appendAudit('2fa_admin_reset', {
+    actor: (getSessionUser(req) || {}).username || null,
+    target: username,
+    wasEnabled,
+    ip: clientIp(req),
+  });
+  return res.json({ ok: true, username, wasEnabled });
 });
 
 app.get('/admin/me', requireSuperadmin, (req, res) => {
