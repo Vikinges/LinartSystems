@@ -2803,13 +2803,15 @@ const PARTS_FIELD_PREFIXES = [
 // What kind of part a row is about. Offered as a dropdown so the common ones are one tap,
 // but the control is a free-text input bound to a datalist — an engineer can still type
 // something specific that isn't on the list instead of being blocked by it.
+// Full names only — the abbreviations were dropped so the document reads the same to
+// anyone, including a customer who has never seen the internal shorthand.
 const SPARE_PART_TYPES = [
-  { code: 'RC', label: 'RC - Receiver card' },
-  { code: 'HB', label: 'HB - Hub board' },
-  { code: 'PX', label: 'PX - Pixel card' },
-  { code: 'PW', label: 'PW - Power supply' },
-  { code: 'AC Hub', label: 'AC Hub' },
-  { code: 'Removal tool', label: 'Removal tool' },
+  'Receiver card',
+  'Hub board',
+  'Pixel card',
+  'Power supply',
+  'AC Hub',
+  'Removal tool',
 ];
 
 
@@ -7506,7 +7508,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const isServiceParts = isService;
 
-    const columnWidths = (isServiceParts ? [0.12, 0.32, 0.28, 0.1, 0.18] : [0.1, 0.28, 0.16, 0.16, 0.16, 0.14]).map(
+    const columnWidths = (isServiceParts ? [0.18, 0.28, 0.26, 0.1, 0.18] : [0.16, 0.24, 0.15, 0.15, 0.16, 0.14]).map(
 
       (ratio) => tableWidth * ratio,
 
@@ -8513,7 +8515,7 @@ function generateIndexHtml() {
     const renderTypeInput = (index) => `<input type="text" name="parts_type_${index}" list="${typeListId}" placeholder="Type" autocomplete="off" />`;
 
     const typeDatalist = `          <datalist id="${typeListId}">
-${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t.code)}">${escapeHtml(t.label)}</option>`).join('\n')}
+${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></option>`).join('\n')}
           </datalist>`;
 
     const rows = [];
@@ -9096,19 +9098,19 @@ ${rows.join('\n')}
 
       .parts-table colgroup col[data-col="type"] {
 
-        width: 14%;
+        width: 18%;
 
       }
 
       .parts-table colgroup col[data-col="part"] {
 
-        width: 30%;
+        width: 28%;
 
       }
 
       .parts-table colgroup col[data-col="desc"] {
 
-        width: 28%;
+        width: 26%;
 
       }
 
