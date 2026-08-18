@@ -5536,7 +5536,9 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       company: val('customer_company'),
 
-      when: formatDisplayDate(val('customer_datetime')),
+      // No signing date under the box: the certificate is already dated by the appointment
+      // date above, and the field it came from no longer exists on either form.
+      when: '',
 
     },
 
@@ -5552,7 +5554,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       company: val('engineer_company'),
 
-      when: formatDisplayDate(val('engineer_datetime')),
+      when: '',
 
     },
 
@@ -7853,9 +7855,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const engineerDetails = [
 
+    // No date & time here: the visit is dated once, by "Date of service" in Site information.
     { label: 'On-site engineer company', value: toSingleValue(body?.engineer_company) || '' },
-
-    { label: 'Engineer date & time', value: formatDisplayDate(toSingleValue(body?.engineer_datetime)) },
 
     { label: 'Engineer name', value: toSingleValue(body?.engineer_name) || '' },
 
@@ -7864,8 +7865,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const customerDetails = [
 
     { label: 'Customer company', value: toSingleValue(body?.customer_company) || '' },
-
-    { label: 'Customer date & time', value: formatDisplayDate(toSingleValue(body?.customer_datetime)) },
 
     { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
 
@@ -12874,15 +12873,14 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           <div class="grid two-col signature-info">
 
+            <!-- Engineer/customer date & time removed: the visit is already dated by
+                 "Date of service" at the top, and asking for it again here produced two
+                 dates on one document that could disagree. -->
             ${renderTextInput('engineer_company', 'On-site engineer company')}
-
-            ${renderTextInput('engineer_datetime', 'Engineer date & time', { type: 'datetime-local' })}
 
             ${renderTextInput('engineer_name', 'Engineer name')}
 
             ${renderTextInput('customer_company', 'Customer company', { id: 'customer-company-signoff', dataFormTypes: 'service_report,maintenance' })}
-
-            ${renderTextInput('customer_datetime', 'Customer date & time', { type: 'datetime-local' })}
 
             ${renderTextInput('customer_name', 'Customer representative(s)', {
               allowUnknown: true,
@@ -17478,13 +17476,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             setIfEmpty('[name=\"engineer_name\"]', 'Debug Installer');
 
-            setIfEmpty('[name=\"engineer_datetime\"]', nowInput);
 
             setIfEmpty('[name=\"customer_company\"]', clientSeed);
 
             setIfEmpty('[name=\"customer_name\"]', clientSeed + ' representative');
 
-            setIfEmpty('[name=\"customer_datetime\"]', nowInput);
 
 
 
