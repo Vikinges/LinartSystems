@@ -7881,6 +7881,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   if (spareStockRows.length) {
 
+    // Breathing room before the heading: it follows the parts table directly and without a
+    // gap the two tables read as one block with a stray line of text between them.
+    cursorY -= 14;
+
     const stockColumnWidths = [0.22, 0.26, 0.34, 0.18].map((ratio) => tableWidth * ratio);
 
     const stockHeaders = ['Type', 'Part number', 'Description', 'Quantity left'];
