@@ -7577,84 +7577,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   checklistSections.forEach((section) => drawChecklistSection(section));
 
-  // What the next crew will find on site. Only on maintenance, and only when something was
-  // recorded — an empty "nothing left" table would say less than no table at all.
-  const spareStockRows = collectSpareStockRows(body || {});
-
-  if (spareStockRows.length) {
-
-    const stockColumnWidths = [0.22, 0.26, 0.34, 0.18].map((ratio) => tableWidth * ratio);
-
-    const stockHeaders = ['Type', 'Part number', 'Description', 'Quantity left'];
-
-    const stockHeaderHeight = 18;
-
-    const stockRowHeight = 24;
-
-    const stockBlockHeight = stockHeaderHeight + stockRowHeight * spareStockRows.length + 12;
-
-    const stockLabel = ensureSpace(stockBlockHeight, 'Spare parts left on site (cont.)')
-      ? 'Spare parts left on site (cont.)'
-      : 'Spare parts left on site';
-
-    drawSectionTitle(stockLabel);
-
-    let stockX = margin;
-
-    stockHeaders.forEach((label, index) => {
-
-      const width = stockColumnWidths[index];
-
-      page.drawRectangle({
-        x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight,
-        color: rgb(0.92, 0.95, 0.99), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
-      });
-
-      drawCenteredTextBlock(
-        page, label, font,
-        { x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight },
-        { align: 'center', paddingX: 4, paddingY: 2, color: headingColor, fontSize: 9, minFontSize: 8, lineHeightMultiplier: 1.2 },
-      );
-
-      stockX += width;
-
-    });
-
-    cursorY -= stockHeaderHeight;
-
-    spareStockRows.forEach((row) => {
-
-      const values = [row.type, row.part, row.description, row.quantity];
-
-      let cellX = margin;
-
-      values.forEach((value, index) => {
-
-        const width = stockColumnWidths[index];
-
-        page.drawRectangle({
-          x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight,
-          color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
-        });
-
-        drawCenteredTextBlock(
-          page, String(value || ''), font,
-          { x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight },
-          { align: 'center', paddingX: 4, paddingY: 3, color: textColor, fontSize: 10, minFontSize: 8, lineHeightMultiplier: 1.15 },
-        );
-
-        cellX += width;
-
-      });
-
-      cursorY -= stockRowHeight;
-
-    });
-
-    cursorY -= 12;
-
-  }
-
   const signoffRows = isInstallation || isService ? [] : SIGN_OFF_CHECKLIST_ROWS;
 
   if (signoffRows.length) {
@@ -7679,8 +7601,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     );
 
-    const headerHeight = 18;
-
     const rowHeightBase = isServiceParts ? 28 : 30;
 
     const headers = isServiceParts
@@ -7702,6 +7622,24 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
           'Serial number (used)',
 
         ];
+
+    // Header height follows the longest label instead of a fixed 18pt: "Serial number
+    // (removed)" wraps to two lines in a narrow column, and the fixed box cut the second
+    // line off, leaving "Serial number" over a mystery column.
+    const headerHeight = Math.max(
+      18,
+      ...headers.map((label, index) => {
+        const layout = layoutTextForWidth({
+          value: label,
+          font,
+          fontSize: 8.5,
+          minFontSize: 7.5,
+          lineHeightMultiplier: 1.2,
+          maxWidth: columnWidths[index] - 8,
+        });
+        return Math.ceil(layout.lineCount * layout.lineHeight + 7);
+      }),
+    );
 
     const drawPartsHeader = () => {
 
@@ -7771,7 +7709,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     if (usedRowsFiltered.length) {
 
-      const partsTitle = isServiceParts ? 'Parts used / replaced' : 'Parts record';
+      const partsTitle = 'Parts used during this visit';
 
       const headerLabel =
 
@@ -7934,6 +7872,84 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= 8;
 
     }
+
+  }
+
+  // What the next crew will find on site. Only on maintenance, and only when something was
+  // recorded — an empty "nothing left" table would say less than no table at all.
+  const spareStockRows = collectSpareStockRows(body || {});
+
+  if (spareStockRows.length) {
+
+    const stockColumnWidths = [0.22, 0.26, 0.34, 0.18].map((ratio) => tableWidth * ratio);
+
+    const stockHeaders = ['Type', 'Part number', 'Description', 'Quantity left'];
+
+    const stockHeaderHeight = 18;
+
+    const stockRowHeight = 24;
+
+    const stockBlockHeight = stockHeaderHeight + stockRowHeight * spareStockRows.length + 12;
+
+    const stockLabel = ensureSpace(stockBlockHeight, 'Spare parts left on site (cont.)')
+      ? 'Spare parts left on site (cont.)'
+      : 'Spare parts left on site';
+
+    drawSectionTitle(stockLabel);
+
+    let stockX = margin;
+
+    stockHeaders.forEach((label, index) => {
+
+      const width = stockColumnWidths[index];
+
+      page.drawRectangle({
+        x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight,
+        color: rgb(0.92, 0.95, 0.99), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+      });
+
+      drawCenteredTextBlock(
+        page, label, font,
+        { x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight },
+        { align: 'center', paddingX: 4, paddingY: 2, color: headingColor, fontSize: 9, minFontSize: 8, lineHeightMultiplier: 1.2 },
+      );
+
+      stockX += width;
+
+    });
+
+    cursorY -= stockHeaderHeight;
+
+    spareStockRows.forEach((row) => {
+
+      const values = [row.type, row.part, row.description, row.quantity];
+
+      let cellX = margin;
+
+      values.forEach((value, index) => {
+
+        const width = stockColumnWidths[index];
+
+        page.drawRectangle({
+          x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight,
+          color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+        });
+
+        drawCenteredTextBlock(
+          page, String(value || ''), font,
+          { x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight },
+          { align: 'center', paddingX: 4, paddingY: 3, color: textColor, fontSize: 10, minFontSize: 8, lineHeightMultiplier: 1.15 },
+        );
+
+        cellX += width;
+
+      });
+
+      cursorY -= stockRowHeight;
+
+    });
+
+    cursorY -= 12;
 
   }
 
@@ -8807,7 +8823,7 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
 
-        <h2>${isService ? 'Parts used / replaced' : 'Parts record'}</h2>
+        <h2>Parts used during this visit</h2>
 
         <p class="hint">${isService
           ? 'Parts you fitted or replaced during this visit. One row per part.'
