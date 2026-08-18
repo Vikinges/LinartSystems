@@ -8946,6 +8946,40 @@ ${rows.join('\n')}
 
       }
 
+      /* A required field left empty: the label turns red too, so the section that needs
+         attention is visible while scrolling past, not only the box itself. */
+      .field.is-missing > span,
+      .field.is-missing > label,
+      .signature-pad.is-missing .signature-pad__label > span {
+        color: #dc2626;
+        font-weight: 600;
+      }
+
+      .field.is-missing > span::after,
+      .field.is-missing > label::after,
+      .signature-pad.is-missing .signature-pad__label > span::after {
+        content: ' — required';
+        font-weight: 500;
+        font-size: 0.85em;
+      }
+
+      .field.is-missing input,
+      .field.is-missing select,
+      .field.is-missing textarea {
+        border-color: #dc2626;
+        background: #fee2e2;
+      }
+
+      .required-summary {
+        margin: 8px 0 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #fecaca;
+        background: #fef2f2;
+        color: #b91c1c;
+        font-size: 0.9rem;
+      }
+
       input[type="checkbox"] {
 
         width: 26px;
@@ -16272,6 +16306,69 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
         debugState = { enabled: false, timeline: [] };
 
+        // Fields a report is not valid without. Vladimir marked these on a printed service
+        // report: submitting with any of them empty produces a document that is useless to
+        // the customer, so the form sends the engineer back to fill them instead of
+        // generating it. Keyed by form type — each document needs its own answer.
+        const REQUIRED_FIELDS = {
+          service_report: [
+            { name: 'end_customer_name', label: 'End customer name' },
+            { name: 'batch_number', label: 'LSC Project number', projectNumber: true },
+            { name: 'customer_representative', label: 'Customer representative' },
+            { name: 'date_of_service', label: 'Date of service' },
+            { name: 'site_location', label: 'Site location' },
+            { name: 'service_company_name', label: 'Service company name' },
+            { name: 'led_display_model', label: 'LED display model / batch' },
+            { name: 'work_performed', label: 'Work performed' },
+          ],
+        };
+
+        const requiredFieldsFor = (formType) => REQUIRED_FIELDS[formType] || [];
+
+        // The value carrier for a field, preferring a visible control; led_display_model is
+        // a hidden input fed by the two picker selects, so fall back to the hidden one.
+        const findRequiredInput = (name) => {
+          const all = Array.from(document.querySelectorAll('[name="' + name + '"]'));
+          const visible = all.find((el) => !el.disabled && el.offsetParent !== null);
+          return visible || all.find((el) => !el.disabled) || null;
+        };
+
+        // What to paint red: the label box for a normal field, the pad for a signature, and
+        // for the hidden model field the picker the engineer actually interacts with.
+        const findRequiredContainer = (name, input) => {
+          if (name === 'led_display_model') {
+            const picker = document.getElementById('led-code-select');
+            return picker ? picker.closest('.field') : null;
+          }
+          return input ? input.closest('.field') : null;
+        };
+
+        const clearRequiredMark = (name) => {
+          const input = findRequiredInput(name);
+          const container = findRequiredContainer(name, input);
+          if (container) container.classList.remove('is-missing');
+          if (input) input.classList.remove('is-invalid');
+        };
+
+        // Clear the red as soon as the engineer starts fixing it, rather than making them
+        // submit again to find out.
+        document.addEventListener('input', (event) => {
+          const target = event.target;
+          if (!target || !target.name) return;
+          if (String(target.value || '').trim()) clearRequiredMark(target.name);
+        });
+
+        document.addEventListener('change', (event) => {
+          const target = event.target;
+          if (!target) return;
+          if (target.id === 'led-code-select' || target.id === 'led-number-select') {
+            const hidden = findRequiredInput('led_display_model');
+            if (hidden && String(hidden.value || '').trim()) clearRequiredMark('led_display_model');
+            return;
+          }
+          if (target.name && String(target.value || '').trim()) clearRequiredMark(target.name);
+        });
+
         // Project numbers are YY-NNNN and the engineer never types the dash. Written without
         // a regex on purpose: this whole script is emitted through a template literal, where
         // backslash escapes get eaten and a mangled pattern kills the page.
@@ -21598,6 +21695,62 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           // Last line of defence: a value written programmatically without firing events
           // would otherwise slip past the mask.
           formEl.querySelectorAll(PROJECT_NUMBER_SELECTOR).forEach(applyProjectNumberMask);
+
+          // Required fields for this document. Nothing is generated until they are filled —
+          // the engineer is taken back to the first one instead of getting a half-empty PDF.
+          const activeFormType = formTypeSelectEl ? formTypeSelectEl.value : '';
+          const requiredList = requiredFieldsFor(activeFormType);
+          const missingFields = [];
+
+          requiredList.forEach((field) => {
+            clearRequiredMark(field.name);
+            const input = findRequiredInput(field.name);
+            const value = input ? String(input.value || '').trim() : '';
+            let missing = !value;
+            let reason = 'is empty';
+            // A project number is only usable once it is complete: "44" or "26-21" would
+            // pass an emptiness check and still be unusable on the document.
+            if (!missing && field.projectNumber) {
+              let digits = '';
+              for (let i = 0; i < value.length; i += 1) {
+                const ch = value.charAt(i);
+                if (ch >= '0' && ch <= '9') digits += ch;
+              }
+              if (digits.length !== 6) { missing = true; reason = 'is incomplete (needs YY-NNNN)'; }
+            }
+            if (!missing) return;
+            missingFields.push({ ...field, input, reason });
+            const container = findRequiredContainer(field.name, input);
+            if (container) container.classList.add('is-missing');
+            if (input && input.offsetParent !== null) input.classList.add('is-invalid');
+          });
+
+          const existingSummary = formEl.querySelector('.required-summary');
+          if (existingSummary) existingSummary.remove();
+
+          if (missingFields.length) {
+            const summary = document.createElement('p');
+            summary.className = 'required-summary';
+            summary.textContent = 'Please complete before submitting: '
+              + missingFields.map((f) => f.label + ' (' + f.reason + ')').join(', ');
+            submitButton.parentNode.insertBefore(summary, submitButton);
+
+            const first = missingFields[0];
+            const focusTarget = first.name === 'led_display_model'
+              ? document.getElementById('led-code-select')
+              : first.input;
+            if (focusTarget) {
+              focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              try { focusTarget.focus({ preventScroll: true }); } catch (err) { focusTarget.focus(); }
+            }
+            if (statusEl) {
+              statusEl.textContent = missingFields.length === 1
+                ? '1 required field is missing.'
+                : missingFields.length + ' required fields are missing.';
+            }
+            resetSubmitState();
+            return;
+          }
 
           const dateTimeSnapshots = Array.from(formEl.querySelectorAll(DATETIME_TEXT_SELECTOR)).map((input) => ({
 
