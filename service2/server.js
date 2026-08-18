@@ -7048,15 +7048,12 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { action: 'Firmware up to date', checkbox: 'control_firmware_up_to_date' },
 
-    { action: 'Software logs', checkbox: 'control_software_logs' },
-
+    // "Software logs" and "Fire safety" struck off the checklist on Vladimir's mark-up.
     { action: 'Remote access', checkbox: 'control_remote_access' },
 
     { action: 'Environment', checkbox: 'control_environment' },
 
     { action: 'Cleaning', checkbox: 'control_cleaning' },
-
-    { action: 'Fire safety', checkbox: 'control_fire_safety' },
 
   ];
 
@@ -7068,12 +7065,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       // Display model is deliberately absent: it is already in Site information at the top,
       // and repeating it here just made the reader check whether the two agreed.
-      // Dead pixels / dead modules / even brightness moved to Control checkpoints.
+      // Dead pixels / dead modules / even brightness / even colour moved to Control
+      // checkpoints; Cabling and Cooling were dropped outright on Vladimir's mark-up.
       { label: 'Controller / firmware', value: toSingleValue(body?.led_controller_firmware) || '' },
-
-      { label: 'Cabling', value: toSingleValue(body?.led_cabling) || '' },
-
-      { label: 'Cooling', value: toSingleValue(body?.led_cooling) || '' },
 
       { label: 'Cabinet issues', value: normalizeCheckboxValue(body?.led_cabinet_issues) ? 'Yes' : '' },
 
