@@ -7025,6 +7025,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       },
     },
 
+    // Same judgement, same wording problem, and it now sits directly under the brightness
+    // row — leaving one plain and the other as "Colour uniformity" would read as an oversight.
+    {
+      action: 'Even colour (no patchy areas)',
+      resolveChecked: (b) => /^(ok|yes|good)$/i.test(String(toSingleValue(b?.led_color_uniformity) || '').trim()),
+      resolveNote: (b) => {
+        const v = String(toSingleValue(b?.led_color_uniformity) || '').trim();
+        return /^(ok|yes|good)$/i.test(v) ? '' : v;
+      },
+    },
+
     { action: 'Power supply', checkbox: 'control_power_supply' },
 
     { action: 'Grounding', checkbox: 'control_grounding' },
@@ -7060,8 +7071,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       // Dead pixels / dead modules / even brightness moved to Control checkpoints.
       { label: 'Controller / firmware', value: toSingleValue(body?.led_controller_firmware) || '' },
 
-      { label: 'Colour uniformity', value: toSingleValue(body?.led_color_uniformity) || '' },
-
       { label: 'Cabling', value: toSingleValue(body?.led_cabling) || '' },
 
       { label: 'Cooling', value: toSingleValue(body?.led_cooling) || '' },
@@ -7072,7 +7081,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     drawTextBlocks('LED inspection notes', [
 
-      { label: 'Observations', value: toSingleValue(body?.led_observations) || '' },
+      { label: 'Add notes', value: toSingleValue(body?.led_observations) || '' },
 
     ]);
 
