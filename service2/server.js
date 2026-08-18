@@ -6531,11 +6531,22 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
+    // Most rows are a plain checkbox + notes pair keyed by field name. Some carry a measured
+    // value instead (dead pixel count, brightness verdict): those supply resolvers so the
+    // tick reflects "in order" while the reading itself lands in the notes column.
+    const rowChecked = (row) => (typeof row.resolveChecked === 'function'
+      ? !!row.resolveChecked(body)
+      : normalizeCheckboxValue(body?.[row.checkbox]));
+
+    const rowNote = (row) => (typeof row.resolveNote === 'function'
+      ? String(row.resolveNote(body) || '')
+      : (toSingleValue(body?.[row.notes]) || ''));
+
     const filteredRows = section.rows.filter((row) => {
 
-      const checked = normalizeCheckboxValue(body?.[row.checkbox]);
+      const checked = rowChecked(row);
 
-      const note = toSingleValue(body?.[row.notes]);
+      const note = rowNote(row);
 
       return alwaysRender || checked || (note && String(note).trim().length > 0);
 
@@ -6575,7 +6586,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       });
 
-      const noteValue = toSingleValue(body?.[row.notes]) || '';
+      const noteValue = rowNote(row);
 
       const noteLayout = layoutTextForWidth({
 
@@ -6709,7 +6720,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       });
 
-      if (normalizeCheckboxValue(body?.[row.checkbox])) {
+      if (rowChecked(row)) {
 
         page.drawLine({
 
@@ -6981,6 +6992,39 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   // Order mirrors the app's own composer so its preview and this document line up.
   const CONTROL_CHECKPOINT_ROWS = [
 
+    // Measured readings live here rather than in the LED inspection grid: they are pass/fail
+    // observations like the rest of the checklist, and an engineer reads one table instead of
+    // hunting the same judgement in two places. The tick means "in order", the reading itself
+    // stays visible in Notes so a count of 0 is never mistaken for "not checked".
+    {
+      action: 'Dead pixels',
+      resolveChecked: (b) => String(toSingleValue(b?.led_dead_pixels) || '').trim() === '0',
+      resolveNote: (b) => {
+        const v = String(toSingleValue(b?.led_dead_pixels) || '').trim();
+        return v === '' ? '' : `${v} dead pixels`;
+      },
+    },
+
+    {
+      action: 'Dead modules',
+      resolveChecked: (b) => String(toSingleValue(b?.led_dead_modules) || '').trim() === '0',
+      resolveNote: (b) => {
+        const v = String(toSingleValue(b?.led_dead_modules) || '').trim();
+        return v === '' ? '' : `${v} dead modules`;
+      },
+    },
+
+    // Renamed from "Brightness uniformity" in plain words: the people filling this in are not
+    // all confident in English, and "uniformity" is the kind of term that gets guessed at.
+    {
+      action: 'Even brightness (no dark or bright spots)',
+      resolveChecked: (b) => /^(ok|yes|good)$/i.test(String(toSingleValue(b?.led_brightness_uniformity) || '').trim()),
+      resolveNote: (b) => {
+        const v = String(toSingleValue(b?.led_brightness_uniformity) || '').trim();
+        return /^(ok|yes|good)$/i.test(v) ? '' : v;
+      },
+    },
+
     { action: 'Power supply', checkbox: 'control_power_supply' },
 
     { action: 'Grounding', checkbox: 'control_grounding' },
@@ -7011,15 +7055,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     drawKeyValueSection('LED inspection', [
 
-      { label: 'Display model', value: toSingleValue(body?.led_display_model) || '' },
-
+      // Display model is deliberately absent: it is already in Site information at the top,
+      // and repeating it here just made the reader check whether the two agreed.
+      // Dead pixels / dead modules / even brightness moved to Control checkpoints.
       { label: 'Controller / firmware', value: toSingleValue(body?.led_controller_firmware) || '' },
-
-      { label: 'Dead pixels', value: toSingleValue(body?.led_dead_pixels) || '' },
-
-      { label: 'Dead modules', value: toSingleValue(body?.led_dead_modules) || '' },
-
-      { label: 'Brightness uniformity', value: toSingleValue(body?.led_brightness_uniformity) || '' },
 
       { label: 'Colour uniformity', value: toSingleValue(body?.led_color_uniformity) || '' },
 
@@ -7085,8 +7124,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       { label: 'Work performed', value: toSingleValue(body?.work_performed) || '' },
 
-      { label: 'Root cause', value: toSingleValue(body?.root_cause) || '' },
-
+      // "Root cause" dropped on Vladimir's mark-up: it overlapped with Problem description
+      // and Work performed, and engineers were repeating themselves across the three.
       { label: 'Recommendations', value: toSingleValue(body?.recommendations) || '' },
 
       // signoff_summary = the app's "Summary" field in the Sign-off section; the closing
@@ -12657,8 +12696,6 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
 ${renderTextInput('problem_description', 'Problem description', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
 
 ${renderTextInput('work_performed', 'Work performed', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
-
-${renderTextInput('root_cause', 'Root cause', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
 
 ${renderTextInput('recommendations', 'Recommendations', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
 
@@ -22672,6 +22709,10 @@ const UPLOAD_FIELD_LIMITS = {
   led_photos: 20,
   control_photos: 20,
   spares_photos: 20,
+  // A photo instead of typing: some readings (a controller label, a firmware screen) are
+  // faster and more accurate photographed than transcribed. It joins the other photos and
+  // is captioned with the section it came from so it is not an anonymous picture.
+  led_controller_photo: 5,
   engineer_signature: 1,
   customer_signature: 1,
 };
@@ -22868,6 +22909,8 @@ function collectPhotoFiles(files) {
   append(files.control_photos);
 
   append(files.spares_photos);
+
+  append(files.led_controller_photo);
 
   return photos;
 
@@ -23195,6 +23238,16 @@ async function embedUploadedImages(pdfDoc, form, photoFiles, embedOptions = {}) 
     photo_defects: 'Defect photo',
 
     photo_installation: 'Installation photo',
+
+    // Section photos were landing in the appendix as anonymous "Photo" — captioned now, so
+    // the reader knows which part of the report each one belongs to.
+    led_photos: 'LED inspection photo',
+
+    control_photos: 'Control checkpoints photo',
+
+    spares_photos: 'Spare parts photo',
+
+    led_controller_photo: 'LED inspection — Controller / firmware',
 
   };
 
