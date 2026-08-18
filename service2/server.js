@@ -3366,6 +3366,32 @@ function resolveTextFieldStyle(name) {
 
 
 
+// Spares left with the customer after a maintenance visit — the stock the next crew will
+// find on site. Separate from the parts table, which records what was consumed today.
+const SPARE_STOCK_PREFIXES = ['spare_stock_type_', 'spare_stock_part_', 'spare_stock_desc_', 'spare_stock_qty_'];
+function collectSpareStockRows(body) {
+  const rows = [];
+  for (let index = 1; index <= PARTS_ROW_COUNT; index += 1) {
+    const fields = {};
+    let hasData = false;
+    SPARE_STOCK_PREFIXES.forEach((prefix) => {
+      const raw = body ? toSingleValue(body[`${prefix}${index}`]) : undefined;
+      const value = raw === undefined || raw === null ? '' : String(raw).trim();
+      if (value) hasData = true;
+      fields[prefix] = value;
+    });
+    if (hasData) {
+      rows.push({
+        type: fields['spare_stock_type_'],
+        part: fields['spare_stock_part_'],
+        description: fields['spare_stock_desc_'],
+        quantity: fields['spare_stock_qty_'],
+      });
+    }
+  }
+  return rows;
+}
+
 function collectPartsRowUsage(body) {
 
   const rows = [];
@@ -7551,6 +7577,84 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   checklistSections.forEach((section) => drawChecklistSection(section));
 
+  // What the next crew will find on site. Only on maintenance, and only when something was
+  // recorded — an empty "nothing left" table would say less than no table at all.
+  const spareStockRows = collectSpareStockRows(body || {});
+
+  if (spareStockRows.length) {
+
+    const stockColumnWidths = [0.22, 0.26, 0.34, 0.18].map((ratio) => tableWidth * ratio);
+
+    const stockHeaders = ['Type', 'Part number', 'Description', 'Quantity left'];
+
+    const stockHeaderHeight = 18;
+
+    const stockRowHeight = 24;
+
+    const stockBlockHeight = stockHeaderHeight + stockRowHeight * spareStockRows.length + 12;
+
+    const stockLabel = ensureSpace(stockBlockHeight, 'Spare parts left on site (cont.)')
+      ? 'Spare parts left on site (cont.)'
+      : 'Spare parts left on site';
+
+    drawSectionTitle(stockLabel);
+
+    let stockX = margin;
+
+    stockHeaders.forEach((label, index) => {
+
+      const width = stockColumnWidths[index];
+
+      page.drawRectangle({
+        x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight,
+        color: rgb(0.92, 0.95, 0.99), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+      });
+
+      drawCenteredTextBlock(
+        page, label, font,
+        { x: stockX, y: cursorY - stockHeaderHeight, width, height: stockHeaderHeight },
+        { align: 'center', paddingX: 4, paddingY: 2, color: headingColor, fontSize: 9, minFontSize: 8, lineHeightMultiplier: 1.2 },
+      );
+
+      stockX += width;
+
+    });
+
+    cursorY -= stockHeaderHeight;
+
+    spareStockRows.forEach((row) => {
+
+      const values = [row.type, row.part, row.description, row.quantity];
+
+      let cellX = margin;
+
+      values.forEach((value, index) => {
+
+        const width = stockColumnWidths[index];
+
+        page.drawRectangle({
+          x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight,
+          color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+        });
+
+        drawCenteredTextBlock(
+          page, String(value || ''), font,
+          { x: cellX, y: cursorY - stockRowHeight, width, height: stockRowHeight },
+          { align: 'center', paddingX: 4, paddingY: 3, color: textColor, fontSize: 10, minFontSize: 8, lineHeightMultiplier: 1.15 },
+        );
+
+        cellX += width;
+
+      });
+
+      cursorY -= stockRowHeight;
+
+    });
+
+    cursorY -= 12;
+
+  }
+
   const signoffRows = isInstallation || isService ? [] : SIGN_OFF_CHECKLIST_ROWS;
 
   if (signoffRows.length) {
@@ -8573,6 +8677,72 @@ function generateIndexHtml() {
 
 
 
+  // What is still on the shelf when the team drives away. A maintenance visit both consumes
+  // spares and leaves a stock behind, and the next crew needs to know what is there before
+  // they load the van — that question was previously answered by phone, if at all.
+  // Kept apart from the parts table on purpose: at submit the form disables every
+  // [data-parts-section] except the active one, so this carries its own attribute and would
+  // otherwise arrive empty.
+  const spareStockTable = (dataAttr) => {
+
+    const listId = `spare-stock-types-${toHtmlId(dataAttr) || 'stock'}`;
+
+    const cell = (name, placeholder, extra = '') =>
+      `<input type="text" name="${escapeHtml(name)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off"${extra} />`;
+
+    const rows = [];
+
+    for (let i = 1; i <= PARTS_ROW_COUNT; i += 1) {
+      const rowClass = i === 1 ? 'parts-row' : 'parts-row is-hidden-row';
+      rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+              <td>${cell(`spare_stock_type_${i}`, 'Type', ` list="${listId}"`)}</td>
+              <td>${cell(`spare_stock_part_${i}`, 'Part number')}</td>
+              <td>${cell(`spare_stock_desc_${i}`, 'Description')}</td>
+              <td>${cell(`spare_stock_qty_${i}`, 'Qty')}</td>
+            </tr>`);
+    }
+
+    return `      <section class="card" data-stock-section data-form-types="${dataAttr}">
+
+        <h2>Spare parts left on site</h2>
+
+        <p class="hint">Spare parts that stay with the customer after this visit. Record what is still
+        available so the next team knows what is on site before the next service — this is stock, not
+        what you used today. Parts you fitted or replaced belong in the table above.</p>
+
+        <table class="parts-table" data-parts-table>
+          <colgroup>
+            <col data-col="type" />
+            <col data-col="part" />
+            <col data-col="desc" />
+            <col data-col="qty" />
+          </colgroup>
+          <datalist id="${listId}">
+${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></option>`).join('\n')}
+          </datalist>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Part number</th>
+              <th>Description</th>
+              <th>Quantity left</th>
+            </tr>
+          </thead>
+          <tbody>
+${rows.join('\n')}
+          </tbody>
+        </table>
+
+        <div class="parts-table-actions">
+          <button type="button" class="button" data-action="parts-add-row">+ Add another spare</button>
+          <button type="button" class="button" data-action="parts-remove-row">- Remove last row</button>
+          <p class="parts-table-hint">Maximum of ${PARTS_ROW_COUNT} rows. Leave empty if nothing is left on site.</p>
+        </div>
+
+      </section>`;
+
+  };
+
   const partsTable = (options = {}) => {
 
     const { isService = false, dataAttr = '' } = options;
@@ -8638,6 +8808,10 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
 
         <h2>${isService ? 'Parts used / replaced' : 'Parts record'}</h2>
+
+        <p class="hint">${isService
+          ? 'Parts you fitted or replaced during this visit. One row per part.'
+          : 'Parts you fitted or replaced during this visit. One row per part — spares that stay with the customer go in the section below.'}</p>
 
         <table class="parts-table" data-parts-table>
 
@@ -9270,6 +9444,21 @@ ${rows.join('\n')}
         opacity: 0.6;
 
         cursor: not-allowed;
+
+      }
+
+      /* Explanatory line under a section heading: what the section is for, in plain English,
+         so the distinction between "used today" and "left on site" is settled on the page
+         rather than by asking a colleague. */
+      .hint {
+
+        margin: 0 0 12px;
+
+        font-size: 0.88rem;
+
+        line-height: 1.45;
+
+        color: #4b5563;
 
       }
 
@@ -12862,6 +13051,8 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
         </section>
 
 ${partsTable({ dataAttr: 'maintenance,installation_report' })}
+
+${spareStockTable('maintenance')}
 
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
 
@@ -18126,7 +18317,10 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const hiddenClass = 'is-hidden-row';
 
-          const sections = Array.from(document.querySelectorAll('[data-parts-section]'));
+          // The spare-stock table reuses this row add/remove behaviour but carries its own
+          // attribute, so it is not caught by the submit-time "disable every parts section
+          // except the active one" rule.
+          const sections = Array.from(document.querySelectorAll('[data-parts-section], [data-stock-section]'));
 
           if (!sections.length) return;
 
