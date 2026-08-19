@@ -3366,6 +3366,26 @@ function resolveTextFieldStyle(name) {
 
 
 
+// One Site-information block for every document, so a service, maintenance and installation
+// report open with the same grid instead of three near-identical variants. Empty fields are
+// dropped, so a form that never asks for a phone number simply prints one row fewer.
+function buildSiteInfoRows(body) {
+  return [
+    { label: 'Service type', value: toSingleValue(body?.service_type) || '' },
+    { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
+    { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || '' },
+    { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
+    { label: 'Date of service', value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
+    { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
+    { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
+    // The person who received the work on site, plus how to reach them — the app collects
+    // all three and they were previously nowhere on the page.
+    { label: 'Contact person', value: toSingleValue(body?.customer_contact) || toSingleValue(body?.customer_representative) || '' },
+    { label: 'Phone', value: toSingleValue(body?.customer_phone) || '' },
+    { label: 'Email', value: toSingleValue(body?.customer_email) || '' },
+  ].filter((row) => row.value && String(row.value).trim());
+}
+
 // Spares left with the customer after a maintenance visit — the stock the next crew will
 // find on site. Separate from the parts table, which records what was consumed today.
 const SPARE_STOCK_PREFIXES = ['spare_stock_type_', 'spare_stock_part_', 'spare_stock_desc_', 'spare_stock_qty_'];
@@ -5080,24 +5100,53 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-  drawSectionTitle('Project details');
-
-  // "Building project" struck off by Vladimir: the project number identifies the job and
+  // Same opening block as the service and maintenance reports rather than a bespoke
+  // "Project details": one grid, one order, so the three documents read alike.
+  // "Building project" struck off by Vladimir — the project number identifies the job and
   // the second line only repeated it in words.
-  drawBlockRow(
-    [{ label: 'LSC project number', value: val('batch_number') || val('lsc_project_number') }],
-    { fullWidth: true },
-  );
-  drawBlockRow([
-    { label: 'Client', value: val('end_customer_name') || val('customer_company') },
-    { label: 'Completion', value: dateVal('completion_date') },
-  ]);
-  // The certificate names the display that was installed — same picker, same key as the
-  // service and maintenance documents. (Acceptance location stays in the Acceptance block.)
-  drawBlockRow(
-    [{ label: 'LED display model', value: val('led_display_model') }],
-    { fullWidth: true },
-  );
+  const installSiteRows = buildSiteInfoRows(body);
+
+  if (installSiteRows.length) {
+
+    drawSectionTitle('Site information');
+
+    for (let i = 0; i < installSiteRows.length; i += 2) {
+
+      const pair = installSiteRows.slice(i, i + 2);
+
+      drawBlockRow(
+        pair.map((row) => ({ label: row.label, value: row.value })),
+        pair.length === 1 ? { fullWidth: true } : {},
+      );
+
+    }
+
+  }
+
+  // The narrative block the other reports carry, so an installation says what was done.
+  const installSummaryRows = [
+    { label: 'Problem description', value: val('problem_description') },
+    { label: 'Work performed', value: val('work_performed') },
+    { label: 'Recommendations', value: val('recommendations') },
+    { label: 'Summary', value: val('signoff_summary') },
+  ].filter((row) => row.value && String(row.value).trim());
+
+  if (installSummaryRows.length) {
+
+    drawSectionTitle('Service summary');
+
+    installSummaryRows.forEach((row) => {
+
+      drawBlockRow(
+        [{ label: row.label, value: row.value, height: 60, align: 'left', verticalAlign: 'top', paddingY: 8 }],
+        { fullWidth: true },
+      );
+
+    });
+
+  }
+
+  // Completion date is acceptance-specific and keeps its place in the Acceptance block.
 
 
 
@@ -5127,6 +5176,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     // Where the handover took place — collected by the form but previously never printed.
     { label: 'Acceptance location', value: val('acceptance_location') },
   ]);
+  // Moved out of the opening grid, which is now shared with the other reports: completion
+  // is an acceptance fact, so it belongs beside the appointment date.
+  drawBlockRow(
+    [{ label: 'Completion date', value: dateVal('completion_date') }],
+    { fullWidth: true },
+  );
 
   drawCheckboxList(
 
@@ -5342,199 +5397,96 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
+  // Parts on an installation read the same as on a service or maintenance report: what was
+  // fitted, then what stays with the customer. The old "Annex 2" table used columns
+  // (Pos./Unit/Ordered qty) that no form ever collected, so most of it printed blank.
   const partsUsedRows = (partsRows || []).filter((row) => row && row.hasData);
 
-  if (partsUsedRows.length) {
+  const drawSimpleTable = (title, headers, ratios, rows) => {
 
-    const estimatedTableHeight = 18 + partsUsedRows.length * 30;
-    const annex2EstimatedHeight = 32 + 32 + estimatedTableHeight + 200; // fields + table + signatures
-    const annex2NewPage = ensureSpace(annex2EstimatedHeight, 'Annex 2 (Spare parts)');
-    if (!annex2NewPage) {
-      drawSectionTitle('Annex 2 (Spare parts)');
-    }
-    drawBlockRow([
-      { label: 'Acceptance date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
-    ]);
+    if (!rows.length) return;
 
-    const tableWidth = page.getWidth() - margin * 2;
+    cursorY -= 14;
 
-    const columnWidths = [0.08, 0.18, 0.12, 0.34, 0.14, 0.14].map((ratio) => tableWidth * ratio);
+    const widths = ratios.map((ratio) => ratio * (page.getWidth() - margin * 2));
 
-    const headers = ['Pos.', 'Delivered qty', 'Unit', 'Description', 'Ordered qty', 'Remaining qty'];
+    const hHeight = 20;
 
-    const headerHeight = 18;
+    const rHeight = 26;
 
-    const rowHeightBase = 26;
+    const label = ensureSpace(hHeight + rHeight * rows.length + 16, `${title} (cont.)`) ? `${title} (cont.)` : title;
 
-    const drawHeader = () => {
+    drawSectionTitle(label);
 
-      let x = margin;
+    let x = margin;
 
-      headers.forEach((label, idx) => {
+    headers.forEach((head, index) => {
 
-        const width = columnWidths[idx];
-
-        page.drawRectangle({
-
-          x,
-
-          y: cursorY - headerHeight,
-
-          width,
-
-          height: headerHeight,
-
-          color: rgb(0.92, 0.95, 0.99),
-
-          borderWidth: TABLE_BORDER_WIDTH,
-
-          borderColor: TABLE_BORDER_COLOR,
-
-        });
-
-        page.drawText(label, {
-
-          x: x + 6,
-
-          y: cursorY - headerHeight + headerHeight - 12,
-
-          size: 9,
-
-          font,
-
-          color: headingColor,
-
-        });
-
-        x += width;
-
+      page.drawRectangle({
+        x, y: cursorY - hHeight, width: widths[index], height: hHeight,
+        color: rgb(0.92, 0.95, 0.99), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
       });
 
-      cursorY -= headerHeight;
-
-    };
-
-
-
-    drawHeader();
-
-    partsUsedRows.forEach((row, index) => {
-
-      const rowFields = row.fields || {};
-
-      const values = [
-
-        String(index + 1),
-
-        toSingleValue(rowFields[`parts_removed_part_${row.number}`]) || '',
-
-        '', // unit not provided
-
-        toSingleValue(rowFields[`parts_removed_desc_${row.number}`]) || '',
-
-        toSingleValue(rowFields[`parts_used_part_${row.number}`]) || '',
-
-        toSingleValue(rowFields[`parts_used_serial_${row.number}`]) || '',
-
-      ];
-
-      const layouts = values.map((value, idx) =>
-
-        layoutMultilineText(String(value || ''), font, columnWidths[idx] - 8, {
-
-          fontSize: 10,
-
-          minFontSize: 9,
-
-          lineHeightMultiplier: 1.2,
-
-        }),
-
+      drawCenteredTextBlock(
+        page, head, font,
+        { x, y: cursorY - hHeight, width: widths[index], height: hHeight },
+        { align: 'center', paddingX: 3, paddingY: 2, color: headingColor, fontSize: 8.5, minFontSize: 7.5, lineHeightMultiplier: 1.15 },
       );
 
-      const rowHeight = Math.max(
-
-        rowHeightBase,
-
-        ...layouts.map((layout) => Math.ceil(layout.totalHeight + 8)),
-
-      );
-
-      if (ensureSpace(rowHeight + 8, 'Annex 2 (Spare parts, cont.)')) {
-
-        drawHeader();
-
-      }
-
-      let x = margin;
-
-      layouts.forEach((layout, idx) => {
-
-        const width = columnWidths[idx];
-
-        page.drawRectangle({
-
-          x,
-
-          y: cursorY - rowHeight,
-
-          width,
-
-          height: rowHeight,
-
-          color: rgb(1, 1, 1),
-
-          borderWidth: TABLE_BORDER_WIDTH,
-
-          borderColor: TABLE_BORDER_COLOR,
-
-        });
-
-        drawCenteredTextBlock(
-
-          page,
-
-          values[idx],
-
-          font,
-
-          { x, y: cursorY - rowHeight, width, height: rowHeight },
-
-          {
-
-            align: 'center',
-
-            paddingX: 4,
-
-            paddingY: 6,
-
-            color: textColor,
-
-            fontSize: layout.fontSize,
-
-            minFontSize: layout.fontSize,
-
-            lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
-
-            precomputed: layout,
-
-          },
-
-        );
-
-        x += width;
-
-      });
-
-      cursorY -= rowHeight;
+      x += widths[index];
 
     });
 
-    cursorY -= 10;
+    cursorY -= hHeight;
 
-  }
+    rows.forEach((cells) => {
 
+      let cellX = margin;
 
+      cells.forEach((value, index) => {
+
+        page.drawRectangle({
+          x: cellX, y: cursorY - rHeight, width: widths[index], height: rHeight,
+          color: rgb(1, 1, 1), borderWidth: TABLE_BORDER_WIDTH, borderColor: TABLE_BORDER_COLOR,
+        });
+
+        drawCenteredTextBlock(
+          page, String(value || ''), font,
+          { x: cellX, y: cursorY - rHeight, width: widths[index], height: rHeight },
+          { align: 'center', paddingX: 4, paddingY: 3, color: textColor, fontSize: 9.5, minFontSize: 8, lineHeightMultiplier: 1.15 },
+        );
+
+        cellX += widths[index];
+
+      });
+
+      cursorY -= rHeight;
+
+    });
+
+    cursorY -= 12;
+
+  };
+
+  drawSimpleTable(
+    'Parts used during this visit',
+    ['Type', 'Part removed (description)', 'Part number', 'Part used in display', 'Serial number'],
+    [0.16, 0.28, 0.18, 0.22, 0.16],
+    partsUsedRows.map((row) => [
+      row.fields[`parts_type_${row.number}`] || '',
+      row.fields[`parts_removed_desc_${row.number}`] || '',
+      row.fields[`parts_removed_part_${row.number}`] || '',
+      row.fields[`parts_used_part_${row.number}`] || '',
+      row.fields[`parts_used_serial_${row.number}`] || '',
+    ]),
+  );
+
+  drawSimpleTable(
+    'Spare parts left on site',
+    ['Type', 'Part number', 'Description', 'Quantity left'],
+    [0.22, 0.26, 0.34, 0.18],
+    collectSpareStockRows(body || {}).map((row) => [row.type, row.part, row.description, row.quantity]),
+  );
 
   const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
 
@@ -7375,25 +7327,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   // Only filled fields make it onto the page — an empty framed box says nothing and makes
   // the document look half-finished. Checklists keep their own rule (a row shows when it is
   // ticked or carries a note), so anything the engineer actually touched still prints.
-  const siteInfoRows = [
-
-    { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
-
-    // Collected by the form (and by the app) but drawn nowhere until now — the person who
-    // received the work on site was missing from the document entirely.
-    { label: 'Customer representative', value: toSingleValue(body?.customer_representative) || '' },
-
-    { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
-
-    { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
-
-    { label: 'LSC Project number', value: toSingleValue(body?.batch_number) || '' },
-
-    { label: 'Date of service', value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
-
-    { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
-
-  ].filter((row) => row.value && String(row.value).trim());
+  const siteInfoRows = buildSiteInfoRows(body);
 
   const hasSiteInfo = siteInfoRows.length > 0;
 
@@ -13064,7 +12998,7 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
 
 ${partsTable({ dataAttr: 'maintenance,installation_report' })}
 
-${spareStockTable('maintenance')}
+${spareStockTable('maintenance,installation_report')}
 
 ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFormTypes: 'maintenance' })}
 
