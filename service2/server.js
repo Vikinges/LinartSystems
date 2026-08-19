@@ -3370,8 +3370,9 @@ function resolveTextFieldStyle(name) {
 // report open with the same grid instead of three near-identical variants. Empty fields are
 // dropped, so a form that never asks for a phone number simply prints one row fewer.
 function buildSiteInfoRows(body) {
+  // No "Service type" row: the document already says which report this is, so repeating
+  // "installation" on an installation report told the reader nothing.
   return [
-    { label: 'Service type', value: toSingleValue(body?.service_type) || '' },
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
     { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
@@ -4925,10 +4926,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     return { ...field, text: text ?? '' };
   };
 
-  const drawBlockRow = (fields, { fullWidth = false } = {}) => {
+  // halfWidth keeps a lone field in the left column instead of stretching it across the
+  // page: an odd number of rows in a two-column grid otherwise ends with one value (an
+  // email address, say) running the full width and looking like a different kind of field.
+  const drawBlockRow = (fields, { fullWidth = false, halfWidth = false } = {}) => {
     const normalized = (fields || []).map(normalizeBlockField).filter(Boolean);
     if (!normalized.length) return;
-    const columns = fullWidth || normalized.length === 1 ? 1 : 2;
+    const columns = !fullWidth && (halfWidth || normalized.length > 1) ? 2 : 1;
     const colGap = columns === 1 ? 0 : BLOCK_COL_GAP;
     const columnWidth =
       columns === 1 ? page.getWidth() - margin * 2 : (page.getWidth() - margin * 2 - colGap) / 2;
@@ -5116,7 +5120,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       drawBlockRow(
         pair.map((row) => ({ label: row.label, value: row.value })),
-        pair.length === 1 ? { fullWidth: true } : {},
+        pair.length === 1 ? { halfWidth: true } : {},
       );
 
     }
@@ -7096,8 +7100,6 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const drawServiceSummary = () => {
 
     const summaryFields = [
-
-      { label: 'Service type', value: toSingleValue(body?.service_type) || '' },
 
       { label: 'Problem description', value: toSingleValue(body?.problem_description) || '' },
 
@@ -12804,31 +12806,7 @@ ${renderTextInput('annex1_reservations', 'Reservations of the client', { textare
 
           <h2>Service summary</h2>
 
-          <div class="grid two-col">
 
-            <label class="field" style="max-width:360px">
-
-              <span>Service type</span>
-
-              <select name="service_type">
-
-                <option value="">Select type</option>
-
-                <option value="maintenance">Maintenance</option>
-
-                <option value="repair">Repair</option>
-
-                <option value="troubleshooting">Troubleshooting</option>
-
-                <option value="inspection">Inspection</option>
-
-                <option value="other">Other</option>
-
-              </select>
-
-            </label>
-
-          </div>
 
 ${renderTextInput('problem_description', 'Problem description', { textarea: true, type: 'textarea-lg', allowUnknown: true })}
 
