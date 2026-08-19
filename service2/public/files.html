@@ -672,11 +672,15 @@
           }
           row.appendChild(selectCell);
 
+          // Fall back to the report's own fields: only dailies carry a dailyReport block, so
+          // reading it alone left service, maintenance and installation rows showing dashes
+          // for project, date and who filled them in.
+          const summary = file.summary || {};
           const cellsBefore = [
             file.templateType || '-',
-            daily.projectNumber || '-',
-            formatIsoDateOnly(daily.reportDate) || '-',
-            daily.submitterName || '-',
+            summary.projectNumber || daily.projectNumber || '-',
+            formatIsoDateOnly(summary.reportDate || daily.reportDate) || '-',
+            file.submittedBy || daily.submitterName || '-',
           ];
 
           cellsBefore.forEach((value) => {

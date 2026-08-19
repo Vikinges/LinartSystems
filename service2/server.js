@@ -362,6 +362,15 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || (dailyReport && dailyReport.projectNumber) || null,
     customerRepresentative: rb.customer_representative || null,
     ledDisplayModel: rb.led_display_model || null,
+    // Everything below exists on every report type, not just dailies. The listing and the
+    // search used to read the daily block alone, so a service or installation report showed
+    // dashes for project/date/submitter and could not be found by the engineer's name.
+    reportDate: rb.date_of_service || (dailyReport && dailyReport.reportDate) || null,
+    engineerName: rb.engineer_name || null,
+    customerName: rb.customer_name || null,
+    customerCompany: rb.customer_company || null,
+    customerContact: rb.customer_contact || null,
+    serviceCompanyName: rb.service_company_name || null,
   };
 
   return {
@@ -410,12 +419,15 @@ function entryMatchesFilters(entry, filters) {
   if (filters.status && (entry.status || 'submitted') !== filters.status) return false;
 
   const daily = entry.dailyReport || {};
-  if (!matchesFilter(daily.projectNumber, filters.project)) return false;
-  if (!matchesFilter(daily.reportDate, filters.reportDate)) return false;
-  if (!matchesFilter(daily.submitterName, filters.submitter)) return false;
+  const s = entry.summary || {};
+
+  // Filter on whichever field the report type actually carries, so "project" and "submitter"
+  // work on a service report and not only on a daily.
+  if (!matchesFilter(s.projectNumber || daily.projectNumber, filters.project)) return false;
+  if (!matchesFilter(s.reportDate || daily.reportDate, filters.reportDate)) return false;
+  if (!matchesFilter(entry.submittedBy || daily.submitterName, filters.submitter)) return false;
 
   if (filters.query) {
-    const s = entry.summary || {};
     const haystack = [
       entry.filename,
       entry.templateLabel,
@@ -423,16 +435,28 @@ function entryMatchesFilters(entry, filters) {
       daily.projectNumber,
       daily.reportDate,
       daily.submitterName,
+      entry.submittedBy,
       s.endCustomerName,
       s.siteLocation,
       s.projectNumber,
+      s.reportDate,
       s.customerRepresentative,
       s.ledDisplayModel,
+      // Who did the work and who received it: searching for an engineer by name is the
+      // most common question asked of this archive and it used to return nothing.
+      s.engineerName,
+      s.customerName,
+      s.customerCompany,
+      s.customerContact,
+      s.serviceCompanyName,
     ]
       .filter(Boolean)
       .join(' ')
       .toLowerCase();
-    if (!haystack.includes(filters.query)) return false;
+    // Every word must appear somewhere, so "marcus janker dhl" finds the engineer's DHL
+    // visits instead of failing because the words live in different fields.
+    const words = String(filters.query).split(/\s+/).filter(Boolean);
+    if (!words.every((word) => haystack.includes(word))) return false;
   }
   return true;
 }
