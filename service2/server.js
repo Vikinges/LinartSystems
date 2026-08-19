@@ -4759,7 +4759,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const textColor = rgb(0.1, 0.1, 0.16);
 
-  const headingTitle = 'Acceptance Certificate';
+  const headingTitle = 'Installation report';
 
   const PAGE_TOP_PADDING = 32;
 
@@ -5082,10 +5082,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   drawSectionTitle('Project details');
 
-  drawBlockRow([
-    { label: 'LSC Projekt-No.', value: val('batch_number') || val('lsc_project_number') },
-    { label: 'Building project', value: val('building_project_acceptance') || val('building_project') },
-  ]);
+  // "Building project" struck off by Vladimir: the project number identifies the job and
+  // the second line only repeated it in words.
+  drawBlockRow(
+    [{ label: 'LSC project number', value: val('batch_number') || val('lsc_project_number') }],
+    { fullWidth: true },
+  );
   drawBlockRow([
     { label: 'Client', value: val('end_customer_name') || val('customer_company') },
     { label: 'Completion', value: dateVal('completion_date') },
@@ -5270,7 +5272,6 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     }
     drawBlockRow([
       { label: 'Annex 1 date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
-      { label: 'Building project', value: val('annex1_building_project') || val('building_project'), height: 32 },
     ]);
 
     drawSectionTitle('Defects');
@@ -5353,11 +5354,6 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     }
     drawBlockRow([
       { label: 'Acceptance date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
-      {
-        label: 'Building project',
-        value: val('annex1_building_project') || val('building_project') || val('building_project_acceptance'),
-        height: 32,
-      },
     ]);
 
     const tableWidth = page.getWidth() - margin * 2;
@@ -12484,13 +12480,11 @@ ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Acceptance certificate</h2>
+          <h2>Installation report</h2>
 
           <div class="grid two-col">
 
-${renderTextInput('batch_number', 'LSC Projekt-No.', { allowUnknown: true, id: 'batch-number-acceptance' })}
-
-${renderTextInput('building_project', 'Building project', { allowUnknown: true })}
+${renderTextInput('batch_number', 'LSC project number', { allowUnknown: true, id: 'batch-number-acceptance' })}
 
 ${renderTextInput('customer_company', 'Client', { allowUnknown: true, id: 'customer-company-acceptance' })}
 
@@ -12589,8 +12583,6 @@ ${renderTextInput('warranty_end', 'Warranty ends on', { type: 'date', allowUnkno
           <div class="grid two-col">
 
 ${renderTextInput('annex1_date', 'Annex 1 date', { type: 'date', allowUnknown: true })}
-
-${renderTextInput('annex1_building_project', 'Building project (Annex 1)', { allowUnknown: true })}
 
           </div>
 
@@ -17611,7 +17603,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             setIfEmpty('[name=\"batch_number\"]', 'LSC-DBG-001');
 
-            setIfEmpty('[name=\"building_project\"]', projectSeed);
 
             setIfEmpty('[name=\"customer_company\"]', clientSeed);
 
@@ -17669,7 +17660,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             setIfEmpty('[name=\"annex1_date\"]', todayIso);
 
-            setIfEmpty('[name=\"annex1_building_project\"]', projectSeed);
 
             setIfEmpty('[name=\"annex1_defects\"]', 'No defects recorded (debug).');
 
@@ -25989,8 +25979,6 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
       assignIfValue('end_customer_name', toSingleValue(req.body?.end_customer_name));
 
       assignIfValue('site_location', toSingleValue(req.body?.site_location));
-
-      assignIfValue('building_project', toSingleValue(req.body?.building_project));
 
       assignIfValue('led_display_model', toSingleValue(req.body?.led_display_model));
       assignIfValue('batch_number', toSingleValue(req.body?.batch_number));
