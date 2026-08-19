@@ -27,7 +27,9 @@
     }
 
     .container {
-      max-width: 1100px;
+      /* The archive is a wide table, not an article: capping it at 1100px left the file
+         column truncated and the actions scrolled off to the right on a normal monitor. */
+      max-width: 1800px;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
@@ -206,7 +208,7 @@
 
     th,
     td {
-      padding: 0.55rem 0.7rem;
+      padding: 0.4rem 0.6rem;
       text-align: left;
       border-bottom: 1px solid var(--border);
       font-size: 0.9rem;
@@ -233,6 +235,78 @@
       font-size: 0.78rem;
       color: #b45309;
       margin-top: 2px;
+    }
+
+    /* Hover card: answers "what is this document?" without downloading the PDF. Everything
+       except the text excerpt is already in the listing payload, so it appears instantly;
+       the excerpt is fetched once per file and cached. */
+    .file-preview {
+      position: fixed;
+      z-index: 50;
+      max-width: 420px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #fff;
+      box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: #1c1c1e;
+      pointer-events: none;
+    }
+
+    .file-preview[hidden] {
+      display: none;
+    }
+
+    .file-preview h4 {
+      margin: 0 0 6px;
+      font-size: 0.9rem;
+      color: #1f2a5b;
+    }
+
+    .file-preview dl {
+      margin: 0;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 2px 10px;
+    }
+
+    .file-preview dt {
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .file-preview dd {
+      margin: 0;
+    }
+
+    .file-preview .preview-chips {
+      margin-top: 8px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .file-preview .chip {
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 0.75rem;
+      background: var(--surface-muted);
+      color: #1e293b;
+    }
+
+    .file-preview .chip.warn {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .file-preview .preview-text {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      color: #334155;
+      white-space: pre-wrap;
     }
 
     .test-badge {
@@ -297,12 +371,22 @@
       color: var(--text-muted);
     }
 
+    /* Laid out across, not down: stacking seven controls made every row ~290px tall and
+       the list unreadable — three files filled a screen. */
     .row-actions {
       display: flex;
-      flex-direction: column;
-      gap: 0.4rem;
-      align-items: stretch;
-      min-width: 150px;
+      flex-direction: row;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      align-items: center;
+      min-width: 0;
+    }
+
+    /* The wide bits keep their own line so the buttons stay on one row. */
+    .row-actions .row-meta,
+    .row-actions .status,
+    .row-actions .row-link-input {
+      flex-basis: 100%;
     }
 
     .row-actions .button {
@@ -726,6 +810,7 @@
           link.href = buildAppUrl(file.downloadPath || '');
           link.textContent = file.filename || 'Download';
           link.title = file.filename || '';
+          attachPreview(link, file);
           linkCell.appendChild(link);
           // This copy predates the customer's remote signature — the signed document is a
           // separate file with a near-identical name. Without this note people download
@@ -1002,6 +1087,156 @@
         selectedKeys = new Set(keys);
         renderRows(currentFiles);
       };
+
+      // --- Hover preview -------------------------------------------------------------
+      // Colleagues open a PDF just to find out whose visit it was. Everything needed to
+      // answer that is already in the listing payload, so the card is instant; the short
+      // text of what was done needs /data, which is fetched once per file and cached.
+      const previewEl = document.createElement('div');
+      previewEl.className = 'file-preview';
+      previewEl.hidden = true;
+      document.body.appendChild(previewEl);
+
+      const previewTextCache = new Map();
+      let previewTimer = null;
+      let previewToken = 0;
+
+      const fetchPreviewText = async (file) => {
+        const key = file.templateType + '/' + file.filename;
+        if (previewTextCache.has(key)) return previewTextCache.get(key);
+        let text = '';
+        try {
+          const res = await fetchWithAdminToken(
+            'api/files/' + encodeURIComponent(file.templateType) + '/' + encodeURIComponent(file.filename) + '/data',
+            { credentials: 'same-origin' },
+          );
+          if (res.ok) {
+            const payload = await res.json();
+            const f = (payload && payload.fields) || {};
+            // First field that actually says what happened, in the order a reader would want.
+            const candidates = [
+              ['Work performed', f.work_performed],
+              ['Report text', f.daily_report_text],
+              ['Problem', f.problem_description],
+              ['Recommendations', f.recommendations],
+              ['Notes', f.led_observations],
+            ];
+            const hit = candidates.find((pair) => pair[1] && String(pair[1]).trim());
+            if (hit) {
+              const value = String(hit[1]).trim().replace(/\s+/g, ' ');
+              text = hit[0] + ': ' + (value.length > 260 ? value.slice(0, 260) + '…' : value);
+            }
+          }
+        } catch (err) { /* preview is a convenience — never surface a failure */ }
+        previewTextCache.set(key, text);
+        return text;
+      };
+
+      const renderPreview = (file, extraText) => {
+        const s = file.summary || {};
+        const daily = file.dailyReport || {};
+        const rows = [
+          ['Customer', s.endCustomerName || s.customerCompany],
+          ['Site', s.siteLocation],
+          ['Project', s.projectNumber || daily.projectNumber],
+          ['Date', formatIsoDateOnly(s.reportDate || daily.reportDate)],
+          ['Engineer', file.submittedBy || s.engineerName],
+          ['Contact', s.customerContact || s.customerRepresentative || s.customerName],
+          ['Display', s.ledDisplayModel],
+        ].filter((pair) => pair[1] && String(pair[1]).trim());
+
+        const chips = [];
+        chips.push((file.photoCount || 0) + ' photo' + ((file.photoCount || 0) === 1 ? '' : 's'));
+        const sig = file.signatures || {};
+        chips.push('signed ' + (file.signatureCount || 0) + '/2'
+          + (file.signatureCount ? ' (' + [sig.engineer ? 'engineer' : null, sig.customer ? 'customer' : null].filter(Boolean).join(' + ') + ')' : ''));
+        if (file.remoteSigned) chips.push('remote signature');
+        if (file.status && file.status !== 'submitted') chips.push(file.status);
+
+        previewEl.innerHTML = '';
+        const title = document.createElement('h4');
+        title.textContent = (file.templateLabel || file.templateType || 'Report');
+        previewEl.appendChild(title);
+
+        const dl = document.createElement('dl');
+        rows.forEach((pair) => {
+          const dt = document.createElement('dt');
+          dt.textContent = pair[0];
+          const dd = document.createElement('dd');
+          dd.textContent = pair[1];
+          dl.append(dt, dd);
+        });
+        previewEl.appendChild(dl);
+
+        const chipWrap = document.createElement('div');
+        chipWrap.className = 'preview-chips';
+        chips.forEach((label) => {
+          const chip = document.createElement('span');
+          chip.className = 'chip';
+          chip.textContent = label;
+          chipWrap.appendChild(chip);
+        });
+        if (file.test) {
+          const chip = document.createElement('span');
+          chip.className = 'chip warn';
+          chip.textContent = 'TEST';
+          chipWrap.appendChild(chip);
+        }
+        if (file.supersededBy) {
+          const chip = document.createElement('span');
+          chip.className = 'chip warn';
+          chip.textContent = 'unsigned original';
+          chipWrap.appendChild(chip);
+        }
+        previewEl.appendChild(chipWrap);
+
+        if (extraText) {
+          const p = document.createElement('div');
+          p.className = 'preview-text';
+          p.textContent = extraText;
+          previewEl.appendChild(p);
+        }
+      };
+
+      const positionPreview = (event) => {
+        const pad = 14;
+        const rect = previewEl.getBoundingClientRect();
+        let left = event.clientX + pad;
+        let top = event.clientY + pad;
+        if (left + rect.width > window.innerWidth - 8) left = event.clientX - rect.width - pad;
+        if (top + rect.height > window.innerHeight - 8) top = Math.max(8, event.clientY - rect.height - pad);
+        previewEl.style.left = left + 'px';
+        previewEl.style.top = top + 'px';
+      };
+
+      const hidePreview = () => {
+        clearTimeout(previewTimer);
+        previewToken += 1;
+        previewEl.hidden = true;
+      };
+
+      const attachPreview = (element, file) => {
+        element.addEventListener('mouseenter', (event) => {
+          clearTimeout(previewTimer);
+          // Short delay so sweeping the cursor down the list doesn't flash cards.
+          previewTimer = setTimeout(async () => {
+            const token = ++previewToken;
+            renderPreview(file, previewTextCache.get(file.templateType + '/' + file.filename) || '');
+            previewEl.hidden = false;
+            positionPreview(event);
+            const text = await fetchPreviewText(file);
+            if (token !== previewToken) return;
+            renderPreview(file, text);
+            positionPreview(event);
+          }, 350);
+        });
+        element.addEventListener('mousemove', (event) => {
+          if (!previewEl.hidden) positionPreview(event);
+        });
+        element.addEventListener('mouseleave', hidePreview);
+      };
+
+      window.addEventListener('scroll', hidePreview, { passive: true });
 
       const loadFiles = async () => {
         await loadUser();
