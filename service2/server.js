@@ -3393,14 +3393,19 @@ function resolveTextFieldStyle(name) {
 // One Site-information block for every document, so a service, maintenance and installation
 // report open with the same grid instead of three near-identical variants. Empty fields are
 // dropped, so a form that never asks for a phone number simply prints one row fewer.
-function buildSiteInfoRows(body) {
+function buildSiteInfoRows(body, options = {}) {
   // No "Service type" row: the document already says which report this is, so repeating
   // "installation" on an installation report told the reader nothing.
+  // dateLabel: an installation runs over days, so its first date is a start date, not the
+  // single "date of service" the other two reports describe.
+  const dateLabel = options.dateLabel || 'Date of service';
   return [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
-    { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || '' },
+    // project_name is the app's key for the same number; the label stays "number" because
+    // that is what the business calls it.
+    { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || toSingleValue(body?.project_name) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
-    { label: 'Date of service', value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
+    { label: dateLabel, value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
     { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
     { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
     // The person who received the work on site, plus how to reach them — the app collects
@@ -5132,7 +5137,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // "Project details": one grid, one order, so the three documents read alike.
   // "Building project" struck off by Vladimir — the project number identifies the job and
   // the second line only repeated it in words.
-  const installSiteRows = buildSiteInfoRows(body);
+  const installSiteRows = buildSiteInfoRows(body, { dateLabel: 'Installation start date' });
 
   if (installSiteRows.length) {
 
@@ -5243,192 +5248,157 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-  if (anyFilled('defects_none', 'defects_annex', 'remaining_annex', 'defects_deadline', 'remaining_deadline', 'supplier_objections')) {
+  // Installation status, in the engineer's own words. The old free-standing "Notification of
+  // defects" checkbox list is replaced by a plain statement, because a customer reading this
+  // needs a sentence, not three ticked boxes to interpret.
+  const installStatus = val('installation_status');
 
-  drawSectionTitle('Notification of defects / remaining activity');
+  const installPartialNotes = val('installation_partial_notes');
 
-  drawCheckboxList(
+  if (installStatus || installPartialNotes) {
 
-    [
+    drawSectionTitle('Installation status');
 
-      { label: 'No visible defects', value: boolVal('defects_none') },
+    const finished = /^(yes|ja|fully|complete)/i.test(String(installStatus || '').trim());
 
-      { label: 'Defects according to Annex 1', value: boolVal('defects_annex') },
+    const statusText = finished
+      ? 'Installation finished completely.'
+      : ('Installation not fully finished.' + (installPartialNotes ? ' ' + installPartialNotes : ''));
 
-      { label: 'Remaining activity according to Annex 1', value: boolVal('remaining_annex') },
-
-    ],
-
-    null,
-
-  );
-
-  drawBlockRow([
-    { label: 'Defects to be remediated before', value: dateVal('defects_deadline'), height: 30 },
-    { label: 'Remaining activities to be remediated before', value: dateVal('remaining_deadline'), height: 30 },
-  ]);
-  drawBlockRow(
-    [
-      {
-        label: 'Objections of the supplier',
-        value: val('supplier_objections'),
-        height: 64,
-        align: 'left',
-        verticalAlign: 'top',
-        paddingY: 8,
-      },
-    ],
-    { fullWidth: true },
-  );
+    drawBlockRow(
+      [{ label: 'Status', value: statusText, height: 52, align: 'left', verticalAlign: 'top', paddingY: 8 }],
+      { fullWidth: true },
+    );
 
   }
 
+  // Warranty: the app sends the start date and a number of years, the end is arithmetic —
+  // asking a person to work it out invites a wrong date on a document that promises
+  // something. warranty_begin is still read so older reports keep rendering.
+  const warrantyStart = val('warranty_start_date') || val('warranty_begin');
 
+  const warrantyYearsRaw = val('warranty_years');
 
-  if (anyFilled('declaration_accepted', 'declaration_after_defects', 'declaration_not_accepted', 'declaration_reservations')) {
+  const warrantyYears = String(warrantyYearsRaw || '').trim() || (warrantyStart ? '2' : '');
 
-  drawSectionTitle('Declaration of the client');
+  const warrantyEnd = (() => {
+    const explicit = val('warranty_end');
+    if (explicit) return formatDisplayDate(explicit);
+    const parsed = parseLocalDateTime(String(warrantyStart || '').trim() + 'T00:00');
+    const years = parseInt(warrantyYears, 10);
+    if (!parsed || !Number.isFinite(years)) return '';
+    const ends = new Date(parsed.getTime());
+    ends.setFullYear(ends.getFullYear() + years);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(ends.getDate())}.${pad(ends.getMonth() + 1)}.${ends.getFullYear()}`;
+  })();
 
-  drawCheckboxList(
+  if (warrantyStart || warrantyYears) {
 
-    [
+    drawSectionTitle('Warranty');
 
-      { label: 'The performance is accepted.', value: boolVal('declaration_accepted') },
-
-      {
-
-        label: 'Acceptance takes effect after listed defects have been eliminated.',
-
-        value: boolVal('declaration_after_defects'),
-
-      },
-
-      { label: 'The performance is not accepted due to substantial defects.', value: boolVal('declaration_not_accepted') },
-
-      { label: 'Acceptance is subject to reservations (Appendix No. 1).', value: boolVal('declaration_reservations') },
-
-    ],
-
-    null,
-
-  );
-
-  }
-
-
-
-  if (anyFilled('warranty_years', 'warranty_begin', 'warranty_end')) {
-
-  drawSectionTitle('Warranty');
-
-  drawBlockRow([
-    { label: 'Warranty (years)', value: val('warranty_years') },
-    { label: 'Warranty begins on', value: dateVal('warranty_begin'), height: 28 },
-  ]);
-  drawBlockRow(
-    [{ label: 'Warranty ends on', value: dateVal('warranty_end'), height: 28 }],
-    { fullWidth: true },
-  );
-
-  }
-
-
-
-  const annex1Fields = [
-
-    val('annex1_defects'),
-
-    val('annex1_remaining'),
-
-    val('annex1_objections'),
-
-    val('annex1_reservations'),
-
-  ];
-
-  if (annex1Fields.some((field) => field && String(field).trim())) {
-
-    const annex1EstimatedHeight = 520; // heading + fields + text blocks (rough estimate)
-    const annex1NewPage = ensureSpace(annex1EstimatedHeight, 'Annex 1');
-    if (!annex1NewPage) {
-      drawSectionTitle('Annex 1');
-    }
     drawBlockRow([
-      { label: 'Annex 1 date', value: dateVal('annex1_date') || dateVal('acceptance_date'), height: 28 },
+      { label: 'Warranty (years)', value: warrantyYears },
+      { label: 'Warranty begins on', value: formatDisplayDate(warrantyStart), height: 28 },
     ]);
 
-    drawSectionTitle('Defects');
+    if (warrantyEnd) {
 
-    drawBlockRow(
-      [
-        {
-          label: 'Details',
-          value: val('annex1_defects'),
-          height: 100,
-          align: 'left',
-          verticalAlign: 'top',
-          paddingY: 8,
-        },
-      ],
-      { fullWidth: true },
-    );
+      drawBlockRow(
+        [{ label: 'Warranty ends on', value: warrantyEnd, height: 28 }],
+        { halfWidth: true },
+      );
 
-    drawSectionTitle('Remaining activities');
-
-    drawBlockRow(
-      [
-        {
-          label: 'Details',
-          value: val('annex1_remaining'),
-          height: 80,
-          align: 'left',
-          verticalAlign: 'top',
-          paddingY: 8,
-        },
-      ],
-      { fullWidth: true },
-    );
-
-    drawSectionTitle('Objections of the supplier');
-
-    drawBlockRow(
-      [
-        {
-          label: 'Details',
-          value: val('annex1_objections'),
-          height: 80,
-          align: 'left',
-          verticalAlign: 'top',
-          paddingY: 8,
-        },
-      ],
-      { fullWidth: true },
-    );
-
-    drawSectionTitle('Reservations of the client');
-
-    drawBlockRow(
-      [
-        {
-          label: 'Details',
-          value: val('annex1_reservations'),
-          height: 80,
-          align: 'left',
-          verticalAlign: 'top',
-          paddingY: 8,
-        },
-      ],
-      { fullWidth: true },
-    );
+    }
 
   }
 
 
 
-  // Parts on an installation read the same as on a service or maintenance report: what was
-  // fitted, then what stays with the customer. The old "Annex 2" table used columns
-  // (Pos./Unit/Ordered qty) that no form ever collected, so most of it printed blank.
-  const partsUsedRows = (partsRows || []).filter((row) => row && row.hasData);
+  // Deferred to the end of the document: the annex is a page of its own, handed over or
+  // filed separately, so it must not interrupt the parts tables and the signatures.
+  const drawAnnex1Page = () => {
+
+    // Annex 1 — the defect list that turns a conditional acceptance into a commitment. Its own
+    // page, so it can be handed over or filed separately. New installation_* keys, with the
+    // previous annex1_* / deadline keys read as fallbacks so older reports still render.
+    const annexDefects = val('installation_defects') || val('annex1_defects');
+
+    const annexRemaining = val('installation_remaining') || val('annex1_remaining');
+
+    const annexHasDefects = boolVal('installation_has_defects') || !!(annexDefects || annexRemaining);
+
+    if (annexHasDefects && (annexDefects || annexRemaining)) {
+
+      addPageWithHeading('Annex 1');
+
+      const annexDate = formatDisplayDate(val('date_of_service') || val('acceptance_date'));
+
+      if (annexDate) {
+
+        drawSectionTitle(`To the acceptance certificate dated ${annexDate}`);
+
+      }
+
+      const annexProject = val('batch_number') || val('lsc_project_number') || val('project_name');
+
+      if (annexProject) {
+
+        drawBlockRow(
+          [{ label: 'LSC project number', value: annexProject }],
+          { halfWidth: true },
+        );
+
+      }
+
+      if (annexDefects) {
+
+        drawBlockRow(
+          [{ label: 'Defects', value: annexDefects, height: 110, align: 'left', verticalAlign: 'top', paddingY: 8 }],
+          { fullWidth: true },
+        );
+
+      }
+
+      if (annexRemaining) {
+
+        drawBlockRow(
+          [{ label: 'Remaining activities', value: annexRemaining, height: 110, align: 'left', verticalAlign: 'top', paddingY: 8 }],
+          { fullWidth: true },
+        );
+
+      }
+
+      // When it has to be done by, and how urgently — the reason the annex exists.
+      const followupType = val('installation_followup_type');
+
+      const followupDate = formatDisplayDate(val('installation_followup_date') || val('defects_deadline') || val('remaining_deadline'));
+
+      if (followupType || followupDate) {
+
+        const urgencyLabels = { urgent: 'Fix urgently', planned: 'Planned completion' };
+
+        const urgency = urgencyLabels[String(followupType || '').trim().toLowerCase()]
+          || followupType
+          || 'Planned completion';
+
+        drawBlockRow(
+          [{
+            label: 'Completion',
+            value: followupDate ? `${urgency} - no later than ${followupDate}` : urgency,
+            height: 40,
+            align: 'left',
+            verticalAlign: 'top',
+            paddingY: 8,
+          }],
+          { fullWidth: true },
+        );
+
+      }
+
+    }
+
+  };
 
   const drawSimpleTable = (title, headers, ratios, rows) => {
 
@@ -5497,30 +5467,43 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   };
 
   drawSimpleTable(
-    'Parts used during this visit',
-    ['Type', 'Part removed (description)', 'Part number', 'Part used in display', 'Serial number'],
-    [0.16, 0.28, 0.18, 0.22, 0.16],
-    partsUsedRows.map((row) => [
-      row.fields[`parts_type_${row.number}`] || '',
-      row.fields[`parts_removed_desc_${row.number}`] || '',
-      row.fields[`parts_removed_part_${row.number}`] || '',
-      row.fields[`parts_used_part_${row.number}`] || '',
-      row.fields[`parts_used_serial_${row.number}`] || '',
-    ]),
-  );
-
-  drawSimpleTable(
     'Spare parts left on site',
     ['Type', 'Part number', 'Description', 'Quantity left'],
     [0.22, 0.26, 0.34, 0.18],
     collectSpareStockRows(body || {}).map((row) => [row.type, row.part, row.description, row.quantity]),
   );
 
+  // What the customer is actually signing. Printed verbatim and in English, like the rest of
+  // the document — a declaration paraphrased by the renderer is not the one that was agreed.
+  const acceptanceStatement = val('acceptance_statement')
+    || val('declaration_text')
+    || val('declaration_statement');
+
+  if (acceptanceStatement) {
+
+    ensureSpace(120, 'Customer declares');
+
+    drawSectionTitle('Customer declares');
+
+    drawBlockRow(
+      [{
+        label: 'Acceptance statement',
+        value: acceptanceStatement,
+        height: 72,
+        align: 'left',
+        verticalAlign: 'top',
+        paddingY: 8,
+      }],
+      { fullWidth: true },
+    );
+
+  }
+
   const columnWidth = (page.getWidth() - margin * 2 - 12) / 2;
 
   const signatureHeight = 160;
 
-  ensureSpace(signatureHeight + 40, 'Signatures');
+  ensureSpace(signatureHeight + 40, `${headingTitle} (cont.)`);
 
   drawSectionTitle('Signatures');
 
@@ -5697,6 +5680,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   }
 
   cursorY -= signatureHeight + 16;
+
+  drawAnnex1Page();
 
 
 
@@ -12484,75 +12469,95 @@ ${renderTextInput('partial_services', 'Partial services (Annex 1)', { textarea: 
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Defects & remaining activity</h2>
+          <h2>Installation status</h2>
 
-          <div class="grid two-col">
+          <label class="field">
 
-            <label class="checkbox"><input type="checkbox" name="defects_none" /> <span>No visible defects</span></label>
+            <span>Was the installation finished completely?</span>
 
-            <label class="checkbox"><input type="checkbox" name="defects_annex" /> <span>Defects according to Annex 1</span></label>
+            <select name="installation_status">
 
-            <label class="checkbox"><input type="checkbox" name="remaining_annex" /> <span>Remaining activity according to Annex 1</span></label>
+              <option value="">-- select --</option>
 
-          </div>
+              <option value="fully_finished">Yes, installation finished completely</option>
 
-          <div class="grid two-col">
+              <option value="not_finished">No, not fully finished</option>
 
-${renderTextInput('defects_deadline', 'Defects to be remediated before', { type: 'date', allowUnknown: true })}
+            </select>
 
-${renderTextInput('remaining_deadline', 'Remaining activities to be remediated before', { type: 'date', allowUnknown: true })}
+          </label>
 
-          </div>
+${renderTextInput('installation_partial_notes', 'What is still outstanding (if not fully finished)', { textarea: true, allowUnknown: true })}
 
-${renderTextInput('supplier_objections', 'Objections of the supplier', { textarea: true, allowUnknown: true })}
+          <label class="checkbox"><input type="checkbox" name="installation_has_defects" data-annex-toggle /> <span>Defects or remaining activities exist (Annex 1)</span></label>
 
         </section>
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Declaration & warranty</h2>
+          <h2>Annex 1 - defects and remaining activities</h2>
+
+          <p>Filled in only when the box above is ticked. Printed on a separate page so it can be handed over on its own.</p>
+
+${renderTextInput('installation_defects', 'Defects', { textarea: true, allowUnknown: true })}
+
+${renderTextInput('installation_remaining', 'Remaining activities', { textarea: true, allowUnknown: true })}
 
           <div class="grid two-col">
 
-            <label class="checkbox"><input type="checkbox" name="declaration_accepted" /> <span>The performance is accepted</span></label>
+            <label class="field">
 
-            <label class="checkbox"><input type="checkbox" name="declaration_after_defects" /> <span>Acceptance takes effect after defects are eliminated</span></label>
+              <span>How urgent</span>
 
-            <label class="checkbox"><input type="checkbox" name="declaration_not_accepted" /> <span>Performance not accepted due to substantial defects</span></label>
+              <select name="installation_followup_type">
 
-            <label class="checkbox"><input type="checkbox" name="declaration_reservations" /> <span>Acceptance subject to reservations (Appendix No. 1)</span></label>
+                <option value="">-- select --</option>
+
+                <option value="urgent">Fix urgently</option>
+
+                <option value="planned">Planned completion</option>
+
+              </select>
+
+            </label>
+
+${renderTextInput('installation_followup_date', 'To be completed no later than', { type: 'date', allowUnknown: true })}
 
           </div>
+
+        </section>
+
+        <section class="card" data-form-types="installation_report">
+
+          <h2>Warranty</h2>
+
+          <p>The end date is calculated from the start date and the number of years - it is not asked for twice.</p>
 
           <div class="grid two-col">
 
 ${renderTextInput('warranty_years', 'Warranty (years)', { type: 'number', allowUnknown: true })}
 
-${renderTextInput('warranty_begin', 'Warranty begins on', { type: 'date', allowUnknown: true })}
-
-${renderTextInput('warranty_end', 'Warranty ends on', { type: 'date', allowUnknown: true })}
+${renderTextInput('warranty_start_date', 'Warranty begins on', { type: 'date', allowUnknown: true })}
 
           </div>
+
+          <p data-warranty-end-preview></p>
 
         </section>
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Annex 1</h2>
+          <h2>Customer declares</h2>
 
-          <div class="grid two-col">
+          <p>Printed verbatim above the signatures. Edit it if this handover was agreed differently.</p>
 
-${renderTextInput('annex1_date', 'Annex 1 date', { type: 'date', allowUnknown: true })}
+          <label class="field" for="field-acceptance-statement">
 
-          </div>
+            <span>Acceptance statement</span>
 
-${renderTextInput('annex1_defects', 'Defects', { textarea: true, allowUnknown: true })}
+            <textarea id="field-acceptance-statement" name="acceptance_statement" rows="4" data-auto-resize>The customer confirms that the installation has been carried out and accepts the work as described in this report.</textarea>
 
-${renderTextInput('annex1_remaining', 'Remaining activities', { textarea: true, allowUnknown: true })}
-
-${renderTextInput('annex1_objections', 'Objections of the supplier', { textarea: true, allowUnknown: true })}
-
-${renderTextInput('annex1_reservations', 'Reservations of the client', { textarea: true, allowUnknown: true })}
+          </label>
 
         </section>
 
@@ -12998,7 +13003,7 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
 
         </section>
 
-${partsTable({ dataAttr: 'maintenance,installation_report' })}
+${partsTable({ dataAttr: 'maintenance' })}
 
 ${spareStockTable('maintenance,installation_report')}
 
@@ -13701,13 +13706,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+        // The warranty end is arithmetic, so the form shows it instead of asking for it —
+        // the server computes the same value when it renders the document.
         const warrantyYearsInput = formEl.querySelector('input[name="warranty_years"]');
 
-        const warrantyBeginInput = formEl.querySelector('input[name="warranty_begin"]');
+        const warrantyStartInput = formEl.querySelector('input[name="warranty_start_date"]');
 
-        const warrantyEndInput = formEl.querySelector('input[name="warranty_end"]');
-
-        let warrantyEndTouched = false;
+        const warrantyEndPreview = formEl.querySelector('[data-warranty-end-preview]');
 
 
 
@@ -13737,75 +13742,41 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-        const formatIsoDate = (date) => {
-
-          const y = date.getUTCFullYear();
-
-          const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-
-          const d = String(date.getUTCDate()).padStart(2, '0');
-
-          return [y, m, d].join('-');
-
-        };
-
-
-
         const updateWarrantyEnd = () => {
 
-          if (!warrantyYearsInput || !warrantyBeginInput || !warrantyEndInput) return;
+          if (!warrantyEndPreview) return;
 
-          if (warrantyEndTouched && warrantyEndInput.value) return;
+          const baseDate = warrantyStartInput ? parseIsoDate(warrantyStartInput.value) : null;
 
-          const baseDate = parseIsoDate(warrantyBeginInput.value);
+          const years = warrantyYearsInput ? Number(warrantyYearsInput.value) : NaN;
 
-          const years = Number(warrantyYearsInput.value);
+          if (!baseDate || !Number.isFinite(years) || !warrantyYearsInput.value) {
 
-          if (!baseDate || !Number.isFinite(years)) return;
+            warrantyEndPreview.textContent = '';
+
+            return;
+
+          }
 
           const target = new Date(baseDate.getTime());
 
           target.setUTCFullYear(target.getUTCFullYear() + years);
 
-          warrantyEndInput.value = formatIsoDate(target);
+          const pad = (n) => String(n).padStart(2, '0');
+
+          const shown = pad(target.getUTCDate()) + '.' + pad(target.getUTCMonth() + 1) + '.' + target.getUTCFullYear();
+
+          warrantyEndPreview.textContent = 'Warranty ends on ' + shown;
 
         };
 
 
 
-        if (warrantyEndInput) {
+        [warrantyYearsInput, warrantyStartInput].forEach((input) => {
 
-          warrantyEndInput.addEventListener('input', () => {
+          if (input) input.addEventListener('input', updateWarrantyEnd);
 
-            warrantyEndTouched = true;
-
-          });
-
-        }
-
-        if (warrantyYearsInput) {
-
-          warrantyYearsInput.addEventListener('input', () => {
-
-            warrantyEndTouched = false;
-
-            updateWarrantyEnd();
-
-          });
-
-        }
-
-        if (warrantyBeginInput) {
-
-          warrantyBeginInput.addEventListener('input', () => {
-
-            warrantyEndTouched = false;
-
-            updateWarrantyEnd();
-
-          });
-
-        }
+        });
 
         updateWarrantyEnd();
 
@@ -17497,6 +17468,24 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          const setSelect = (name, value) => {
+
+            const el = formEl.querySelector('select[name=\"' + name + '\"]');
+
+            if (el && !el.value) {
+
+              el.value = value;
+
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+
+            }
+
+            return el;
+
+          };
+
+
+
           const toLocalDateTimeValue = (date) => {
 
             if (!(date instanceof Date)) return '';
@@ -17562,48 +17551,27 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-            setCheckbox('defects_none', true);
+            setSelect('installation_status', 'not_finished');
 
-            setCheckbox('defects_annex', false);
+            setIfEmpty('[name=\"installation_partial_notes\"]', 'Cable trunking on the rear side still open.');
 
-            setCheckbox('remaining_annex', false);
+            setCheckbox('installation_has_defects', true);
 
-            setIfEmpty('[name=\"defects_deadline\"]', todayIso);
+            setIfEmpty('[name=\"installation_defects\"]', 'Two modules show a slight colour shift in the lower right corner.');
 
-            setIfEmpty('[name=\"remaining_deadline\"]', todayIso);
+            setIfEmpty('[name=\"installation_remaining\"]', 'Cleaning and handover of documentation.');
 
-            setIfEmpty('[name=\"supplier_objections\"]', 'No objections (debug mode).');
+            setSelect('installation_followup_type', 'planned');
 
-
-
-            setCheckbox('declaration_accepted', true);
-
-            setCheckbox('declaration_after_defects', false);
-
-            setCheckbox('declaration_not_accepted', false);
-
-            setCheckbox('declaration_reservations', false);
+            setIfEmpty('[name=\"installation_followup_date\"]', todayIso);
 
 
 
             setIfEmpty('[name=\"warranty_years\"]', '2');
 
-            setIfEmpty('[name=\"warranty_begin\"]', todayIso);
+            setIfEmpty('[name=\"warranty_start_date\"]', todayIso);
 
             updateWarrantyEnd();
-
-
-
-            setIfEmpty('[name=\"annex1_date\"]', todayIso);
-
-
-            setIfEmpty('[name=\"annex1_defects\"]', 'No defects recorded (debug).');
-
-            setIfEmpty('[name=\"annex1_remaining\"]', 'Only cleaning and documentation pending.');
-
-            setIfEmpty('[name=\"annex1_objections\"]', 'None.');
-
-            setIfEmpty('[name=\"annex1_reservations\"]', 'None.');
 
 
 
