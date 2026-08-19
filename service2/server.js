@@ -12549,13 +12549,23 @@ ${renderTextInput('warranty_start_date', 'Warranty begins on', { type: 'date', a
 
           <h2>Customer declares</h2>
 
-          <p>Printed verbatim above the signatures. Edit it if this handover was agreed differently.</p>
+          <p>Printed verbatim above the signatures. The same four wordings the app offers, so a report says the same thing whichever side filled it in.</p>
 
-          <label class="field" for="field-acceptance-statement">
+          <label class="field">
 
             <span>Acceptance statement</span>
 
-            <textarea id="field-acceptance-statement" name="acceptance_statement" rows="4" data-auto-resize>The customer confirms that the installation has been carried out and accepts the work as described in this report.</textarea>
+            <select name="acceptance_statement">
+
+              <option value="Acceptance has taken place." selected>Acceptance has taken place.</option>
+
+              <option value="Acceptance takes effect once the listed defects are fully remedied.">Acceptance takes effect once the listed defects are fully remedied.</option>
+
+              <option value="Acceptance is refused due to significant defects.">Acceptance is refused due to significant defects.</option>
+
+              <option value="Acceptance is made under the conditions set out in Annex 1.">Acceptance is made under the conditions set out in Annex 1.</option>
+
+            </select>
 
           </label>
 
