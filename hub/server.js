@@ -1154,6 +1154,11 @@ app.get('/service2/api/files/trash', requireFilesAdminAccess, attachHubProxyHead
 app.post('/service2/api/files/:type/:filename/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.post('/service2/api/files/:type/:filename/restore', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.delete('/service2/api/files/:type/:filename/purge', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+// Marking a report as a test is a delete-level action and needs the same treatment: without
+// being listed here it fell through to the generic /service2 proxy, which strips the client's
+// hub headers and does not add the authoritative ones, so service2 saw no permissions and
+// answered 403 — the button reported "Failed — retry".
+app.post('/service2/api/files/:type/:filename/test', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 // Legacy hard-delete + bulk-zip used by the web Files page. service2 gates both on
 // delete permission; register them here (before registerProxies' open /service2
 // catch-all) so an admin hub session attaches the authoritative x-hub-* headers and
