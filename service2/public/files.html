@@ -13,16 +13,50 @@
     .files-table th:nth-child(8),
     .files-table td:nth-child(8) { max-width: 260px; }
 
-    .row-ttl select { height: 28px; font-size: 12px; }
+    /* The sign-link controls: six of them per row, only visible to an admin.
+       They overflowed the cell and ran across the File column once the shared
+       theme's full-size buttons applied, so they are sized down and allowed to
+       wrap inside a bounded column instead of pushing the table apart. */
+    .files-table th:last-child,
+    .files-table td:last-child { width: 300px; max-width: 300px; }
+
+    /* .row-actions is the wrapper div inside the cell, not the cell itself. */
+    .row-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 4px;
+      white-space: normal;
+    }
+
+    .row-actions .button {
+      height: 26px;
+      padding: 0 8px;
+      font-size: 11.5px;
+      gap: 4px;
+    }
+
+    .row-ttl {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    .row-ttl select { height: 26px; padding: 0 6px; font-size: 12px; }
 
     .row-link-input {
       font-family: var(--font-mono);
       font-size: 11px;
-      height: 28px;
-      max-width: 260px;
+      height: 26px;
+      width: 100%;
+      max-width: 280px;
     }
 
-    .row-meta { font-size: 11px; color: var(--text-muted); }
+    .row-meta { font-size: 11px; color: var(--text-muted); width: 100%; text-align: right; }
   </style>
 </head>
 
