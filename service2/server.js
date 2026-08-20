@@ -9083,6 +9083,16 @@ ${rows.join('\n')}
 
       input[type="datetime-local"],
 
+      input[type="email"],
+
+      input[type="tel"],
+
+      input[type="number"],
+
+      input[type="time"],
+
+      input[type="password"],
+
       textarea,
 
       select {
@@ -12377,7 +12387,7 @@ ${renderTextInput('service_company_name', 'Service company name')}
 
 ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 
-${renderTextInput('customer_phone', 'Phone', { allowUnknown: true })}
+${renderTextInput('customer_phone', 'Phone', { type: 'tel', allowUnknown: true })}
 
 ${renderTextInput('customer_email', 'Email', { type: 'email', allowUnknown: true })}
 
