@@ -4970,6 +4970,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // leading; one that follows a block does.
   let atPageTop = true;
 
+  let currentSection = '';
+
   const setCurrentPage = (target, heading = headingTitle) => {
 
     atPageTop = true;
@@ -5040,6 +5042,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     atPageTop = false;
 
+    currentSection = String(label || '').replace(/ \(cont\.\)$/, '');
+
     page.drawText(label, {
 
       x: margin,
@@ -5055,6 +5059,14 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     });
 
     cursorY -= SECTION_TITLE_HEIGHT + SECTION_TITLE_GAP;
+
+  };
+
+  // A section whose rows spill onto the next page announces itself again there. The page
+  // keeps the report's own name; this is the section saying "still me".
+  const resumeSection = () => {
+
+    if (currentSection) drawSectionTitle(`${currentSection} (cont.)`);
 
   };
 
@@ -5090,7 +5102,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       }),
     );
     const rowHeight = BLOCK_HEADER_HEIGHT + maxDataHeight;
-    ensureSpace(rowHeight + BLOCK_ROW_GAP);
+    if (ensureSpace(rowHeight + BLOCK_ROW_GAP)) resumeSection();
     atPageTop = false;
     normalized.forEach((field, index) => {
       const x = margin + index * (columnWidth + colGap);
@@ -6978,7 +6990,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const blockHeight = rowsPerCol * rowHeight + 20;
 
-    const sectionLabel = ensureBlock(blockHeight, `${title} (cont.)`) ? `${title} (cont.)` : title;
+    ensureBlock(blockHeight);
+
+    const sectionLabel = title;
 
     drawSectionTitle(sectionLabel);
 
@@ -7078,7 +7092,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (!sectionStarted) {
 
-        drawSectionTitle(sectionStarted ? `${title} (cont.)` : title);
+        drawSectionTitle(title);
 
         sectionStarted = true;
 
@@ -7138,7 +7152,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       resolveChecked: (b) => String(toSingleValue(b?.led_dead_pixels) || '').trim() === '0',
       resolveNote: (b) => {
         const v = String(toSingleValue(b?.led_dead_pixels) || '').trim();
-        return v === '' ? '' : `${v} dead pixels`;
+        return v === '' ? '' : `${v} dead ${v === '1' ? 'pixel' : 'pixels'}`;
       },
     },
 
@@ -7147,7 +7161,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       resolveChecked: (b) => String(toSingleValue(b?.led_dead_modules) || '').trim() === '0',
       resolveNote: (b) => {
         const v = String(toSingleValue(b?.led_dead_modules) || '').trim();
-        return v === '' ? '' : `${v} dead modules`;
+        return v === '' ? '' : `${v} dead ${v === '1' ? 'module' : 'modules'}`;
       },
     },
 
@@ -7216,7 +7230,18 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     ]);
 
-    const anyCheckpoint = CONTROL_CHECKPOINT_ROWS.some((row) => normalizeCheckboxValue(body?.[row.checkbox]))
+    // Four of these rows are measured readings resolved from their own fields rather than a
+    // checkbox, so testing row.checkbox alone asked body[undefined] and always said no. An
+    // engineer who reported three dead pixels and nothing else got no table at all: the
+    // reading was submitted, stored, and silently absent from the document.
+    const rowHasContent = (row) => {
+      if (row.checkbox && normalizeCheckboxValue(body?.[row.checkbox])) return true;
+      if (typeof row.resolveNote === 'function' && String(row.resolveNote(body) || '').trim()) return true;
+      if (typeof row.resolveChecked === 'function' && row.resolveChecked(body)) return true;
+      return false;
+    };
+
+    const anyCheckpoint = CONTROL_CHECKPOINT_ROWS.some(rowHasContent)
 
       || String(toSingleValue(body?.control_open_issues) || '').trim();
 
@@ -7301,7 +7326,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       }
 
-      if (ensureSpace(blockHeight + 8, sectionStarted ? 'Service summary (cont.)' : 'Service summary')) {
+      if (ensureSpace(blockHeight + 8)) {
 
         sectionStarted = false;
 
@@ -7309,7 +7334,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (!sectionStarted) {
 
-        drawSectionTitle(sectionStarted ? 'Service summary (cont.)' : index === 0 ? 'Service summary' : 'Service summary (cont.)');
+        drawSectionTitle('Service summary');
 
         sectionStarted = true;
 
@@ -23759,7 +23784,9 @@ async function embedUploadedImages(pdfDoc, form, photoFiles, embedOptions = {}) 
 
       const x = cellX + (availableWidth - drawWidth) / 2;
 
-      const y = cellY + captionHeight + (availableHeight - drawHeight) / 2;
+      const cellTop = cellY + captionHeight + availableHeight;
+
+      const y = cellTop - drawHeight;
 
 
 
@@ -23779,9 +23806,9 @@ async function embedUploadedImages(pdfDoc, form, photoFiles, embedOptions = {}) 
 
       page.drawText(caption, {
 
-        x: cellX,
+        x,
 
-        y: cellY + 6,
+        y: y - 16,
 
         size: 11,
 
@@ -26469,7 +26496,9 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
       imagePlacements = await embedUploadedImages(pdfDoc, null, photoFiles, {
 
-        projectNumber: toSingleValue(sanitizedBody.batch_number) || '',
+        projectNumber: resolveProjectNumber(sanitizedBody)
+          || (dailyReportData && dailyReportData.projectNumber)
+          || '',
 
       });
 
@@ -26480,12 +26509,6 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
       }
 
     } else {
-
-      imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles, {
-
-        projectNumber: toSingleValue(sanitizedBody.batch_number) || '',
-
-      });
 
       if (form) {
 
@@ -26540,6 +26563,15 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
         },
 
       );
+
+      // Appended last, once the report itself is complete.
+      imagePlacements = await embedUploadedImages(pdfDoc, form, photoFiles, {
+
+        projectNumber: resolveProjectNumber(sanitizedBody)
+          || (dailyReportData && dailyReportData.projectNumber)
+          || '',
+
+      });
 
     }
 
