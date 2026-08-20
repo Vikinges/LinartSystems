@@ -360,6 +360,8 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     endCustomerName: rb.end_customer_name || null,
     siteLocation: rb.site_location || null,
     projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || (dailyReport && dailyReport.projectNumber) || null,
+    // Colleagues look for the job by the name they call it, not by a six-digit number.
+    projectName: rb.lsc_project_name || null,
     customerRepresentative: rb.customer_representative || null,
     ledDisplayModel: rb.led_display_model || null,
     // Everything below exists on every report type, not just dailies. The listing and the
@@ -439,6 +441,7 @@ function entryMatchesFilters(entry, filters) {
       s.endCustomerName,
       s.siteLocation,
       s.projectNumber,
+      s.projectName,
       s.reportDate,
       s.customerRepresentative,
       s.ledDisplayModel,
@@ -3404,6 +3407,7 @@ function buildSiteInfoRows(body, options = {}) {
     // project_name is the app's key for the same number; the label stays "number" because
     // that is what the business calls it.
     { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || toSingleValue(body?.project_name) || '' },
+    { label: 'LSC project name', value: toSingleValue(body?.lsc_project_name) || '' },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
     { label: dateLabel, value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
     { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
@@ -5360,10 +5364,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       const annexProject = val('batch_number') || val('lsc_project_number') || val('project_name');
 
-      if (annexProject) {
+      if (annexProject || val('lsc_project_name')) {
 
         drawBlockRow(
-          [{ label: 'LSC project number', value: annexProject }],
+          [
+            { label: 'LSC project number', value: annexProject },
+            { label: 'LSC project name', value: val('lsc_project_name') },
+          ],
           { halfWidth: true },
         );
 
@@ -12382,6 +12389,8 @@ ${renderTextInput('customer_representative', 'Contact person', { allowUnknown: t
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
 ${renderTextInput('batch_number', 'LSC Project number')}
+
+${renderTextInput('lsc_project_name', 'LSC project name', { allowUnknown: true, placeholder: 'What the customer calls this job, e.g. Hub Leipzig hall 3' })}
 
 ${renderTextInput('service_company_name', 'Service company name')}
 
