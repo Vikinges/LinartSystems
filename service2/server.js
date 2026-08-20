@@ -4819,6 +4819,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const SECTION_TITLE_GAP = 6;
 
+  // Air above a heading. The title is drawn on its baseline, so with nothing here the
+  // letters ride on the border of the block above and the descenders cut through it.
+  const SECTION_TITLE_TOP_GAP = 14;
+
   const LABEL_FONT_SIZE = 10;
 
   const FIELD_GAP = 10;
@@ -4859,7 +4863,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
+  // A heading that opens a page already sits below the page title and needs no extra
+  // leading; one that follows a block does.
+  let atPageTop = true;
+
   const setCurrentPage = (target, heading = headingTitle) => {
+
+    atPageTop = true;
 
     page = target;
 
@@ -4921,7 +4931,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const drawSectionTitle = (label) => {
 
-    ensureSpace(SECTION_TITLE_HEIGHT + SECTION_TITLE_GAP);
+    ensureSpace(SECTION_TITLE_TOP_GAP + SECTION_TITLE_HEIGHT + SECTION_TITLE_GAP);
+
+    if (!atPageTop) cursorY -= SECTION_TITLE_TOP_GAP;
+
+    atPageTop = false;
 
     page.drawText(label, {
 
@@ -4974,6 +4988,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     );
     const rowHeight = BLOCK_HEADER_HEIGHT + maxDataHeight;
     ensureSpace(rowHeight + BLOCK_ROW_GAP);
+    atPageTop = false;
     normalized.forEach((field, index) => {
       const x = margin + index * (columnWidth + colGap);
       const headerY = cursorY - BLOCK_HEADER_HEIGHT;
@@ -5031,7 +5046,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     const totalHeight = visible.length * rowHeight + titleHeight + FIELD_GAP;
 
-    ensureSpace(totalHeight, title ? `${title} (cont.)` : undefined);
+    ensureSpace(totalHeight);
 
     if (title) {
 
@@ -5412,7 +5427,9 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     const rHeight = 26;
 
-    const label = ensureSpace(hHeight + rHeight * rows.length + 16, `${title} (cont.)`) ? `${title} (cont.)` : title;
+    ensureSpace(hHeight + rHeight * rows.length + 16);
+
+    const label = title;
 
     drawSectionTitle(label);
 
@@ -5481,7 +5498,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   if (acceptanceStatement) {
 
-    ensureSpace(120, 'Customer declares');
+    ensureSpace(120);
 
     drawSectionTitle('Customer declares');
 
@@ -6181,11 +6198,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  const addPageWithHeading = (heading) => {
+  const addPageWithHeading = (heading = `${headingTitle} (cont.)`) => {
 
     const next = pdfDoc.addPage([baseSize.width, baseSize.height]);
 
     setCurrentPage(next, heading);
+
+    atPageTop = true;
 
     return next;
 
@@ -6215,7 +6234,18 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
+  // Air above a heading that follows a block. The title is drawn on its baseline, so with
+  // nothing here the letters sit on the border of the block above and the descenders cut
+  // through it. A heading that opens a page already sits under the page title.
+  const SECTION_TITLE_TOP_GAP = 14;
+
+  let atPageTop = true;
+
   const drawSectionTitle = (label) => {
+
+    if (!atPageTop && !ensureSpace(SECTION_TITLE_TOP_GAP + 18)) cursorY -= SECTION_TITLE_TOP_GAP;
+
+    atPageTop = false;
 
     page.drawText(label, {
 
@@ -6926,7 +6956,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (!Number.isFinite(blockHeight) || blockHeight <= 0) blockHeight = 40;
 
-      if (ensureSpace(blockHeight + 8, `${title} (cont.)`)) sectionStarted = false;
+      if (ensureSpace(blockHeight + 8)) sectionStarted = false;
 
       if (!sectionStarted) {
 
@@ -7265,15 +7295,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     let blockHeight = Math.max(48, Math.ceil(layout.totalHeight + 20));
 
-    if (ensureSpace(blockHeight + 8, `${label} (cont.)`)) {
+    ensureSpace(blockHeight + 8);
 
-      drawSectionTitle(`${label} (cont.)`);
-
-    } else {
-
-      drawSectionTitle(label);
-
-    }
+    drawSectionTitle(label);
 
     page.drawRectangle({
 
@@ -7836,11 +7860,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const stockBlockHeight = stockHeaderHeight + stockRowHeight * spareStockRows.length + 12;
 
-    const stockLabel = ensureSpace(stockBlockHeight, 'Spare parts left on site (cont.)')
-      ? 'Spare parts left on site (cont.)'
-      : 'Spare parts left on site';
+    ensureSpace(stockBlockHeight);
 
-    drawSectionTitle(stockLabel);
+    drawSectionTitle('Spare parts left on site');
 
     let stockX = margin;
 
@@ -7904,15 +7926,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     // Avoid duplicating template heading; just ensure space for signatures.
 
-    ensureSpace(260, 'Sign-off details');
+    ensureSpace(260);
 
   } else {
 
     drawNotesBlock('Additional notes', body?.general_notes);
 
-    addPageWithHeading('Sign-off details');
-
-    drawSectionTitle('Sign-off details');
+    addPageWithHeading();
 
   }
 
@@ -7954,17 +7974,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const combinedRequired = detailHeight * detailRows + signatureHeight + 140;
 
-  const signoffPageBreak = ensureSpace(combinedRequired, 'Sign-off details (cont.)');
+  ensureSpace(combinedRequired);
 
 
 
   if (hasSignoffDetails) {
 
-    const detailHeading =
-
-      signoffPageBreak ? 'Sign-off details (cont.)' : 'Sign-off details';
-
-    drawSectionTitle(detailHeading);
+    drawSectionTitle('Sign-off details');
 
     const baseDetailY = cursorY;
 
@@ -8110,11 +8126,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   // ÃÅ¸ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂ¸ ÃÂºÃ‘â‚¬Ã‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂµ, ÃÂ½ÃÂ¾ ÃÂ·ÃÂ°ÃÂ½ÃÂ¸ÃÂ¼ÃÂ°Ã‘Å½Ã‘â€š ÃÂ¼ÃÂµÃÂ½Ã‘Å’Ã‘Ë†ÃÂµ ÃÂ²Ã‘â€¹Ã‘ÂÃÂ¾Ã‘â€šÃ‘â€¹.
 
-  const signatureHeading =
+  ensureSpace(signatureHeight + 40);
 
-    ensureSpace(signatureHeight + 40, 'Signatures (cont.)') ? 'Signatures (cont.)' : 'Signatures';
-
-  drawSectionTitle(signatureHeading);
+  drawSectionTitle('Signatures');
 
   const signatureWidth = columnWidth;
 
@@ -12341,7 +12355,7 @@ ${renderTextInput(DAILY_REPORT_FIELDS.reportText, 'Report text', { textarea: tru
 
         </section>
 
-        <section class="card" data-form-types="service_report,maintenance">
+        <section class="card" data-form-types="service_report,maintenance,installation_report">
 
           <h2>Site information</h2>
 
@@ -12351,7 +12365,7 @@ ${renderTextInput('end_customer_name', 'End customer name')}
 
 ${renderTextInput('site_location', 'Site location')}
 
-${renderTextInput('customer_representative', 'Customer representative', { allowUnknown: true })}
+${renderTextInput('customer_representative', 'Contact person', { allowUnknown: true })}
 <input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
 
 ${renderTextInput('batch_number', 'LSC Project number')}
@@ -12359,6 +12373,10 @@ ${renderTextInput('batch_number', 'LSC Project number')}
 ${renderTextInput('service_company_name', 'Service company name')}
 
 ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
+
+${renderTextInput('customer_phone', 'Phone', { allowUnknown: true })}
+
+${renderTextInput('customer_email', 'Email', { type: 'email', allowUnknown: true })}
 
           </div>
 
@@ -12425,11 +12443,9 @@ ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Installation report</h2>
+          <h2>Acceptance details</h2>
 
           <div class="grid two-col">
-
-${renderTextInput('batch_number', 'LSC project number', { allowUnknown: true, id: 'batch-number-acceptance' })}
 
 ${renderTextInput('customer_company', 'Client', { allowUnknown: true, id: 'customer-company-acceptance' })}
 
@@ -13695,6 +13711,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             });
 
           });
+
+          // The shared block asks for one date, but an installation runs over days, so the
+          // document calls its first date a start date. The form has to say the same thing.
+          const serviceDateLabel = document.querySelector('label[for="field-date-of-service"] > span')
+            || document.querySelector('input[name="date_of_service"]')?.closest('label')?.querySelector('span');
+
+          if (serviceDateLabel) {
+
+            serviceDateLabel.textContent =
+              type === 'installation_report' ? 'Installation start date' : 'Date of service';
+
+          }
 
         };
 
