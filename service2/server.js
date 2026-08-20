@@ -5540,7 +5540,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   // Deferred to the end of the document: the annex is a page of its own, handed over or
   // filed separately, so it must not interrupt the parts tables and the signatures.
-  const drawAnnex1Page = () => {
+  const drawAnnex1Page = async () => {
 
     // Annex 1 — the defect list that turns a conditional acceptance into a commitment. Its own
     // page, so it can be handed over or filed separately. New installation_* keys, with the
@@ -5597,8 +5597,32 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       }
 
-      // The completion date lives in the Installation status block, not here: it is agreed
-      // when the engineer says the job isn't finished, and it is stated once.
+      // Repeated from Installation status on purpose, unlike the earlier decision to state
+      // it once: this page leaves the certificate, and a defect list with no date on it is
+      // a complaint rather than a commitment.
+      if (followupSentence) {
+
+        drawBlockRow(
+          [{
+            label: 'To be completed',
+            value: followupSentence,
+            height: 30,
+            align: 'left',
+            verticalAlign: 'top',
+            paddingY: 8,
+          }],
+          { fullWidth: true },
+        );
+
+      }
+
+      // Both parties sign the annex as well. Signing the certificate is agreement to
+      // accept the work; this is agreement to the list and the date it names.
+      ensureSpace(signatureHeight + 60);
+
+      drawSectionTitle('Both parties agree to the above');
+
+      await drawSignatureBoxes();
 
     }
 
@@ -5709,11 +5733,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const signatureHeight = 160;
 
-  ensureSpace(signatureHeight + 40, headingTitle);
-
-  drawSectionTitle('Signatures');
-
-  const signatureBoxes = [
+  const buildSignatureBoxes = () => [
 
     {
 
@@ -5753,7 +5773,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const resolvePageNumber = () => pdfDoc.getPages().indexOf(page) + 1;
 
+  // Draws the two signature boxes wherever the cursor is. Used by the certificate and by
+  // Annex 1, which is detached and handed over on its own and therefore has to carry its
+  // own confirmation that both sides agreed to what it lists.
+  const drawSignatureBoxes = async () => {
 
+  const signatureBoxes = buildSignatureBoxes();
 
   for (const box of signatureBoxes) {
 
@@ -5885,9 +5910,17 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   }
 
-  cursorY -= signatureHeight + 16;
+    cursorY -= signatureHeight + 16;
 
-  drawAnnex1Page();
+  };
+
+  ensureSpace(signatureHeight + 40, headingTitle);
+
+  drawSectionTitle('Signatures');
+
+  await drawSignatureBoxes();
+
+  await drawAnnex1Page();
 
 
 
