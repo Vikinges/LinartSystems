@@ -4924,7 +4924,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   // Air above a heading. The title is drawn on its baseline, so with nothing here the
   // letters ride on the border of the block above and the descenders cut through it.
-  const SECTION_TITLE_TOP_GAP = 14;
+  const SECTION_TITLE_TOP_GAP = 24;
 
   const LABEL_FONT_SIZE = 10;
 
@@ -4934,7 +4934,9 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   const BLOCK_VALUE_MIN_HEIGHT = 34;
   const BLOCK_VALUE_FONT_SIZE = 10.5;
   const BLOCK_COL_GAP = 10;
-  const BLOCK_ROW_GAP = 12;
+  // Zero: the maintenance grid stacks its rows with shared borders, and a gap here made
+  // the same block read as a looser, different table.
+  const BLOCK_ROW_GAP = 0;
 
   const initialStartY =
 
@@ -5097,8 +5099,28 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     const maxDataHeight = Math.max(
       BLOCK_VALUE_MIN_HEIGHT,
       ...normalized.map((field) => {
-        const height = Number(field.height);
-        return Number.isFinite(height) ? Math.max(height, BLOCK_VALUE_MIN_HEIGHT) : BLOCK_VALUE_MIN_HEIGHT;
+        const paddingY = field.paddingY ?? 10;
+        const text = String(field.text ?? '');
+        // An empty box keeps the minimum height; measuring nothing yields nothing useful.
+        let needed = 0;
+        if (text.trim()) {
+          // The same function the drawing path uses, so the measured height and the drawn
+          // height cannot disagree - measuring with a different one is how the address box
+          // stayed 34pt tall while two lines were painted into it.
+          const layout = layoutMultilineText(text, font, columnWidth - 16, {
+            fontSize: BLOCK_VALUE_FONT_SIZE,
+            minFontSize: 9,
+            lineHeightMultiplier: 1.15,
+          });
+          const total = Number(layout && layout.totalHeight);
+          if (Number.isFinite(total)) needed = Math.ceil(total + paddingY * 2);
+        }
+        const explicit = Number(field.height);
+        return Math.max(
+          BLOCK_VALUE_MIN_HEIGHT,
+          needed,
+          Number.isFinite(explicit) ? explicit : 0,
+        );
       }),
     );
     const rowHeight = BLOCK_HEADER_HEIGHT + maxDataHeight;
@@ -5117,8 +5139,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
         borderColor: TABLE_BORDER_COLOR,
         color: rgb(0.92, 0.95, 0.99),
       });
+      // Centred, as on the other two reports.
+      const labelWidth = font.widthOfTextAtSize(field.label, BLOCK_HEADER_FONT_SIZE);
+
       page.drawText(field.label, {
-        x: x + 6,
+        x: x + Math.max(6, (columnWidth - labelWidth) / 2),
         y: headerY + BLOCK_HEADER_HEIGHT - BLOCK_HEADER_FONT_SIZE,
         size: BLOCK_HEADER_FONT_SIZE,
         font,
@@ -5282,9 +5307,11 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     drawSectionTitle('Site information');
 
-    for (let i = 0; i < installSiteRows.length; i += 2) {
+    const siteRowsPerCol = Math.ceil(installSiteRows.length / 2);
 
-      const pair = installSiteRows.slice(i, i + 2);
+    for (let i = 0; i < siteRowsPerCol; i += 1) {
+
+      const pair = [installSiteRows[i], installSiteRows[i + siteRowsPerCol]].filter(Boolean);
 
       drawBlockRow(
         pair.map((row) => ({ label: row.label, value: row.value })),
@@ -7554,9 +7581,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20;
 
-    const sectionLabel = ensureBlock(blockHeight, 'Site information (cont.)') ? 'Site information (cont.)' : 'Site information';
+    ensureBlock(blockHeight);
 
-    drawSectionTitle(sectionLabel);
+    drawSectionTitle('Site information');
 
     const colX = [margin, margin + columnWidth + 8];
 
