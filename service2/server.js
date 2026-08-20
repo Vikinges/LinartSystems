@@ -1012,7 +1012,23 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
-const SERVICE2_VERSION = '0.73';
+// The one place the web version lives. Bumped by 0.01 on every commit that touches this
+// service (see .githooks/pre-commit), so a deployed build always announces a version nobody
+// had to remember to change - and the reports it generates are stamped with the same value.
+const SERVICE2_VERSION = (() => {
+  const FALLBACK = '0.74';
+  try {
+    const raw = fs.readFileSync(path.join(__dirname, 'version.json'), 'utf8');
+    const parsed = JSON.parse(raw);
+    const value = String(parsed?.version || '').trim();
+    return value || FALLBACK;
+  } catch (err) {
+    // A missing or malformed version file must never stop the service from starting:
+    // reports are worth more than an accurate version string.
+    console.warn(`[server] Unable to read version.json (${err.message}); using ${FALLBACK}.`);
+    return FALLBACK;
+  }
+})();
 
 // Which client made a report, and which build of it. The web form stamps itself; the apps
 // send their own pair. Absence means the report predates provenance, which is itself

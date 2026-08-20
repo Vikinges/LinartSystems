@@ -9,7 +9,7 @@ COPY package*.json ./
 RUN npm install --production
 
 # Copy only necessary files
-COPY server.js mapping.json fields.json ./
+COPY server.js mapping.json fields.json version.json ./
 COPY public ./public
 COPY data/admin.json data/projects.json data/templates.json ./data/
 COPY entrypoint.sh /entrypoint.sh

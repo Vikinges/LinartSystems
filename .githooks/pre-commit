@@ -1,0 +1,26 @@
+#!/bin/sh
+# Bump the service2 web version on every commit that touches it, so a deployed build always
+# announces a version nobody had to remember to change. The same number is stamped into
+# every report's provenance, which is the point: a bad document months from now names the
+# build that made it.
+#
+# Enabled with:  git config core.hooksPath .githooks
+#
+# Only fires when service2 code is actually staged — a README edit is not a new build. The
+# version file itself is excluded, otherwise a manual version edit would bump on top of it.
+
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+echo "$staged" | grep -q '^service2/' || exit 0
+echo "$staged" | grep -v '^service2/version\.json$' | grep -q '^service2/' || exit 0
+
+node service2/tools/bump-version.js || {
+  # A broken bump must never block a commit: the version being stale is a smaller problem
+  # than not being able to save work.
+  echo "pre-commit: version bump failed, committing without it" >&2
+  exit 0
+}
+
+git add service2/version.json
