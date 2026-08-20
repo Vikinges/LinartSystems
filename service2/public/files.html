@@ -340,6 +340,9 @@
 
     .via-badge.is-ios { background: #e0e7ff; color: #3730a3; }
 
+    /* Outlined rather than filled: this one we worked out, we were not told it. */
+    .via-badge.is-inferred { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+
     /* Created column: keep date and time on their own lines so the column stays
        narrow and predictable rather than wrapping mid-timestamp. */
     .cell-created {
@@ -831,7 +834,9 @@
             viaBadge.textContent = file.submittedVia;
             viaBadge.title = file.clientVersion
               ? 'Made in ' + file.submittedVia + ' ' + file.clientVersion
+                + (file.clientVersionInferred ? ' (this build does not send its version - inferred)' : '')
               : 'Made in ' + file.submittedVia;
+            if (file.clientVersionInferred) viaBadge.classList.add('is-inferred');
             linkCell.appendChild(viaBadge);
           }
           const link = document.createElement('a');
@@ -1172,6 +1177,7 @@
           ['Engineer', file.submittedBy || s.engineerName],
           ['Made in', file.submittedVia
             ? file.submittedVia + (file.clientVersion ? ' ' + file.clientVersion : '')
+              + (file.clientVersionInferred ? ' (inferred)' : '')
             : null],
           ['Contact', s.customerContact || s.customerRepresentative || s.customerName],
           ['Display', s.ledDisplayModel],

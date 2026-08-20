@@ -377,8 +377,25 @@ function buildFileListEntry(meta, type, fallbackFilename) {
   };
 
   // Normalised so the archive can group on it: the apps send 'ios', we send 'web'.
-  const submittedVia = String(rb.submitted_via || '').trim().toLowerCase() || null;
-  const clientVersion = String(rb.client_version || '').trim() || null;
+  //
+  // Builds before 117 send neither key, and the version people actually have on their
+  // phones today is 1.70 - so "no version" is not "unknown", it is information. Two fields
+  // give it away: client_report_id and owner_user_id come from the app and from nothing
+  // else, so a report carrying them without a version is an older app rather than a
+  // browser. Inferred, and labelled as inferred: a guess printed as a fact is worse than
+  // an honest blank, and this feeds the question "which build produced this document".
+  const sentVia = String(rb.submitted_via || '').trim().toLowerCase() || null;
+
+  const sentVersion = String(rb.client_version || '').trim() || null;
+
+  const looksLikeApp = !!(rb.client_report_id || rb.owner_user_id);
+
+  const submittedVia = sentVia || (looksLikeApp ? 'ios' : null);
+
+  const clientVersion = sentVersion || (looksLikeApp ? '1.70 or older' : null);
+
+  // True when we worked it out rather than being told.
+  const clientVersionInferred = !sentVersion && !!clientVersion;
 
   return {
     templateType,
@@ -403,6 +420,7 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     })(),
     submittedVia,
     clientVersion,
+    ...(clientVersionInferred ? { clientVersionInferred: true } : {}),
     summary,
     dailyReport,
   };
@@ -5329,6 +5347,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     { label: 'Work performed', value: val('work_performed') },
     { label: 'Recommendations', value: val('recommendations') },
     { label: 'Summary', value: val('signoff_summary') },
+    // The customer's own words about the handover, and the engineer's notes. Both were
+    // collected by the form and dropped by this renderer - found by the read-back check.
+    { label: 'Customer comments', value: val('customer_comments') },
+    { label: 'Additional notes', value: val('general_notes') || val('client_notes') },
   ].filter((row) => row.value && String(row.value).trim());
 
   if (installSummaryRows.length) {
@@ -6335,6 +6357,8 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const isInstallation = templateType === 'installation_report';
 
   const isService = isServiceReport(templateType);
+
+  const isMaintenance = templateType === 'maintenance';
 
   if (isInstallation) {
 
@@ -7759,9 +7783,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  if (isService) {
+  // Maintenance gets the narrative block too. It was service-only, so an engineer who
+  // described what they did on a maintenance visit had that text stored and dropped - the
+  // read-back check found it on its first run, in the same class as the notes above.
+  // The iOS LED-inspection sections stay service-only: maintenance has its own checklists.
+  if (isService || isMaintenance) {
 
     drawServiceSummary();
+
+  }
+
+  if (isService) {
 
     drawIosServiceSections();
 
@@ -8155,9 +8187,20 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   }
 
+  // The app has always sent the engineer's own notes as `client_notes`; this file only ever
+  // read `general_notes`, so that text was accepted, stored, and silently left off the page.
+  // A real report lost eight hours of travel time and a recommendation to the customer.
+  const generalNotes = toSingleValue(body?.general_notes) || toSingleValue(body?.client_notes) || '';
+
+  const customerComments = toSingleValue(body?.customer_comments) || '';
+
   if (isService) {
 
-    drawNotesBlock('Customer comments', body?.customer_comments || body?.general_notes);
+    // Both, when both were filled in. The old `a || b` printed whichever came first and
+    // dropped the other without a trace - the same failure in a smaller disguise.
+    drawNotesBlock('Customer comments', customerComments);
+
+    drawNotesBlock('Additional notes', generalNotes);
 
     // Avoid duplicating template heading; just ensure space for signatures.
 
@@ -8165,7 +8208,9 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   } else {
 
-    drawNotesBlock('Additional notes', body?.general_notes);
+    drawNotesBlock('Customer comments', customerComments);
+
+    drawNotesBlock('Additional notes', generalNotes);
 
     addPageWithHeading();
 
@@ -23973,6 +24018,90 @@ async function embedUploadedImages(pdfDoc, form, photoFiles, embedOptions = {}) 
 
 
 
+// Did what the engineer typed actually reach the page?
+//
+// A field the renderer has never heard of is accepted, stored and silently left off the
+// document. It happened with `client_notes`: an engineer's notes - eight hours of travel
+// time and a recommendation to the customer - sat in the archive for weeks while the PDF
+// showed nothing, and nobody could have known until a customer read their copy.
+//
+// So instead of trusting a list of known keys, which drifts the moment a client adds one,
+// this reads the generated PDF back and asks the only question that matters: is this text
+// on the page? Anything substantial that is not gets logged with the report, so an
+// unrecognised field from any client - including builds older than this server - surfaces
+// the day it is submitted rather than months later.
+const UNRENDERED_CHECK_SKIP = new Set([
+  // Metadata: never printed, and correctly so. This list is stable because it describes
+  // the envelope, not the contents.
+  'template_type', 'template_slug', 'template_id', 'template_version', 'template_label',
+  'client_report_id', 'owner_user_id', 'submitted_at', 'submitted_via', 'client_version',
+  'engineer_signature', 'customer_signature', 'employees', 'breaks_enabled',
+  'signoff_complete', 'acceptance_overall', 'acceptance_partial',
+]);
+
+function extractPdfPlainText(bytes) {
+  const raw = Buffer.from(bytes).toString('latin1');
+  const pieces = [];
+  const streamRe = /stream\r?\n/g;
+  let match;
+  while ((match = streamRe.exec(raw)) !== null) {
+    const start = match.index + match[0].length;
+    const end = raw.indexOf('endstream', start);
+    if (end < 0) continue;
+    let chunk = Buffer.from(raw.slice(start, end), 'latin1');
+    try {
+      chunk = zlib.inflateSync(chunk);
+    } catch (err) {
+      // Not deflated, or an image stream; the text match below decides either way.
+    }
+    const text = chunk.toString('latin1');
+    if (!text.includes('Tj') && !text.includes('TJ')) continue;
+    const hexRe = /<([0-9A-Fa-f\s]+)>\s*Tj/g;
+    let hex;
+    while ((hex = hexRe.exec(text)) !== null) {
+      const digits = hex[1].replace(/\s+/g, '');
+      pieces.push(Buffer.from(digits.length % 2 ? `${digits}0` : digits, 'hex').toString('latin1'));
+    }
+    const litRe = /\(((?:\\.|[^\\()])*)\)\s*Tj/g;
+    let lit;
+    while ((lit = litRe.exec(text)) !== null) pieces.push(lit[1]);
+  }
+  return pieces.join(' ');
+}
+
+// Letters and digits only: the renderer re-wraps, re-cases and re-punctuates what it draws,
+// so anything finer than this reports differences that are not losses.
+const squashForComparison = (value) => String(value || '').replace(/[^A-Za-z0-9]+/g, '').toLowerCase();
+
+function findUnrenderedFields(body, pdfBytes) {
+  let pageText = '';
+  try {
+    pageText = squashForComparison(extractPdfPlainText(pdfBytes));
+  } catch (err) {
+    // The check must never be the thing that fails a submission.
+    console.warn(`[server] Unable to read back the generated PDF: ${err.message}`);
+    return [];
+  }
+  if (!pageText) return [];
+
+  const missing = [];
+  for (const [key, rawValue] of Object.entries(body || {})) {
+    if (UNRENDERED_CHECK_SKIP.has(key)) continue;
+    if (/signature|photo|_base64$/i.test(key)) continue;
+    const value = toSingleValue(rawValue);
+    if (typeof value !== 'string') continue;
+    const text = value.trim();
+    // Short values collide by accident and checkbox values are not prose; only look at
+    // something long enough that its absence is unambiguous.
+    if (text.length < 15) continue;
+    if (/^data:/i.test(text)) continue;
+    const needle = squashForComparison(text).slice(0, 40);
+    if (needle.length < 12) continue;
+    if (!pageText.includes(needle)) missing.push(key);
+  }
+  return missing;
+}
+
 function detectSubmitterName(body) {
 
   const candidates = [
@@ -26752,6 +26881,21 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
     }
 
     const pdfOutput = await pdfDoc.save();
+
+    // Read the document back and check that what was typed is on it. Logged, never fatal:
+    // the submission is already valid, and a report we cannot verify is still worth more
+    // than a rejected one.
+    const unrenderedFields = findUnrenderedFields(sanitizedBody, pdfOutput);
+
+    if (unrenderedFields.length) {
+
+      console.warn(
+        `[server] Submitted but not printed: ${unrenderedFields.join(', ')}`
+        + ` (type=${templateType}, via=${toSingleValue(req.body?.submitted_via) || 'web'}`
+        + ` ${toSingleValue(req.body?.client_version) || '?'})`,
+      );
+
+    }
 
 
 
