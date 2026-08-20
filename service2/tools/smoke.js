@@ -107,6 +107,18 @@ async function checkFormPage() {
   }
   check(`all ${index} inline scripts parse`, broken === 0);
 
+  // An absolute /api/... path works here and 404s on prod, where the form is served behind
+  // /service2/. That asymmetry means local testing cannot see the bug at all, so catch it
+  // statically instead: found on prod once, never again.
+  const absoluteApiCalls = [...html.matchAll(/fetch\(\s*['"`](\/[^'"`]*)/g)]
+    .map((m) => m[1])
+    .filter((p) => !p.startsWith('/service2/'));
+  check(
+    'no absolute /api paths in page scripts',
+    absoluteApiCalls.length === 0,
+    absoluteApiCalls.join(', '),
+  );
+
   // Fields the renderer prints must be reachable from the browser, or the document comes
   // out with blank rows nobody can fill in.
   [

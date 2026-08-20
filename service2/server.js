@@ -12894,9 +12894,19 @@ ${renderTextInput('warranty_start_date', 'Warranty begins on', { type: 'date', a
             // or company (engineer/customer) from that person's last form â€” so a worker
             // only types their name and the rest is filled in. Never overwrites edits.
             var PMAP = {};
+            // The form is served at / in development and behind /service2/ in production,
+            // so an absolute /api/... path 404s on prod only - invisible in local testing.
+            // Resolve against the page's own directory instead.
+            function apiUrl(p) {
+              var dir = window.location.pathname.replace(/[^/]*$/, '');
+              if (dir.charAt(dir.length - 1) !== '/') dir += '/';
+              var rel = String(p);
+              while (rel.charAt(0) === '/') rel = rel.slice(1);
+              return dir + rel;
+            }
             function pkey(s) { return String(s || '').trim().toLowerCase(); }
             function loadPeople() {
-              fetch('/api/people', { credentials: 'same-origin' })
+              fetch(apiUrl('api/people'), { credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                   if (!d || !d.ok || !Array.isArray(d.people)) return;
@@ -14006,7 +14016,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         const callPaddleOcr = async (dataUrl) => {
           const base64 = (dataUrl || '').split(',').pop();
           if (!base64) throw new Error('Unable to read image.');
-          const response = await fetch('/api/ocr/paddle', {
+          const response = await fetch(buildAppUrl('api/ocr/paddle'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ image: base64 }),
@@ -24185,7 +24195,7 @@ function buildAdminProfilePayload() {
 }
 
 
-app.post('/api/ocr/paddle', async (req, res) => {
+app.post(['/api/ocr/paddle', '/service2/api/ocr/paddle'], async (req, res) => {
   if (!PADDLE_OCR_URL) {
     return res.status(503).json({ ok: false, error: 'PADDLE_OCR_URL is not configured on the server.' });
   }
