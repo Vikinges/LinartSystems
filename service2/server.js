@@ -12469,7 +12469,7 @@ ${renderTextInput('customer_email', 'Email', { type: 'email', allowUnknown: true
 
           <div class="grid two-col">
 
-${renderTextInput('customer_company', 'Client', { allowUnknown: true, id: 'customer-company-acceptance' })}
+${renderTextInput('customer_company', 'Client company', { allowUnknown: true, id: 'customer-company-acceptance', placeholder: 'The company accepting the work' })}
 
 ${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnknown: true })}
 
@@ -12479,11 +12479,13 @@ ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: 
 
           </div>
 
+          <p>Who was present at the handover. Names of people, not companies - these two go under "Attendees" on the document and above the signature boxes.</p>
+
           <div class="grid two-col">
 
-${renderTextInput('attendee_client', 'Attendee (client)', { allowUnknown: true })}
+${renderTextInput('attendee_client', 'For the client', { allowUnknown: true, placeholder: 'Who attended for the client, e.g. Marcus Janker' })}
 
-${renderTextInput('attendee_supplier', 'Attendee (supplier)', { allowUnknown: true })}
+${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true, placeholder: 'Who attended for us, e.g. Vladimir Linart' })}
 
           </div>
 
