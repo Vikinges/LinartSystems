@@ -5381,7 +5381,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     drawSectionTitle('Attendees');
 
     drawBlockRow([
-      { label: 'For the client', value: val('attendee_client') || val('customer_name') },
+      { label: 'For the client', value: val('attendee_client') || resolveCustomerSignatoryName(body) },
       { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') || submittedByName },
     ]);
 
@@ -5765,7 +5765,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       x: margin,
 
-      name: val('attendee_client') || val('customer_name'),
+      name: val('attendee_client') || resolveCustomerSignatoryName(body),
 
       company: val('customer_company'),
 
@@ -8236,7 +8236,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     { label: 'Customer company', value: toSingleValue(body?.customer_company) || '' },
 
-    { label: 'Customer name', value: toSingleValue(body?.customer_name) || '' },
+    { label: 'Customer name', value: resolveCustomerSignatoryName(body) },
 
   ].filter((d) => d.value && String(d.value).trim());
 
@@ -9485,6 +9485,18 @@ ${rows.join('\n')}
       .field.is-missing textarea {
         border-color: #dc2626;
         background: #fee2e2;
+      }
+
+      /* A checkbox group has no field box to redden, so the whole card is marked - the
+         engineer needs to see which decision is missing, not which input. */
+      section.card.is-missing > h2 {
+        color: #dc2626;
+      }
+
+      section.card.is-missing > h2::after {
+        content: ' — required';
+        font-weight: 500;
+        font-size: 0.85em;
       }
 
       .required-summary {
@@ -16885,25 +16897,39 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         // report: submitting with any of them empty produces a document that is useless to
         // the customer, so the form sends the engineer back to fill them instead of
         // generating it. Keyed by form type — each document needs its own answer.
-        const PROJECT_NAME_REQUIRED = { name: 'lsc_project_name', label: 'LSC project name' };
+        // Vladimir's call, as already applied in the app: the same set on all three report
+        // types. The browser has to refuse the submission the app refuses, or the rule only
+        // holds for whoever happens to be using a phone.
+        const REQUIRED_ON_EVERY_REPORT = [
+          { name: 'end_customer_name', label: 'End customer name' },
+          { name: 'batch_number', label: 'LSC Project number', projectNumber: true },
+          { name: 'lsc_project_name', label: 'LSC project name' },
+          { name: 'site_location', label: 'Site location' },
+          { name: 'date_of_service', label: 'Date of service' },
+          { name: 'service_company_name', label: 'Service company name' },
+          { name: 'led_display_model', label: 'LED display model / batch' },
+          { name: 'work_performed', label: 'Work performed' },
+          // The two people the document is about. The app calls the first submitter_name;
+          // on this form it is the engineer named beside their signature.
+          { name: 'engineer_name', label: 'Engineer name' },
+          { name: 'customer_representative', label: 'Contact person' },
+        ];
 
         const REQUIRED_FIELDS = {
-          service_report: [
-            { name: 'end_customer_name', label: 'End customer name' },
-            { name: 'batch_number', label: 'LSC Project number', projectNumber: true },
-            PROJECT_NAME_REQUIRED,
-            { name: 'customer_representative', label: 'Customer representative' },
-            { name: 'date_of_service', label: 'Date of service' },
-            { name: 'site_location', label: 'Site location' },
-            { name: 'service_company_name', label: 'Service company name' },
-            { name: 'led_display_model', label: 'LED display model / batch' },
-            { name: 'work_performed', label: 'Work performed' },
+          service_report: REQUIRED_ON_EVERY_REPORT,
+          maintenance: REQUIRED_ON_EVERY_REPORT,
+          installation_report: [
+            ...REQUIRED_ON_EVERY_REPORT,
+            // An acceptance certificate that does not say whether the work is finished, or
+            // what the customer declared, is not a certificate.
+            { name: 'installation_status', label: 'Was the installation finished completely?' },
+            { name: 'acceptance_statement', label: 'Acceptance statement' },
+            {
+              anyOf: ['acceptance_overall', 'acceptance_partial'],
+              label: 'What is being accepted',
+              reason: 'needs one of the two options ticked',
+            },
           ],
-          // Vladimir's call: a report must not be able to enter the archive nameless. The
-          // browser has to refuse the same submission the app refuses, or the rule only
-          // holds for whoever happens to be using a phone.
-          maintenance: [PROJECT_NAME_REQUIRED],
-          installation_report: [PROJECT_NAME_REQUIRED],
         };
 
         const requiredFieldsFor = (formType) => REQUIRED_FIELDS[formType] || [];
@@ -22282,6 +22308,19 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const missingFields = [];
 
           requiredList.forEach((field) => {
+            // Checkbox group: satisfied when any one of the named boxes is ticked.
+            if (field.anyOf) {
+              const boxes = field.anyOf
+                .map((name) => formEl.querySelector('input[name="' + name + '"]'))
+                .filter(Boolean);
+              const ticked = boxes.some((box) => box.checked);
+              const groupCard = boxes.length ? boxes[0].closest('section.card') : null;
+              if (groupCard) groupCard.classList.remove('is-missing');
+              if (ticked) return;
+              missingFields.push({ ...field, input: boxes[0] || null, reason: field.reason || 'is empty' });
+              if (groupCard) groupCard.classList.add('is-missing');
+              return;
+            }
             clearRequiredMark(field.name);
             const input = findRequiredInput(field.name);
             const value = input ? String(input.value || '').trim() : '';
@@ -24100,6 +24139,30 @@ function findUnrenderedFields(body, pdfBytes) {
     if (!pageText.includes(needle)) missing.push(key);
   }
   return missing;
+}
+
+// Who signed for the customer, when the client did not say.
+//
+// No app build has ever sent `customer_name` - not a regression, a permanent gap, and the
+// engineers in the field run the App Store build and cannot install a fix. So the signature
+// box on every app-submitted report carried no name at all.
+//
+// `customer_representative` is the app's sign-off field - the person who accepted the work,
+// filled in next to the customer's signature - so on those submissions it IS the signer.
+// On our own web form the same key is labelled "Contact person", which is a different thing
+// and may well be a different person, and a wrong name under a signature is worse than
+// none. Hence the narrowing: only where the payload is an app submission, which
+// client_report_id and owner_user_id identify and nothing else sends.
+function isAppSubmission(body) {
+  return !!(toSingleValue(body?.client_report_id) || toSingleValue(body?.owner_user_id));
+}
+
+function resolveCustomerSignatoryName(body) {
+  const explicit = toSingleValue(body?.customer_name);
+  if (explicit && String(explicit).trim()) return String(explicit).trim();
+  if (!isAppSubmission(body)) return '';
+  const rep = toSingleValue(body?.customer_representative);
+  return rep && String(rep).trim() ? String(rep).trim() : '';
 }
 
 function detectSubmitterName(body) {
