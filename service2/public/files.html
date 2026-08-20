@@ -13,50 +13,69 @@
     .files-table th:nth-child(8),
     .files-table td:nth-child(8) { max-width: 260px; }
 
-    /* The sign-link controls: six of them per row, only visible to an admin.
-       They overflowed the cell and ran across the File column once the shared
-       theme's full-size buttons applied, so they are sized down and allowed to
-       wrap inside a bounded column instead of pushing the table apart. */
+    /* Row actions are four fixed icons now, so the column has one width whatever
+       a row can do. The sign-link toolset moved into a popover. */
     .files-table th:last-child,
-    .files-table td:last-child { width: 300px; max-width: 300px; }
+    .files-table td:last-child { width: 132px; }
 
-    /* .row-actions is the wrapper div inside the cell, not the cell itself. */
     .row-actions {
       display: flex;
-      flex-wrap: wrap;
       justify-content: flex-end;
       align-items: center;
-      gap: 4px;
-      white-space: normal;
+      gap: 2px;
     }
 
-    .row-actions .button {
-      height: 26px;
-      padding: 0 8px;
-      font-size: 11.5px;
-      gap: 4px;
+    /* A flagged report keeps its marker visible without hovering. */
+    .button.icon.is-flagged { color: var(--warning); }
+
+    .link-panel {
+      position: fixed;
+      z-index: 60;
+      width: 340px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-pop);
     }
 
-    .row-ttl {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
+    .link-panel__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .link-panel__head h4 { margin: 0; font-size: 14px; font-weight: 600; }
+
+    .link-panel__file {
+      margin: 0;
       font-size: 11px;
       color: var(--text-muted);
-      white-space: nowrap;
+      word-break: break-all;
+      line-height: 1.4;
     }
 
-    .row-ttl select { height: 26px; padding: 0 6px; font-size: 12px; }
+    .link-panel__ttl { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .link-panel__ttl > span { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+    .link-panel__ttl select { flex: 0 0 110px; }
+
+    .link-panel__result {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .link-panel__pin { font-size: 15px; font-weight: 600; letter-spacing: .08em; }
+    .link-panel__buttons { display: flex; flex-wrap: wrap; gap: 6px; }
 
     .row-link-input {
       font-family: var(--font-mono);
       font-size: 11px;
-      height: 26px;
+      height: 28px;
       width: 100%;
-      max-width: 280px;
     }
 
-    .row-meta { font-size: 11px; color: var(--text-muted); width: 100%; text-align: right; }
+    .row-meta { font-size: 11px; color: var(--text-muted); }
   </style>
 </head>
 
@@ -368,6 +387,192 @@
         }
       };
 
+      // ---- Sign-link popover -------------------------------------------------
+      // Everything about generating a link for the customer, in one place, opened
+      // from the row. Inline it was a TTL select plus five buttons on every row,
+      // whether or not anyone would ever use them there.
+      let openPanel = null;
+
+      function onDocumentClickAway(event) {
+        if (openPanel && !openPanel.contains(event.target)) closeLinkPanel();
+      }
+
+      function onPanelKey(event) {
+        if (event.key === 'Escape') closeLinkPanel();
+      }
+
+      function closeLinkPanel() {
+        if (!openPanel) return;
+        openPanel.remove();
+        openPanel = null;
+        document.removeEventListener('click', onDocumentClickAway, true);
+        document.removeEventListener('keydown', onPanelKey, true);
+      }
+
+      const icon = (name) => '<svg class="ic"><use href="./icons.svg#' + name + '"></use></svg>';
+
+      const openLinkPanel = (anchorEl, file) => {
+        closeLinkPanel();
+
+        const panelEl = document.createElement('div');
+        panelEl.className = 'link-panel';
+
+        const head = document.createElement('div');
+        head.className = 'link-panel__head';
+        const title = document.createElement('h4');
+        title.textContent = 'Sign link';
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'button icon';
+        closeBtn.title = 'Close';
+        closeBtn.innerHTML = icon('i-close');
+        closeBtn.addEventListener('click', closeLinkPanel);
+        head.append(title, closeBtn);
+
+        const forFile = document.createElement('p');
+        forFile.className = 'link-panel__file mono';
+        forFile.textContent = file.filename || '';
+
+        const ttlWrap = document.createElement('label');
+        ttlWrap.className = 'link-panel__ttl';
+        const ttlLabel = document.createElement('span');
+        ttlLabel.textContent = 'Valid for';
+        const ttlSelect = document.createElement('select');
+        for (let day = 1; day <= 7; day += 1) {
+          const option = document.createElement('option');
+          option.value = String(day);
+          option.textContent = day === 1 ? '1 day' : day + ' days';
+          if (day === 7) option.selected = true;
+          ttlSelect.appendChild(option);
+        }
+        ttlWrap.append(ttlLabel, ttlSelect);
+
+        const createBtn = document.createElement('button');
+        createBtn.type = 'button';
+        createBtn.className = 'button';
+        createBtn.innerHTML = icon('i-link') + ' Create sign link';
+
+        const result = document.createElement('div');
+        result.className = 'link-panel__result';
+        result.hidden = true;
+
+        const linkInput = document.createElement('input');
+        linkInput.type = 'text';
+        linkInput.readOnly = true;
+        linkInput.className = 'row-link-input';
+
+        const pinLabel = document.createElement('div');
+        pinLabel.className = 'link-panel__pin mono';
+        pinLabel.hidden = true;
+
+        const meta = document.createElement('div');
+        meta.className = 'row-meta';
+        meta.hidden = true;
+
+        const buttons = document.createElement('div');
+        buttons.className = 'link-panel__buttons';
+
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'button ghost small';
+        copyBtn.innerHTML = icon('i-copy') + ' Copy link';
+
+        // One click: a ready-to-send message with link, PIN and expiry.
+        const copyMsgBtn = document.createElement('button');
+        copyMsgBtn.type = 'button';
+        copyMsgBtn.className = 'button small';
+        copyMsgBtn.innerHTML = icon('i-copy') + ' Copy link + PIN';
+
+        const openBtn = document.createElement('a');
+        openBtn.className = 'button ghost small';
+        openBtn.target = '_blank';
+        openBtn.rel = 'noopener';
+        openBtn.innerHTML = icon('i-external') + ' Open';
+
+        buttons.append(copyMsgBtn, copyBtn, openBtn);
+
+        const rowStatus = document.createElement('div');
+        rowStatus.className = 'status';
+        const setRowStatus = (message, isError) => {
+          rowStatus.textContent = message || '';
+          rowStatus.classList.toggle('error', Boolean(isError));
+        };
+
+        result.append(linkInput, pinLabel, meta, buttons);
+        panelEl.append(head, forFile, ttlWrap, createBtn, result, rowStatus);
+
+        let signInfo = null;
+
+        createBtn.addEventListener('click', async () => {
+          createBtn.disabled = true;
+          setRowStatus('Creating link...');
+          try {
+            const response = await fetchWithAdminToken('api/sign/create', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                type: file.templateType,
+                file: file.filename,
+                expiresInDays: Number(ttlSelect.value || '7'),
+              }),
+              credentials: 'same-origin',
+            });
+            const payload = await response.json().catch(() => ({}));
+            if (!response.ok || !payload.ok) {
+              throw new Error(payload && payload.error ? payload.error : 'Unable to create link.');
+            }
+            const linkValue = payload.url || '';
+            linkInput.value = linkValue;
+            pinLabel.textContent = payload.pin ? 'PIN ' + payload.pin : '';
+            pinLabel.hidden = !payload.pin;
+            openBtn.href = linkValue || '#';
+            meta.textContent = payload.expiresAt ? 'Expires ' + formatDate(payload.expiresAt) : '';
+            meta.hidden = !meta.textContent;
+            signInfo = { url: linkValue, pin: payload.pin || '', expiresAt: payload.expiresAt || '' };
+            result.hidden = false;
+            setRowStatus('Link ready.');
+          } catch (err) {
+            setRowStatus(err && err.message ? err.message : 'Unable to create link.', true);
+          } finally {
+            createBtn.disabled = false;
+          }
+        });
+
+        copyBtn.addEventListener('click', async () => {
+          const ok = await copyText(linkInput.value, linkInput);
+          setRowStatus(ok ? 'Copied.' : 'Copy failed.', !ok);
+        });
+
+        copyMsgBtn.addEventListener('click', async () => {
+          if (!signInfo || !signInfo.url) return;
+          const lines = ['Please review and sign the document:', '', signInfo.url];
+          if (signInfo.pin) lines.push('PIN: ' + signInfo.pin);
+          if (signInfo.expiresAt) lines.push('Valid until: ' + formatDate(signInfo.expiresAt));
+          const ok = await copyText(lines.join('\n'), linkInput);
+          setRowStatus(ok ? 'Link + PIN copied - ready to send.' : 'Copy failed.', !ok);
+        });
+
+        document.body.appendChild(panelEl);
+        openPanel = panelEl;
+
+        // Anchored under the button, pulled back inside the viewport when the row
+        // sits near an edge.
+        const rect = anchorEl.getBoundingClientRect();
+        const width = panelEl.offsetWidth;
+        let left = rect.right - width;
+        if (left < 12) left = 12;
+        if (left + width > window.innerWidth - 12) left = window.innerWidth - width - 12;
+        let top = rect.bottom + 6;
+        if (top + panelEl.offsetHeight > window.innerHeight - 12) {
+          top = Math.max(12, rect.top - panelEl.offsetHeight - 6);
+        }
+        panelEl.style.left = left + 'px';
+        panelEl.style.top = top + 'px';
+
+        document.addEventListener('click', onDocumentClickAway, true);
+        document.addEventListener('keydown', onPanelKey, true);
+      };
+
       const renderRows = (files) => {
         currentFiles = Array.isArray(files) ? files : [];
         const keysInView = new Set(currentFiles.map(fileKey));
@@ -502,155 +707,50 @@
           }
           row.appendChild(linkCell);
 
+          // Row actions: four icons of fixed width. Everything about sign links used to
+          // sit inline — a TTL select and five worded buttons per row — which ran across
+          // the File column and wrapped onto a second line. It lives in a popover now, so
+          // the column has one width regardless of what a row can do.
           const actionsCell = document.createElement('td');
+          actionsCell.className = 'cell-actions';
+          const actionsWrap = document.createElement('div');
+          actionsWrap.className = 'row-actions';
+
+          const iconButton = (icon, title, extraClass) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'button icon' + (extraClass ? ' ' + extraClass : '');
+            b.title = title;
+            b.setAttribute('aria-label', title);
+            b.innerHTML = '<svg class="ic"><use href="./icons.svg#' + icon + '"></use></svg>';
+            return b;
+          };
+
+          const downloadLink = document.createElement('a');
+          downloadLink.className = 'button icon';
+          downloadLink.href = buildAppUrl(file.downloadPath || '');
+          downloadLink.title = 'Download this report';
+          downloadLink.setAttribute('aria-label', 'Download ' + (file.filename || ''));
+          downloadLink.innerHTML = '<svg class="ic"><use href="./icons.svg#i-download"></use></svg>';
+          actionsWrap.appendChild(downloadLink);
+
           if (canGenerateLinks) {
-            const actionsWrap = document.createElement('div');
-            actionsWrap.className = 'row-actions';
-
-            const ttlWrap = document.createElement('div');
-            ttlWrap.className = 'row-ttl';
-            const ttlLabel = document.createElement('span');
-            ttlLabel.textContent = 'TTL days';
-            const ttlSelect = document.createElement('select');
-            for (let day = 1; day <= 7; day += 1) {
-              const option = document.createElement('option');
-              option.value = String(day);
-              option.textContent = String(day);
-              if (day === 7) option.selected = true;
-              ttlSelect.appendChild(option);
-            }
-            ttlWrap.appendChild(ttlLabel);
-            ttlWrap.appendChild(ttlSelect);
-
-            const signBtn = document.createElement('button');
-            signBtn.type = 'button';
-            signBtn.className = 'button ghost small';
-            signBtn.textContent = 'Create sign link';
-
-            const linkInput = document.createElement('input');
-            linkInput.type = 'text';
-            linkInput.readOnly = true;
-            linkInput.className = 'row-link-input';
-            linkInput.hidden = true;
-
-            const pinLabel = document.createElement('span');
-            pinLabel.style.fontWeight = 'bold';
-            pinLabel.style.marginLeft = '0.5rem';
-            pinLabel.hidden = true;
-
-            const copyBtn = document.createElement('button');
-            copyBtn.type = 'button';
-            copyBtn.className = 'button secondary small';
-            copyBtn.textContent = 'Copy link';
-            copyBtn.hidden = true;
-
-            // One-click: copy a ready-to-send message (link + PIN + expiry) for the client.
-            const copyMsgBtn = document.createElement('button');
-            copyMsgBtn.type = 'button';
-            copyMsgBtn.className = 'button primary small';
-            copyMsgBtn.textContent = 'Copy link + PIN';
-            copyMsgBtn.hidden = true;
-
-            const openBtn = document.createElement('a');
-            openBtn.className = 'button secondary small';
-            openBtn.textContent = 'Open link';
-            openBtn.target = '_blank';
-            openBtn.rel = 'noopener';
-            openBtn.hidden = true;
-
-            const meta = document.createElement('div');
-            meta.className = 'row-meta';
-            meta.hidden = true;
-
-            const rowStatus = document.createElement('div');
-            rowStatus.className = 'status';
-
-            const setRowStatus = (message, isError = false) => {
-              rowStatus.textContent = message || '';
-              rowStatus.classList.toggle('error', Boolean(isError));
-            };
-
-            let signInfo = null;
-
-            signBtn.addEventListener('click', async () => {
-              signBtn.disabled = true;
-              setRowStatus('Creating link...');
-              try {
-                const response = await fetchWithAdminToken('api/sign/create', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    type: file.templateType,
-                    file: file.filename,
-                    expiresInDays: Number(ttlSelect.value || '7'),
-                  }),
-                  credentials: 'same-origin',
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok || !payload.ok) {
-                  throw new Error(payload && payload.error ? payload.error : 'Unable to create link.');
-                }
-                const linkValue = payload.url || '';
-                linkInput.value = linkValue;
-                linkInput.hidden = false;
-                pinLabel.textContent = `PIN: ${payload.pin || ''}`;
-                pinLabel.hidden = !payload.pin;
-                copyBtn.hidden = false;
-                openBtn.href = linkValue || '#';
-                openBtn.hidden = !linkValue;
-                meta.textContent = payload.expiresAt ? `Expires ${formatDate(payload.expiresAt)}` : '';
-                meta.hidden = !meta.textContent;
-                signInfo = { url: linkValue, pin: payload.pin || '', expiresAt: payload.expiresAt || '' };
-                copyMsgBtn.hidden = false;
-                setRowStatus('Link ready.');
-              } catch (err) {
-                setRowStatus(err && err.message ? err.message : 'Unable to create link.', true);
-              } finally {
-                signBtn.disabled = false;
-              }
+            const linkBtn = iconButton('i-link', 'Sign link for the customer');
+            linkBtn.addEventListener('click', (event) => {
+              event.stopPropagation();
+              openLinkPanel(linkBtn, file);
             });
-
-            copyBtn.addEventListener('click', async () => {
-              const ok = await copyText(linkInput.value, linkInput);
-              setRowStatus(ok ? 'Copied.' : 'Copy failed.', !ok);
-            });
-
-            copyMsgBtn.addEventListener('click', async () => {
-              if (!signInfo || !signInfo.url) return;
-              const lines = [
-                'Please review and sign the document:',
-                '',
-                signInfo.url,
-              ];
-              if (signInfo.pin) lines.push(`PIN: ${signInfo.pin}`);
-              if (signInfo.expiresAt) lines.push(`Valid until: ${formatDate(signInfo.expiresAt)}`);
-              const ok = await copyText(lines.join('\n'), linkInput);
-              setRowStatus(ok ? 'Link + PIN copied — ready to send.' : 'Copy failed.', !ok);
-            });
-
-            actionsWrap.appendChild(ttlWrap);
-            actionsWrap.appendChild(signBtn);
-            actionsWrap.appendChild(linkInput);
-            actionsWrap.appendChild(pinLabel);
-            actionsWrap.appendChild(copyBtn);
-            actionsWrap.appendChild(copyMsgBtn);
-            actionsWrap.appendChild(openBtn);
-            actionsWrap.appendChild(meta);
-            actionsWrap.appendChild(rowStatus);
-            actionsCell.appendChild(actionsWrap);
-          } else {
-            actionsCell.textContent = '-';
+            actionsWrap.appendChild(linkBtn);
           }
-          // Labelling a throwaway submission is a delete-level action but never deletes:
-          // it only flags the row so the archive shows what is real and what was a trial.
+
           if (canDeleteFiles) {
-            const testBtn = document.createElement('button');
-            testBtn.type = 'button';
-            testBtn.className = 'button ghost';
-            testBtn.textContent = file.test ? 'Unmark test' : 'Mark as test';
-            testBtn.title = file.test
-              ? 'Remove the TEST label from this report'
-              : 'Label this report as a test submission (it is not deleted)';
+            // Labelling a throwaway submission is a delete-level action but never deletes:
+            // it only flags the row so the archive shows what is real and what was a trial.
+            const testBtn = iconButton(
+              'i-flag',
+              file.test ? 'Remove the TEST label' : 'Label this report as a test submission',
+              file.test ? 'is-flagged' : '',
+            );
             testBtn.addEventListener('click', async () => {
               testBtn.disabled = true;
               try {
@@ -667,11 +767,36 @@
                 await loadFiles();
               } catch (err) {
                 testBtn.disabled = false;
-                testBtn.textContent = 'Failed — retry';
+                testBtn.title = 'Failed — click to retry';
               }
             });
-            actionsCell.appendChild(testBtn);
+            actionsWrap.appendChild(testBtn);
+
+            // Straight to the trash from the row, without selecting first. Recoverable,
+            // so it asks once and names the file rather than demanding a typed word.
+            const trashBtn = iconButton('i-trash', 'Move to trash', 'is-danger');
+            trashBtn.addEventListener('click', async () => {
+              if (!confirm('Move ' + (file.filename || 'this report') + ' to the trash?\n\nIt can be put back from there.')) return;
+              trashBtn.disabled = true;
+              setStatus('Moving to trash...');
+              try {
+                const res = await fetchWithAdminToken(
+                  'api/files/' + encodeURIComponent(file.templateType) + '/' + encodeURIComponent(file.filename) + '/trash',
+                  { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: '{}' },
+                );
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                await loadFiles();
+                setStatus('Moved to the trash.');
+              } catch (err) {
+                trashBtn.disabled = false;
+                setStatus('Unable to move that report to the trash.', true);
+              }
+            });
+            actionsWrap.appendChild(trashBtn);
           }
+
+          if (!actionsWrap.childElementCount) actionsCell.textContent = '-';
+          else actionsCell.appendChild(actionsWrap);
           row.appendChild(actionsCell);
 
           tbody.appendChild(row);
