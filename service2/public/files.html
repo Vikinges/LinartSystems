@@ -654,10 +654,18 @@
         return fetch(buildAppUrl(path), { ...options, headers });
       };
 
-      const APP_VERSION = '0.56';
+      // Read from the running service instead of a constant. This page said 0.56 while the
+      // service was on 0.86 - the same stale-version problem the form had, in the one place
+      // you would look to find out what you are running.
       const versionMetaEl = document.getElementById('version-meta');
       if (versionMetaEl) {
-        versionMetaEl.textContent = `Version ${APP_VERSION}`;
+        versionMetaEl.textContent = 'Version …';
+        fetch(buildAppUrl('health'), { credentials: 'same-origin' })
+          .then((r) => r.json())
+          .then((info) => {
+            versionMetaEl.textContent = 'Version ' + (info && info.version ? info.version : '?');
+          })
+          .catch(() => { versionMetaEl.textContent = ''; });
       }
       const filtersForm = document.getElementById('filters');
       const typeSelect = document.getElementById('filter-type');
