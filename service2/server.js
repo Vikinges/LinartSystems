@@ -9,6 +9,7 @@ require('dotenv').config();
 const path = require('path');
 
 const fs = require('fs');
+const vm = require('vm');
 
 const fsExtra = require('fs-extra');
 
@@ -359,9 +360,9 @@ function buildFileListEntry(meta, type, fallbackFilename) {
   const summary = {
     endCustomerName: rb.end_customer_name || null,
     siteLocation: rb.site_location || null,
-    projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || (dailyReport && dailyReport.projectNumber) || null,
+    projectNumber: resolveProjectNumber(rb) || (dailyReport && dailyReport.projectNumber) || null,
     // Colleagues look for the job by the name they call it, not by a six-digit number.
-    projectName: rb.lsc_project_name || null,
+    projectName: resolveProjectName(rb) || null,
     customerRepresentative: rb.customer_representative || null,
     ledDisplayModel: rb.led_display_model || null,
     // Everything below exists on every report type, not just dailies. The listing and the
@@ -2827,6 +2828,71 @@ function normalizeProjectNumber(value) {
   return `${digits.slice(0, 2)}-${digits.slice(2)}`;
 }
 
+// ---------------------------------------------------------------------------
+// A project has TWO identifiers and they are not interchangeable:
+//
+//   number  26-0042            lsc_project_number   machine-readable, YY-NNNN
+//   name    Siemens Erlangen   lsc_project_name     what people call the job
+//
+// Those two keys are the contract. Everything else below is a legacy alias kept
+// only so reports already in the archive keep rendering, and every one of them
+// means the NUMBER — including `project_name`, whose spelling says otherwise.
+// That alias is why this block exists: read it by hand in one more place and
+// sooner or later the job's name lands in the number row of a signed document.
+//
+// Nothing outside this file should touch the aliases. Call resolveProjectNumber
+// and resolveProjectName; they are the only two functions that know the list.
+// ---------------------------------------------------------------------------
+
+// Number aliases, most trusted first. `project_name` is last on purpose.
+const PROJECT_NUMBER_ALIASES = [
+  'lsc_project_number',
+  'batch_number',
+  'daily_project_number',
+  'project_name', // the app's key for the NUMBER, despite the spelling. Being retired.
+];
+
+const PROJECT_NAME_ALIASES = ['lsc_project_name'];
+
+// A project number never contains a space and never has a long run of letters.
+// "26-0042" and "LSC-DBG-001" are numbers; "Siemens Erlangen" is a name. Used to
+// tell them apart when a value arrives under the ambiguous `project_name` key,
+// so a client that flips that key's meaning cannot print a name where a number
+// belongs — it self-corrects instead of quietly producing a wrong document.
+function looksLikeProjectName(value) {
+  const text = String(value === undefined || value === null ? '' : value).trim();
+  if (!text) return false;
+  return /\s/.test(text) || /[A-Za-z]{4,}/.test(text);
+}
+
+function firstFilled(body, keys) {
+  for (const key of keys) {
+    const value = String(toSingleValue(body?.[key]) ?? '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
+function resolveProjectNumber(body) {
+  for (const key of PROJECT_NUMBER_ALIASES) {
+    const value = String(toSingleValue(body?.[key]) ?? '').trim();
+    if (!value) continue;
+    // The ambiguous alias only counts as a number when it actually looks like one.
+    if (key === 'project_name' && looksLikeProjectName(value)) continue;
+    return value;
+  }
+  return '';
+}
+
+function resolveProjectName(body) {
+  const explicit = firstFilled(body, PROJECT_NAME_ALIASES);
+  if (explicit) return explicit;
+  // No name was sent, but `project_name` holds something that plainly is one:
+  // take it rather than drop it on the floor.
+  const ambiguous = String(toSingleValue(body?.project_name) ?? '').trim();
+  return looksLikeProjectName(ambiguous) ? ambiguous : '';
+}
+
 const PARTS_FIELD_PREFIXES = [
 
   'parts_type_',
@@ -3404,10 +3470,8 @@ function buildSiteInfoRows(body, options = {}) {
   const dateLabel = options.dateLabel || 'Date of service';
   return [
     { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
-    // project_name is the app's key for the same number; the label stays "number" because
-    // that is what the business calls it.
-    { label: 'LSC project number', value: toSingleValue(body?.batch_number) || toSingleValue(body?.lsc_project_number) || toSingleValue(body?.project_name) || '' },
-    { label: 'LSC project name', value: toSingleValue(body?.lsc_project_name) || '' },
+    { label: 'LSC project number', value: resolveProjectNumber(body) },
+    { label: 'LSC project name', value: resolveProjectName(body) },
     { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
     { label: dateLabel, value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
     { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
@@ -5362,14 +5426,16 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       }
 
-      const annexProject = val('batch_number') || val('lsc_project_number') || val('project_name');
+      const annexNumber = resolveProjectNumber(body);
 
-      if (annexProject || val('lsc_project_name')) {
+      const annexName = resolveProjectName(body);
+
+      if (annexNumber || annexName) {
 
         drawBlockRow(
           [
-            { label: 'LSC project number', value: annexProject },
-            { label: 'LSC project name', value: val('lsc_project_name') },
+            { label: 'LSC project number', value: annexNumber },
+            { label: 'LSC project name', value: annexName },
           ],
           { halfWidth: true },
         );
@@ -14662,6 +14728,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           batch_number: formEl.querySelector('input[name="batch_number"]'),
 
+          lsc_project_name: formEl.querySelector('input[name="lsc_project_name"]'),
+
           end_customer_name: formEl.querySelector('input[name="end_customer_name"]'),
 
           site_location: formEl.querySelector('input[name="site_location"]'),
@@ -14723,6 +14791,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const mapping = {
 
             batch_number: card.batch_number || card.lsc_project_number || '',
+
+            lsc_project_name: card.lsc_project_name,
 
             end_customer_name: card.end_customer_name,
 
@@ -22708,8 +22778,71 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-  fs.writeFileSync(path.join(PUBLIC_DIR, 'index.html'), sanitizedHtml, 'utf8');
+  writeIndexHtmlIfParseable(sanitizedHtml);
 
+}
+
+// This page is emitted from a template literal, so an unescaped backslash or backtick in
+// the generator silently corrupts the browser script and the whole form goes dead — no
+// error on the server, just a page that does nothing. It has happened twice. So: parse
+// every inline script before the file is written, and if one is broken keep the previous
+// index.html and say so loudly. A slightly stale form beats a dead one.
+function collectInlineScripts(html) {
+  const scripts = [];
+  const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    const attrs = match[1] || '';
+    if (/\bsrc\s*=/i.test(attrs)) continue; // external file, nothing to parse here
+    const type = /\btype\s*=\s*["']([^"']+)["']/i.exec(attrs);
+    // Only real scripts: skip JSON blobs, templates and anything else parked in a tag.
+    if (type && !/^(text|application)\/(java|ecma)script$/i.test(type[1])) continue;
+    scripts.push(match[2]);
+  }
+  return scripts;
+}
+
+function writeIndexHtmlIfParseable(html) {
+  const target = path.join(PUBLIC_DIR, 'index.html');
+  let broken = [];
+  try {
+    collectInlineScripts(html).forEach((code, index) => {
+      if (!code.trim()) return;
+      try {
+        new vm.Script(code, { filename: `index.html:inline-script-${index + 1}` });
+      } catch (err) {
+        // Only a parse failure means the page is dead. Anything else is the checker's
+        // problem, not the page's.
+        if (err instanceof SyntaxError) {
+          broken.push(`inline script #${index + 1}: ${err.message}`);
+        } else {
+          throw err;
+        }
+      }
+    });
+  } catch (err) {
+    console.error(`[server] index.html script check could not run (${err.message}); writing the page unchecked.`);
+    broken = [];
+  }
+
+  if (!broken.length) {
+    fs.writeFileSync(target, html, 'utf8');
+    return true;
+  }
+
+  console.error('[server] Generated index.html has broken inline script(s); NOT writing it:');
+  broken.forEach((line) => console.error(`[server]   ${line}`));
+
+  if (fs.existsSync(target)) {
+    console.error('[server] Keeping the previous index.html. The form is stale but alive — fix the generator.');
+    return false;
+  }
+
+  // Nothing to fall back to. Writing a dead page is still better than a 404, but this
+  // must not pass unnoticed.
+  console.error('[server] No previous index.html to fall back to; writing the broken page anyway.');
+  fs.writeFileSync(target, html, 'utf8');
+  return false;
 }
 
 
@@ -23770,7 +23903,7 @@ async function aggregateProjectStats() {
       const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
       const daily = (meta.dailyReport && typeof meta.dailyReport === 'object') ? meta.dailyReport : {};
       const key = String(
-        rb.lsc_project_number || rb.batch_number || rb.daily_project_number || daily.projectNumber || ''
+        resolveProjectNumber(rb) || daily.projectNumber || ''
       ).trim();
       if (!key) continue;
       const submittedAt = String(meta.createdAt || '');
@@ -23884,7 +24017,7 @@ async function collectProjectVisits(projectKey) {
       const rb = (meta.requestBody && typeof meta.requestBody === 'object') ? meta.requestBody : {};
       const daily = (meta.dailyReport && typeof meta.dailyReport === 'object') ? meta.dailyReport : {};
       const key = String(
-        rb.lsc_project_number || rb.batch_number || rb.daily_project_number || daily.projectNumber || ''
+        resolveProjectNumber(rb) || daily.projectNumber || ''
       ).trim();
       if (key !== projectKey) continue;
       const resolvedType = meta.templateType || type;
@@ -24747,7 +24880,7 @@ async function collectCalendar(from, to) {
         filename: meta.filename || file.replace(/\.json$/i, '.pdf'),
         type: meta.templateType || type,
         status: normalizeReportStatus(meta.status),
-        projectNumber: rb.lsc_project_number || rb.batch_number || rb.daily_project_number || null,
+        projectNumber: resolveProjectNumber(rb) || null,
         submitterName: String(detectSubmitterName(rb) || '').trim() || null,
         submittedAt: createdAt || null,
       };
@@ -25643,13 +25776,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
   let projectsStore = loadProjectsStore();
 
-  const projectKey =
-
-    toSingleValue(req.body?.lsc_project_number) ||
-
-    toSingleValue(req.body?.batch_number) ||
-
-    null;
+  const projectKey = resolveProjectNumber(req.body) || null;
 
   const templateType = toSingleValue(req.body?.template_type) || 'service_report';
 
@@ -25950,6 +26077,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
       assignIfValue('led_display_model', toSingleValue(req.body?.led_display_model));
       assignIfValue('batch_number', toSingleValue(req.body?.batch_number));
+      assignIfValue('lsc_project_name', resolveProjectName(req.body));
       assignIfValue('date_of_service', toSingleValue(req.body?.date_of_service));
       assignIfValue('service_company_name', toSingleValue(req.body?.service_company_name));
       assignIfValue('supplier_name', toSingleValue(req.body?.supplier_name));
