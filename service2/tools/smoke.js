@@ -188,7 +188,11 @@ async function checkReports() {
         'Siemens Erlangen',
         'Installation not fully finished. Trunking still open.',
         'Warranty ends on',
-        '14.08.2028',                 // start + years, computed, never sent
+        // The installation is not finished in this case, so the warranty runs from the
+        // agreed completion date (05.09.2026) rather than the signing date, and the end is
+        // computed from that. Guards the rule, not just the arithmetic.
+        '05.09.2028',
+        'The warranty runs from completion of the outstanding work',
         'Acceptance has taken place.',
         'Annex 1',
         'Two modules colour-shifted.',

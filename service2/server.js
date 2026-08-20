@@ -5410,13 +5410,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const installPartialNotes = val('installation_partial_notes');
 
+  const installationIsFinished = /^(yes|ja|fully|complete)/i.test(String(installStatus || '').trim());
+
   if (installStatus || installPartialNotes || followupSentence) {
 
     drawSectionTitle('Installation status');
 
-    const finished = /^(yes|ja|fully|complete)/i.test(String(installStatus || '').trim());
-
-    const statusText = finished
+    const statusText = installationIsFinished
       ? 'Installation finished completely.'
       : ('Installation not fully finished.' + (installPartialNotes ? ' ' + installPartialNotes : ''));
 
@@ -5439,15 +5439,27 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // Warranty: the app sends the start date and a number of years, the end is arithmetic —
   // asking a person to work it out invites a wrong date on a document that promises
   // something. warranty_begin is still read so older reports keep rendering.
-  const warrantyStart = val('warranty_start_date') || val('warranty_begin');
+  const signedWarrantyStart = val('warranty_start_date') || val('warranty_begin');
+
+  // Vladimir's rule: the warranty runs from the moment the installation is actually
+  // complete, not from the day the paper was signed. When work is still outstanding, that
+  // moment is the completion date agreed in Installation status - so the clock starts
+  // there, later than the signature, which is the reading that favours the customer.
+  const completionDate = val('installation_followup_date') || val('defects_deadline') || val('remaining_deadline');
+
+  const startsOnCompletion = !!(completionDate && !installationIsFinished);
+
+  const warrantyStart = startsOnCompletion ? completionDate : signedWarrantyStart;
 
   const warrantyYearsRaw = val('warranty_years');
 
   const warrantyYears = String(warrantyYearsRaw || '').trim() || (warrantyStart ? '2' : '');
 
   const warrantyEnd = (() => {
+    // An explicit end is only honoured when nothing moved the start; otherwise a client
+    // that computed its end from the signing date would contradict the start printed above.
     const explicit = val('warranty_end');
-    if (explicit) return formatDisplayDate(explicit);
+    if (explicit && !startsOnCompletion) return formatDisplayDate(explicit);
     const parsed = parseLocalDateTime(String(warrantyStart || '').trim() + 'T00:00');
     const years = parseInt(warrantyYears, 10);
     if (!parsed || !Number.isFinite(years)) return '';
@@ -5471,6 +5483,25 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       drawBlockRow(
         [{ label: 'Warranty ends on', value: warrantyEnd, height: 28 }],
         { halfWidth: true },
+      );
+
+    }
+
+    // The date above is a planned one until the work is signed off. Saying so is the
+    // difference between a document that can be wrong and one that cannot: if the crew
+    // comes back later than planned, this sentence still describes the agreement.
+    if (startsOnCompletion) {
+
+      drawBlockRow(
+        [{
+          label: 'Basis',
+          value: `The warranty runs from completion of the outstanding work listed in Annex 1, planned for ${formatDisplayDate(completionDate)}. If that work is completed on a different date, the warranty period starts then.`,
+          height: 44,
+          align: 'left',
+          verticalAlign: 'top',
+          paddingY: 8,
+        }],
+        { fullWidth: true },
       );
 
     }
