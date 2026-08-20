@@ -236,14 +236,16 @@
           .catch(() => { versionMetaEl.textContent = ''; });
       }
 
+      // The hub answers this at its own root, not under /service2 - the archive page reads
+      // the same one. I had invented /api/session here, which simply 404s.
       const userMetaEl = document.getElementById('user-meta');
-      fetch(buildAppUrl('api/session'), { credentials: 'same-origin' })
+      fetch('/api/status', { credentials: 'same-origin' })
         .then((r) => (r.ok ? r.json() : null))
         .then((payload) => {
-          const user = payload && (payload.user || payload);
+          const user = payload && payload.hub ? payload.hub.user : null;
           if (userMetaEl && user && user.username) {
-            userMetaEl.textContent = 'Logged in as ' + user.username
-              + (user.role ? ' (' + user.role + ')' : '');
+            const role = user.role || (user.isSuperadmin ? 'admin' : 'manager');
+            userMetaEl.textContent = 'Logged in as ' + user.username + ' (' + role + ')';
           }
         })
         .catch(() => {});
