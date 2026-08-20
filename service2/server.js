@@ -5339,9 +5339,22 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // needs a sentence, not three ticked boxes to interpret.
   const installStatus = val('installation_status');
 
+  // When the job isn't finished, the date it will be is the commitment on this page.
+  // Built here because it prints twice: under the status, and on the detachable annex.
+  const followupSentence = (() => {
+    const type = val('installation_followup_type');
+    const date = formatDisplayDate(
+      val('installation_followup_date') || val('defects_deadline') || val('remaining_deadline'),
+    );
+    if (!type && !date) return '';
+    const labels = { urgent: 'Fix urgently', planned: 'Planned completion' };
+    const urgency = labels[String(type || '').trim().toLowerCase()] || type || 'Planned completion';
+    return date ? `${urgency} - no later than ${date}` : urgency;
+  })();
+
   const installPartialNotes = val('installation_partial_notes');
 
-  if (installStatus || installPartialNotes) {
+  if (installStatus || installPartialNotes || followupSentence) {
 
     drawSectionTitle('Installation status');
 
@@ -5355,6 +5368,15 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       [{ label: 'Status', value: statusText, height: 52, align: 'left', verticalAlign: 'top', paddingY: 8 }],
       { fullWidth: true },
     );
+
+    if (followupSentence) {
+
+      drawBlockRow(
+        [{ label: 'To be completed', value: followupSentence, height: 30, align: 'left', verticalAlign: 'top', paddingY: 8 }],
+        { fullWidth: true },
+      );
+
+    }
 
   }
 
@@ -5460,32 +5482,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       }
 
-      // When it has to be done by, and how urgently — the reason the annex exists.
-      const followupType = val('installation_followup_type');
-
-      const followupDate = formatDisplayDate(val('installation_followup_date') || val('defects_deadline') || val('remaining_deadline'));
-
-      if (followupType || followupDate) {
-
-        const urgencyLabels = { urgent: 'Fix urgently', planned: 'Planned completion' };
-
-        const urgency = urgencyLabels[String(followupType || '').trim().toLowerCase()]
-          || followupType
-          || 'Planned completion';
-
-        drawBlockRow(
-          [{
-            label: 'Completion',
-            value: followupDate ? `${urgency} - no later than ${followupDate}` : urgency,
-            height: 40,
-            align: 'left',
-            verticalAlign: 'top',
-            paddingY: 8,
-          }],
-          { fullWidth: true },
-        );
-
-      }
+      // The completion date lives in the Installation status block, not here: it is agreed
+      // when the engineer says the job isn't finished, and it is stated once.
 
     }
 
@@ -12597,19 +12595,7 @@ ${renderTextInput('partial_services', 'Which part of the job', { textarea: true,
 
 ${renderTextInput('installation_partial_notes', 'What is still outstanding (if not fully finished)', { textarea: true, allowUnknown: true })}
 
-          <label class="checkbox"><input type="checkbox" name="installation_has_defects" data-annex-toggle /> <span>Defects or remaining activities exist (Annex 1)</span></label>
-
-        </section>
-
-        <section class="card" data-form-types="installation_report">
-
-          <h2>Annex 1 - defects and remaining activities</h2>
-
-          <p>Filled in only when the box above is ticked. Printed on a separate page so it can be handed over on its own.</p>
-
-${renderTextInput('installation_defects', 'Defects', { textarea: true, allowUnknown: true })}
-
-${renderTextInput('installation_remaining', 'Remaining activities', { textarea: true, allowUnknown: true })}
+          <p>If anything is still open, agree here and now when it will be done - this is the date the customer is signing up to.</p>
 
           <div class="grid two-col">
 
@@ -12632,6 +12618,20 @@ ${renderTextInput('installation_remaining', 'Remaining activities', { textarea: 
 ${renderTextInput('installation_followup_date', 'To be completed no later than', { type: 'date', allowUnknown: true })}
 
           </div>
+
+          <label class="checkbox"><input type="checkbox" name="installation_has_defects" data-annex-toggle /> <span>List the defects and remaining activities in Annex 1</span></label>
+
+        </section>
+
+        <section class="card" data-form-types="installation_report">
+
+          <h2>Annex 1 - defects and remaining activities</h2>
+
+          <p>Filled in only when the box above is ticked. Printed on a separate page, with the completion date, so it can be handed over on its own.</p>
+
+${renderTextInput('installation_defects', 'Defects', { textarea: true, allowUnknown: true })}
+
+${renderTextInput('installation_remaining', 'Remaining activities', { textarea: true, allowUnknown: true })}
 
         </section>
 
