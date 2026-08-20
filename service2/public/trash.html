@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en-GB">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trash — PDF files archive</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5fb;
+      color: #1c1c1e;
+      --base-font-size: 16px;
+      --accent: #1f3bf5;
+      --surface: #ffffff;
+      --surface-muted: #f1f5f9;
+      --border: #d8d8e5;
+      --text-muted: #475569;
+    }
+
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-size: var(--base-font-size);
+    }
+
+    .container {
+      max-width: 1800px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+    }
+
+    header {
+      background: var(--surface);
+      padding: 1.5rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    header h1 { margin: 0; font-size: 1.75rem; }
+    header p { margin: 0; color: var(--text-muted); line-height: 1.4; }
+
+    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .header-meta { margin-top: 0.4rem; color: var(--text-muted); font-size: 0.95rem; }
+
+    .card {
+      background: var(--surface);
+      padding: 1.5rem;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .card h2 { margin: 0; font-size: 1.3rem; color: #1f2a5b; }
+
+    .button, .button:visited {
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 0.75rem 1.25rem;
+      border-radius: 999px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      text-align: center;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .button.secondary { background: #e2e8f0; color: #1e293b; }
+    .button.ghost { background: transparent; color: #1e293b; border: 1px solid var(--border); }
+    .button.small { padding: 0.45rem 0.8rem; font-size: 0.85rem; }
+    .button[disabled] { opacity: 0.5; cursor: default; }
+
+    /* The irreversible ones look irreversible. Everything on this page can be undone
+       except these, so they are the only red things here. */
+    .button.danger { background: #dc2626; color: #fff; }
+    .button.danger[disabled] { background: #fca5a5; }
+
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .toolbar-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+
+    .badge {
+      background: #e0e7ff;
+      color: #1e3a8a;
+      border-radius: 999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    thead { background: var(--surface-muted); }
+
+    th, td {
+      padding: 0.5rem 0.6rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+      vertical-align: middle;
+    }
+
+    td.file-cell { max-width: 320px; word-break: break-all; }
+
+    .row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+    .expiry-soon { color: #b45309; font-weight: 600; }
+
+    .empty { text-align: center; color: var(--text-muted); padding: 1.5rem; }
+
+    .status { min-height: 1.2rem; color: var(--text-muted); }
+    .status.error { color: #dc2626; }
+
+    .notice {
+      padding: 0.75rem 1rem;
+      border-radius: 10px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <div class="header-row">
+        <div>
+          <h1>Trash</h1>
+          <p>Reports deleted from the archive. They stay here until you remove them, or until the retention period runs out.</p>
+          <div class="header-meta" id="user-meta"></div>
+          <div class="header-meta" id="version-meta"></div>
+        </div>
+        <div class="header-actions">
+          <a class="button secondary" href="./files.html">Back to archive</a>
+          <button class="button" type="button" id="refresh">Refresh</button>
+        </div>
+      </div>
+    </header>
+
+    <section class="card">
+      <p class="notice" id="retention-note">Deleted reports can be put back from here. Only “Delete permanently” removes them for good.</p>
+
+      <div class="toolbar">
+        <div class="toolbar-group">
+          <span class="badge" id="trash-count">0 in trash</span>
+        </div>
+        <div class="toolbar-group">
+          <button class="button danger" type="button" id="empty-trash" disabled>Empty trash</button>
+        </div>
+      </div>
+
+      <div class="status" id="status" aria-live="polite"></div>
+
+      <div class="table-wrap">
+        <table id="trash-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Project</th>
+              <th>File</th>
+              <th>Deleted</th>
+              <th>Removed by</th>
+              <th>Removed for good</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="trash-body">
+            <tr><td colspan="7" class="empty">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (() => {
+      const appBaseUrl = new URL('.', window.location.href);
+      const buildAppUrl = (path) => {
+        const normalized = (path || '').replace(/^\/+/, '');
+        return new URL(normalized || '.', appBaseUrl).toString();
+      };
+
+      const ADMIN_TOKEN_KEY = 'pm-admin-token';
+      const readAdminToken = () => {
+        try { return window.localStorage.getItem(ADMIN_TOKEN_KEY) || ''; } catch (err) { return ''; }
+      };
+      const apiFetch = (path, options = {}) => {
+        const token = readAdminToken();
+        const headers = new Headers(options.headers || {});
+        if (token) headers.set('Authorization', `Bearer ${token}`);
+        return fetch(buildAppUrl(path), { credentials: 'same-origin', ...options, headers });
+      };
+
+      const versionMetaEl = document.getElementById('version-meta');
+      if (versionMetaEl) {
+        versionMetaEl.textContent = 'Version …';
+        fetch(buildAppUrl('health'), { credentials: 'same-origin' })
+          .then((r) => r.json())
+          .then((info) => { versionMetaEl.textContent = 'Version ' + ((info && info.version) || '?'); })
+          .catch(() => { versionMetaEl.textContent = ''; });
+      }
+
+      const userMetaEl = document.getElementById('user-meta');
+      fetch(buildAppUrl('api/session'), { credentials: 'same-origin' })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((payload) => {
+          const user = payload && (payload.user || payload);
+          if (userMetaEl && user && user.username) {
+            userMetaEl.textContent = 'Logged in as ' + user.username
+              + (user.role ? ' (' + user.role + ')' : '');
+          }
+        })
+        .catch(() => {});
+
+      const pad = (n) => String(n).padStart(2, '0');
+      const dmy = (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()}`;
+      const formatDateTime = (value) => {
+        if (!value) return '-';
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        return `${dmy(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      const formatDay = (value) => {
+        if (!value) return '-';
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return value;
+        return dmy(d);
+      };
+      const daysUntil = (value) => {
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return null;
+        return Math.ceil((d.getTime() - Date.now()) / 86400000);
+      };
+
+      const statusEl = document.getElementById('status');
+      const setStatus = (message, isError) => {
+        statusEl.textContent = message || '';
+        statusEl.classList.toggle('error', Boolean(isError));
+      };
+
+      const bodyEl = document.getElementById('trash-body');
+      const countEl = document.getElementById('trash-count');
+      const emptyBtn = document.getElementById('empty-trash');
+      const retentionNote = document.getElementById('retention-note');
+
+      const showEmpty = (text) => {
+        bodyEl.innerHTML = '';
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.className = 'empty';
+        cell.colSpan = 7;
+        cell.textContent = text;
+        row.appendChild(cell);
+        bodyEl.appendChild(row);
+      };
+
+      const request = async (path, options) => {
+        const response = await apiFetch(path, options);
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        return response.json().catch(() => ({ ok: true }));
+      };
+
+      const reportPath = (item, action) =>
+        'api/files/' + encodeURIComponent(item.templateType)
+        + '/' + encodeURIComponent(item.filename) + '/' + action;
+
+      const loadTrash = async () => {
+        setStatus('Loading…');
+        try {
+          const payload = await request('api/files/trash', { method: 'GET' });
+          const items = payload.items || payload.entries || payload.files || [];
+          const retention = payload.retentionDays
+            || (payload.settings && payload.settings.retentionDays);
+
+          // Read from the server rather than repeating a number here: a hint that drifts
+          // from the setting it describes is worse than no hint.
+          if (retentionNote && retention) {
+            retentionNote.textContent = 'Deleted reports can be put back from here. '
+              + 'Anything left untouched is removed for good after ' + retention + ' days. '
+              + 'Only “Delete permanently” removes them sooner.';
+          }
+
+          countEl.textContent = items.length + (items.length === 1 ? ' in trash' : ' in trash');
+          emptyBtn.disabled = items.length === 0;
+
+          if (!items.length) {
+            showEmpty('The trash is empty.');
+            setStatus('');
+            return;
+          }
+
+          bodyEl.innerHTML = '';
+          items.forEach((item) => {
+            const row = document.createElement('tr');
+
+            const summary = item.summary || {};
+            const cells = [
+              item.templateType || '-',
+              summary.projectNumber || item.projectNumber || '-',
+              item.filename || '-',
+              formatDateTime(item.deletedAt || item.trashedAt),
+              item.deletedBy || '-',
+            ];
+            cells.forEach((value, index) => {
+              const td = document.createElement('td');
+              if (index === 2) td.className = 'file-cell';
+              td.textContent = value || '-';
+              row.appendChild(td);
+            });
+
+            // When this one disappears on its own. The number matters most when it is
+            // small, so it is called out then.
+            const expiryCell = document.createElement('td');
+            const expires = item.expiresAt || item.expiryAt;
+            if (expires) {
+              const left = daysUntil(expires);
+              expiryCell.textContent = formatDay(expires)
+                + (left !== null && left >= 0 ? ` (${left}d)` : '');
+              if (left !== null && left <= 3) expiryCell.className = 'expiry-soon';
+            } else {
+              expiryCell.textContent = '-';
+            }
+            row.appendChild(expiryCell);
+
+            const actions = document.createElement('td');
+            actions.className = 'row-actions';
+
+            const restore = document.createElement('button');
+            restore.type = 'button';
+            restore.className = 'button ghost small';
+            restore.textContent = 'Restore';
+            restore.addEventListener('click', async () => {
+              restore.disabled = true;
+              try {
+                await request(reportPath(item, 'restore'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                setStatus('Restored ' + item.filename + ' to the archive.');
+                await loadTrash();
+              } catch (err) {
+                restore.disabled = false;
+                setStatus(err.message || 'Unable to restore.', true);
+              }
+            });
+
+            const purge = document.createElement('button');
+            purge.type = 'button';
+            purge.className = 'button danger small';
+            purge.textContent = 'Delete permanently';
+            purge.addEventListener('click', async () => {
+              // Names the file rather than counting: a count is not enough when nothing
+              // can be undone afterwards.
+              if (!confirm('Permanently delete ' + item.filename + '?\n\nThis cannot be undone.')) return;
+              purge.disabled = true;
+              try {
+                await request(reportPath(item, 'purge'), { method: 'DELETE' });
+                setStatus('Deleted ' + item.filename + ' permanently.');
+                await loadTrash();
+              } catch (err) {
+                purge.disabled = false;
+                setStatus(err.message || 'Unable to delete.', true);
+              }
+            });
+
+            actions.append(restore, purge);
+            row.appendChild(actions);
+            bodyEl.appendChild(row);
+          });
+
+          setStatus('');
+        } catch (err) {
+          showEmpty('Unable to load the trash.');
+          setStatus(err.message || 'Unable to load the trash.', true);
+        }
+      };
+
+      emptyBtn.addEventListener('click', async () => {
+        const count = countEl.textContent;
+        if (!confirm('Permanently delete everything in the trash (' + count + ')?\n\nThis cannot be undone.')) return;
+        emptyBtn.disabled = true;
+        setStatus('Emptying trash…');
+        try {
+          await request('api/files/trash/empty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+          setStatus('Trash emptied.');
+          await loadTrash();
+        } catch (err) {
+          emptyBtn.disabled = false;
+          setStatus(err.message || 'Unable to empty the trash.', true);
+        }
+      });
+
+      document.getElementById('refresh').addEventListener('click', loadTrash);
+
+      loadTrash();
+    })();
+  </script>
+</body>
+
+</html>
