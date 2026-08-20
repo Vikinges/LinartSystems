@@ -5008,7 +5008,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
 
 
-  const addPageWithHeading = (heading = `${headingTitle} (cont.)`) => {
+  const addPageWithHeading = (heading = headingTitle) => {
 
     const next = pdfDoc.addPage([baseSize.width, baseSize.height]);
 
@@ -5024,7 +5024,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     if (cursorY - requiredHeight < margin) {
 
-      addPageWithHeading(heading || `${headingTitle} (cont.)`);
+      addPageWithHeading(heading || headingTitle);
 
       return true;
 
@@ -5044,7 +5044,8 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     atPageTop = false;
 
-    currentSection = String(label || '').replace(/ \(cont\.\)$/, '');
+    // Strip the marker so a section continued twice does not become "(continued) (continued)".
+    currentSection = String(label || '').replace(/ \(continued\)$/, '');
 
     page.drawText(label, {
 
@@ -5068,7 +5069,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // keeps the report's own name; this is the section saying "still me".
   const resumeSection = () => {
 
-    if (currentSection) drawSectionTitle(`${currentSection} (cont.)`);
+    if (currentSection) drawSectionTitle(`${currentSection} (continued)`);
 
   };
 
@@ -5708,7 +5709,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const signatureHeight = 160;
 
-  ensureSpace(signatureHeight + 40, `${headingTitle} (cont.)`);
+  ensureSpace(signatureHeight + 40, headingTitle);
 
   drawSectionTitle('Signatures');
 
@@ -6386,7 +6387,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  const addPageWithHeading = (heading = `${headingTitle} (cont.)`) => {
+  const addPageWithHeading = (heading = headingTitle) => {
 
     const next = pdfDoc.addPage([baseSize.width, baseSize.height]);
 
@@ -6400,7 +6401,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  const addContinuationPage = (heading = `${headingTitle} (cont.)`) => {
+  const addContinuationPage = (heading = headingTitle) => {
 
     return addPageWithHeading(heading);
 
@@ -6581,21 +6582,21 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       cursorY -= groupHeaderH;
     };
 
-    const label = ensureBlock(groupHeaderH + colHeaderH + dayRowH + 12, 'On-site team (cont.)')
-      ? 'On-site team (cont.)' : 'On-site team';
+    const label = ensureBlock(groupHeaderH + colHeaderH + dayRowH + 12, 'On-site team (continued)')
+      ? 'On-site team (continued)' : 'On-site team';
     drawSectionTitle(label);
 
     groups.forEach((g) => {
       // Keep the group header + its column header + one day-row together.
       if (ensureSpace(groupHeaderH + colHeaderH + dayRowH + 6)) {
-        drawSectionTitle('On-site team (cont.)');
+        drawSectionTitle('On-site team (continued)');
       }
       drawGroupHeader(g);
       drawColHeader();
 
       g.days.forEach((entry) => {
         if (ensureSpace(dayRowH + 4)) {
-          drawSectionTitle('On-site team (cont.)');
+          drawSectionTitle('On-site team (continued)');
           drawGroupHeader(g);
           drawColHeader();
         }
@@ -6767,7 +6768,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const movedPage = ensureSpace(totalHeightEstimate);
 
-    const headingLabel = movedPage ? `${section.title} (cont.)` : section.title;
+    const headingLabel = movedPage ? `${section.title} (continued)` : section.title;
 
     drawSectionTitle(headingLabel);
 
@@ -6823,7 +6824,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
       if (ensureSpace(rowHeight + 8)) {
 
-        drawSectionTitle(`${section.title} (cont.)`);
+        drawSectionTitle(`${section.title} (continued)`);
 
         drawHeaderRow();
 
@@ -7881,7 +7882,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         ensureSpace(headerHeight + rowHeightBase * Math.min(usedRowsFiltered.length, 3) + 8)
 
-          ? `${partsTitle} (cont.)`
+          ? `${partsTitle} (continued)`
 
           : partsTitle;
 
@@ -7965,7 +7966,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         if (ensureSpace(rowHeight + 6)) {
 
-          drawSectionTitle(`${partsTitle} (cont.)`);
+          drawSectionTitle(`${partsTitle} (continued)`);
 
           drawPartsHeader();
 
