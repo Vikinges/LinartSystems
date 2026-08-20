@@ -322,6 +322,36 @@
       vertical-align: middle;
     }
 
+    .trash-panel {
+      margin-top: 18px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: #fff;
+    }
+
+    .trash-panel__head {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .trash-panel__head h2 { margin: 0; font-size: 1.1rem; }
+
+    .trash-panel__hint {
+      margin: 8px 0 0;
+      color: #475569;
+      font-size: 0.85rem;
+    }
+
+    .trash-danger {
+      background: #fee2e2;
+      color: #b91c1c;
+      border-color: #fca5a5;
+    }
+
     /* Which client produced the file. Quiet by design - it matters when a document is
        wrong months later, not while you are reading the list. */
     .via-badge {
@@ -539,9 +569,37 @@
         </div>
         <div class="admin-actions-group">
           <button class="button secondary" type="button" id="download-zip" disabled>Download zip</button>
-          <button class="button" type="button" id="delete-files" disabled>Delete</button>
+          <button class="button" type="button" id="delete-files" disabled>Move to trash</button>
+          <button class="button ghost" type="button" id="open-trash">Trash</button>
         </div>
       </div>
+
+      <!-- The trash existed on the server from the start - soft delete, restore, retention,
+           a daily sweep - and none of it was reachable from here, so the only button on the
+           page destroyed reports outright. This is that machinery, surfaced. -->
+      <section class="trash-panel" id="trash-panel" hidden>
+        <div class="trash-panel__head">
+          <h2>Trash</h2>
+          <div class="admin-actions-group">
+            <span class="badge" id="trash-count">0 in trash</span>
+            <button class="button ghost" type="button" id="trash-refresh">Refresh</button>
+            <button class="button secondary" type="button" id="trash-empty">Empty trash</button>
+            <button class="button ghost" type="button" id="trash-close">Close</button>
+          </div>
+        </div>
+        <p class="trash-panel__hint" id="trash-hint">Deleted reports stay here and can be put back. Only "Delete permanently" removes them for good.</p>
+        <div class="status" id="trash-status" aria-live="polite"></div>
+        <div class="table-wrap">
+          <table class="files-table" id="trash-table">
+            <thead>
+              <tr>
+                <th>Type</th><th>Project</th><th>File</th><th>Deleted</th><th>Removed by</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="trash-body"></tbody>
+          </table>
+        </div>
+      </section>
       <div class="status" id="status" aria-live="polite"></div>
       <div class="table-wrap">
         <table id="files-table" class="files-table">
@@ -1377,32 +1435,169 @@
           if (!canDeleteFiles) return;
           const selected = getSelectedFiles();
           if (!selected.length) return;
-          if (!confirm(`Delete ${selected.length} file(s)?`)) return;
-          setStatus('Deleting files...');
+          if (!confirm(`Move ${selected.length} report(s) to the trash? They can be put back from there.`)) return;
+          setStatus('Moving to trash...');
           try {
-            const response = await fetchWithAdminToken('api/files/delete', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                files: selected.map((file) => ({
-                  templateType: file.templateType,
-                  filename: file.filename
-                }))
-              }),
-              credentials: 'same-origin'
-            });
-            if (!response.ok) {
-              throw new Error(`Delete failed (${response.status})`);
-            }
-            const payload = await response.json();
-            if (!payload.ok) {
-              throw new Error('Delete failed.');
+            // One call per report: the bulk endpoint is the old hard delete, and this page
+            // should not be able to destroy anything in a single click any more.
+            let moved = 0;
+            const failed = [];
+            for (const file of selected) {
+              const url = 'api/files/' + encodeURIComponent(file.templateType)
+                + '/' + encodeURIComponent(file.filename) + '/trash';
+              const response = await fetchWithAdminToken(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: '{}',
+                credentials: 'same-origin'
+              });
+              if (response.ok) moved += 1; else failed.push(file.filename);
             }
             applySelection([]);
             await loadFiles();
-            setStatus('Deleted.');
+            if (failed.length) {
+              setStatus(`Moved ${moved}, failed ${failed.length}: ${failed.join(', ')}`, true);
+            } else {
+              setStatus(`Moved ${moved} report(s) to the trash.`);
+            }
           } catch (err) {
-            setStatus(err && err.message ? err.message : 'Unable to delete files.', true);
+            setStatus(err && err.message ? err.message : 'Unable to move files to the trash.', true);
+          }
+        });
+      }
+
+      // --- Trash -------------------------------------------------------------------
+      const trashPanel = document.getElementById('trash-panel');
+      const trashBody = document.getElementById('trash-body');
+      const trashCountEl = document.getElementById('trash-count');
+      const trashStatusEl = document.getElementById('trash-status');
+      const trashHintEl = document.getElementById('trash-hint');
+
+      const setTrashStatus = (message, isError) => {
+        if (!trashStatusEl) return;
+        trashStatusEl.textContent = message || '';
+        trashStatusEl.classList.toggle('error', Boolean(isError));
+      };
+
+      const trashAction = async (url, options) => {
+        const response = await fetchWithAdminToken(url, {
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          ...options
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        return response.json().catch(() => ({ ok: true }));
+      };
+
+      const loadTrash = async () => {
+        if (!trashBody) return;
+        setTrashStatus('Loading...');
+        try {
+          const payload = await trashAction('api/files/trash', { method: 'GET' });
+          const items = payload.items || payload.entries || payload.files || [];
+          const retention = payload.retentionDays
+            || (payload.settings && payload.settings.retentionDays);
+          if (trashHintEl && retention) {
+            trashHintEl.textContent = 'Deleted reports stay here for '
+              + retention + ' days and can be put back. Only "Delete permanently" removes them for good.';
+          }
+          trashBody.innerHTML = '';
+          items.forEach((item) => {
+            const row = document.createElement('tr');
+            const cells = [
+              item.templateType || '-',
+              (item.summary && item.summary.projectNumber) || item.projectNumber || '-',
+              item.filename || '-',
+              formatDate(item.deletedAt || item.trashedAt) || '-',
+              item.deletedBy || '-'
+            ];
+            cells.forEach((value) => {
+              const td = document.createElement('td');
+              td.textContent = value || '-';
+              row.appendChild(td);
+            });
+
+            const actions = document.createElement('td');
+            actions.className = 'row-actions';
+
+            const restore = document.createElement('button');
+            restore.type = 'button';
+            restore.className = 'button ghost';
+            restore.textContent = 'Restore';
+            restore.addEventListener('click', async () => {
+              restore.disabled = true;
+              try {
+                await trashAction('api/files/' + encodeURIComponent(item.templateType)
+                  + '/' + encodeURIComponent(item.filename) + '/restore', { method: 'POST', body: '{}' });
+                setTrashStatus('Restored.');
+                await loadTrash();
+                await loadFiles();
+              } catch (err) {
+                restore.disabled = false;
+                setTrashStatus(err.message || 'Unable to restore.', true);
+              }
+            });
+
+            const purge = document.createElement('button');
+            purge.type = 'button';
+            purge.className = 'button trash-danger';
+            purge.textContent = 'Delete permanently';
+            purge.addEventListener('click', async () => {
+              // The only irreversible button on the page, and it names the file it will
+              // destroy - a count is not enough when nothing can be undone afterwards.
+              if (!confirm('Permanently delete ' + item.filename + '?\n\nThis cannot be undone.')) return;
+              purge.disabled = true;
+              try {
+                await trashAction('api/files/' + encodeURIComponent(item.templateType)
+                  + '/' + encodeURIComponent(item.filename) + '/purge', { method: 'DELETE' });
+                setTrashStatus('Deleted permanently.');
+                await loadTrash();
+              } catch (err) {
+                purge.disabled = false;
+                setTrashStatus(err.message || 'Unable to delete.', true);
+              }
+            });
+
+            actions.append(restore, purge);
+            row.appendChild(actions);
+            trashBody.appendChild(row);
+          });
+
+          if (trashCountEl) trashCountEl.textContent = items.length + ' in trash';
+          setTrashStatus(items.length ? '' : 'The trash is empty.');
+        } catch (err) {
+          setTrashStatus(err.message || 'Unable to load the trash.', true);
+        }
+      };
+
+      const openTrashBtn = document.getElementById('open-trash');
+      if (openTrashBtn) {
+        openTrashBtn.addEventListener('click', () => {
+          if (!trashPanel) return;
+          trashPanel.hidden = !trashPanel.hidden;
+          if (!trashPanel.hidden) loadTrash();
+        });
+      }
+
+      const trashCloseBtn = document.getElementById('trash-close');
+      if (trashCloseBtn) trashCloseBtn.addEventListener('click', () => { trashPanel.hidden = true; });
+
+      const trashRefreshBtn = document.getElementById('trash-refresh');
+      if (trashRefreshBtn) trashRefreshBtn.addEventListener('click', loadTrash);
+
+      const trashEmptyBtn = document.getElementById('trash-empty');
+      if (trashEmptyBtn) {
+        trashEmptyBtn.addEventListener('click', async () => {
+          if (!confirm('Permanently delete everything in the trash?\n\nThis cannot be undone.')) return;
+          trashEmptyBtn.disabled = true;
+          try {
+            await trashAction('api/files/trash/empty', { method: 'POST', body: '{}' });
+            setTrashStatus('Trash emptied.');
+            await loadTrash();
+          } catch (err) {
+            setTrashStatus(err.message || 'Unable to empty the trash.', true);
+          } finally {
+            trashEmptyBtn.disabled = false;
           }
         });
       }
