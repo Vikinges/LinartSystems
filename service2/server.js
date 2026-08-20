@@ -9221,7 +9221,7 @@ ${rows.join('\n')}
 
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <title>PDF forms generator - v${SERVICE2_VERSION} Lin</title>
+    <title>New report - LSC LED Solution Center</title>
 
     <link
 
@@ -12290,13 +12290,51 @@ ${rows.join('\n')}
 
       }
 
-      .admin-launch {
+      /* Both header controls sit in one row instead of the Admin button being
+         absolutely positioned on its own - a second control had nowhere to go. */
+      .header-nav {
 
         position: absolute;
 
         top: 1rem;
 
         right: 1rem;
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 0.5rem;
+
+      }
+
+      .header-nav__link {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 0.4rem;
+
+        border-radius: 999px;
+
+        padding: 0.5rem 1rem;
+
+        background: #e2e8f0;
+
+        color: #1e293b;
+
+        font-weight: 600;
+
+        font-size: 0.9rem;
+
+        text-decoration: none;
+
+      }
+
+      .header-nav__link:hover { background: #cbd5e1; }
+
+      .admin-launch {
 
         border: none;
 
@@ -12550,9 +12588,15 @@ ${rows.join('\n')}
 
       <header>
 
-        <button type="button" class="admin-launch" data-admin-open>Admin</button>
+        <div class="header-nav">
 
-        <h1>PDF forms generator - v${SERVICE2_VERSION} Lin</h1>
+          <a class="header-nav__link" href="./files.html" title="Browse generated reports">Files</a>
+
+          <button type="button" class="admin-launch" data-admin-open>Admin</button>
+
+        </div>
+
+        <h1>New report</h1>
 
         <p>Fill in the service visit details: site info, on-site team, checklists, parts, and signatures. Fields are blank so you can start from scratch.</p>
 
