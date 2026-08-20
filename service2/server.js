@@ -2537,7 +2537,7 @@ function loadSuggestionStore() {
 
   }
 
-  // merge defaults so ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂµÃ‘ÂÃ‘â€šÃ‘Å’ ÃÂ´ÃÂ°ÃÂ¶ÃÂµ ÃÂ±ÃÂµÃÂ· ÃÂ¿Ã‘â‚¬ÃÂ¾Ã‘Ë†ÃÂ»Ã‘â€¹Ã‘â€¦ ÃÂ¾Ã‘â€šÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ¾ÃÂº
+  // merge defaults so the suggestions are there even before the first submission
 
   for (const [field, values] of Object.entries(DEFAULT_SUGGESTIONS)) {
 
@@ -2663,7 +2663,7 @@ function recordSuggestionValue(fieldName, value) {
 
   let changed = updateBucket(suggestionStore.suggestions[canonical]);
 
-  // Ã‘â€šÃÂ°ÃÂºÃÂ¶ÃÂµ ÃÂ´Ã‘Æ’ÃÂ±ÃÂ»ÃÂ¸Ã‘â‚¬Ã‘Æ’ÃÂµÃÂ¼ ÃÂ² Ã‘ÂÃ‘â€šÃÂ°Ã‘â‚¬ÃÂ¾ÃÂµ ÃÂ¸ÃÂ¼Ã‘Â ÃÂ¿ÃÂ¾ÃÂ»Ã‘Â, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ¸Ã‘ÂÃÂ¿ÃÂ¾ÃÂ»Ã‘Å’ÃÂ·ÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃ‘Å’ Ã‘â‚¬ÃÂ°ÃÂ½ÃÂµÃÂµ Ã‘ÂÃÂ¾Ã‘â€¦Ã‘â‚¬ÃÂ°ÃÂ½Ã‘â€˜ÃÂ½ÃÂ½Ã‘â€¹ÃÂµ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸Ã‘Â
+  // also mirrored under the old field name, so values saved earlier still come back
 
   if (canonical !== fieldName) {
 
@@ -2709,7 +2709,7 @@ function recordSuggestionsFromSubmission(body) {
 
 
 
-  // Ãâ€™Ã‘â€¹Ã‘â€šÃÂ°Ã‘ÂÃÂºÃÂ¸ÃÂ²ÃÂ°ÃÂµÃÂ¼ ÃÂ¸ÃÂ¼ÃÂµÃÂ½ÃÂ°/Ã‘â‚¬ÃÂ¾ÃÂ»ÃÂ¸ Ã‘ÂÃÂ¾Ã‘â€šÃ‘â‚¬Ã‘Æ’ÃÂ´ÃÂ½ÃÂ¸ÃÂºÃÂ¾ÃÂ² ÃÂ¸ÃÂ· ÃÂ¼ÃÂ°Ã‘ÂÃ‘ÂÃÂ¸ÃÂ²ÃÂ° employees[n][...]
+  // pull staff names and roles out of the employees[n][...] array
 
   Object.keys(body || {}).forEach((key) => {
 
@@ -4763,7 +4763,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 
     : defaultBodyTopOffset(pageHeight);
 
-  // ÃÂ¡Ã‘â€šÃÂ°Ã‘â‚¬Ã‘â€š Ã‘â‚¬ÃÂµÃÂ½ÃÂ´ÃÂµÃ‘â‚¬ÃÂ°: Ã‘â€¡Ã‘Æ’Ã‘â€šÃ‘Å’ ÃÂ½ÃÂ¸ÃÂ¶ÃÂµ ÃÂ»ÃÂ¸ÃÂ½ÃÂ¸ÃÂ¸ ÃÂºÃÂ¾ÃÂ½Ã‘â€šÃÂµÃÂ½Ã‘â€šÃÂ° (bodyTopOffset), Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ²ÃÂ¸ÃÂ·Ã‘Æ’ÃÂ°ÃÂ»Ã‘Å’ÃÂ½ÃÂ¾ Ã‘ÂÃÂ¾ÃÂ²ÃÂ¿ÃÂ°Ã‘ÂÃ‘â€šÃ‘Å’ Ã‘Â ÃÂ»ÃÂ¸ÃÂ½ÃÂ¸ÃÂµÃÂ¹ ÃÂ² ÃÂ°ÃÂ´ÃÂ¼ÃÂ¸ÃÂ½ÃÂºÃÂµ.
+  // Start of the render, just below the content line (bodyTopOffset), so it lines up with the line shown in the admin page.
 
   const marginTop = 12;
 
@@ -4771,7 +4771,7 @@ function clearOriginalSignoffSection(pdfDoc, options = {}) {
 
 
 
-  // ÃÅ¾Ã‘â€¡ÃÂ¸Ã‘â€°ÃÂ°ÃÂµÃÂ¼ Ã‘â€šÃÂµÃÂ»ÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ´ Ã‘Ë†ÃÂ°ÃÂ¿ÃÂºÃÂ¾ÃÂ¹, ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃ‘Â ÃÂ²ÃÂµÃ‘â‚¬Ã‘â€¦ÃÂ½Ã‘Å½Ã‘Å½ Ã‘â€¡ÃÂ°Ã‘ÂÃ‘â€šÃ‘Å’ (ÃÂ»ÃÂ¾ÃÂ³ÃÂ¾Ã‘â€šÃÂ¸ÃÂ¿/Ã‘â€¦ÃÂµÃÂ´ÃÂµÃ‘â‚¬) ÃÂ½ÃÂµÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂ½Ã‘Æ’Ã‘â€šÃÂ¾ÃÂ¹.
+  // Clear the body under the header, leaving the top strip (logo / letterhead) untouched.
 
   targetPage.drawRectangle({
 
@@ -5219,36 +5219,39 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   drawSectionTitle('Acceptance');
 
-  drawBlockRow([
-    { label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') },
-    // Where the handover took place — collected by the form but previously never printed.
-    { label: 'Acceptance location', value: val('acceptance_location') },
-  ]);
+  drawBlockRow(
+    [
+      { label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') },
+      // Where the handover took place — collected by the form but previously never printed.
+      { label: 'Acceptance location', value: val('acceptance_location') },
+    ],
+    { halfWidth: true },
+  );
   // Moved out of the opening grid, which is now shared with the other reports: completion
   // is an acceptance fact, so it belongs beside the appointment date.
   drawBlockRow(
     [{ label: 'Completion date', value: dateVal('completion_date') }],
-    { fullWidth: true },
+    { halfWidth: true },
   );
 
   drawCheckboxList(
 
     [
 
-      { label: 'Contractually agreed overall performance', value: boolVal('acceptance_overall') },
+      { label: 'The whole agreed job', value: boolVal('acceptance_overall') },
 
-      { label: 'Self-contained partial service(s)', value: boolVal('acceptance_partial') },
+      { label: 'Only a finished part of the job, accepted on its own', value: boolVal('acceptance_partial') },
 
     ],
 
-    'Scope of acceptance',
+    'What is being accepted',
 
   );
 
   drawBlockRow(
     [
       {
-        label: 'Partial service(s)',
+        label: 'Which part of the job',
         value: val('partial_services'),
         height: 60,
         align: 'left',
@@ -6120,7 +6123,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   }
 
-  // ÃÂÃÂ°Ã‘â€¡ÃÂ¸ÃÂ½ÃÂ°ÃÂµÃÂ¼ Ã‘â‚¬ÃÂ¸Ã‘ÂÃÂ¾ÃÂ²ÃÂ°Ã‘â€šÃ‘Å’ ÃÂ½ÃÂ¸ÃÂ¶ÃÂµ Ã‘Ë†ÃÂ°ÃÂ¿ÃÂºÃÂ¸: ÃÂ°ÃÂ´ÃÂ¼ÃÂ¸ÃÂ½ÃÂºÃÂ° Ã‘ÂÃÂ¾Ã‘â€¦Ã‘â‚¬ÃÂ°ÃÂ½Ã‘ÂÃÂµÃ‘â€š bodyTopOffset.
+  // Start drawing below the header: the admin page stores bodyTopOffset.
 
   const initialStartY =
 
@@ -6158,7 +6161,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     page = target;
 
-    // Ãâ€ÃÂ»Ã‘Â ÃÂ¿ÃÂµÃ‘â‚¬ÃÂ²ÃÂ¾ÃÂ¹ Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ°ÃÂ½ÃÂ¸Ã‘â€ Ã‘â€¹ ÃÂ¸Ã‘ÂÃÂ¿ÃÂ¾ÃÂ»Ã‘Å’ÃÂ·Ã‘Æ’ÃÂµÃÂ¼ ÃÂ·ÃÂ°ÃÂ´ÃÂ°ÃÂ½ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ¾Ã‘â€šÃ‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿, ÃÂ´ÃÂ»Ã‘Â Ã‘ÂÃÂ»ÃÂµÃÂ´Ã‘Æ’Ã‘Å½Ã‘â€°ÃÂ¸Ã‘â€¦ Ã¢â‚¬â€ ÃÂ²ÃÂµÃ‘ÂÃ‘Å’ ÃÂ´ÃÂ¾Ã‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ²ÃÂµÃ‘â‚¬Ã‘â€¦.
+    // The first page uses the configured offset; later pages get the full top of the sheet.
 
     if (!firstPageDone && initialStartY !== null) {
 
@@ -7357,7 +7360,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // ÃÂ¡ÃÂ½ÃÂ°Ã‘â€¡ÃÂ°ÃÂ»ÃÂ° Site information (ÃÂ´ÃÂ²ÃÂµ ÃÂºÃÂ¾ÃÂ»ÃÂ¾ÃÂ½ÃÂºÃÂ¸)
+  // Site information first (two columns)
 
   // Only filled fields make it onto the page — an empty framed box says nothing and makes
   // the document look half-finished. Checklists keep their own rule (a row shows when it is
@@ -7512,13 +7515,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // ÃÂÃÂµÃÂ±ÃÂ¾ÃÂ»Ã‘Å’Ã‘Ë†ÃÂ¾ÃÂ¹ ÃÂ·ÃÂ°ÃÂ·ÃÂ¾Ã‘â‚¬ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµ site info
+  // A small gap after the site info
 
   cursorY -= 6;
 
 
 
-  // Ãâ€”ÃÂ°Ã‘â€šÃÂµÃÂ¼ employees ÃÂ¸ Ã‘â€¡ÃÂµÃÂºÃÂ»ÃÂ¸Ã‘ÂÃ‘â€šÃ‘â€¹
+  // Then the employees and the checklists
 
   renderEmployeesSection();
 
@@ -7552,7 +7555,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // Parts record Ã¢â‚¬â€ ÃÂ² Ã‘ÂÃÂ°ÃÂ¼ÃÂ¾ÃÂ¼ ÃÂºÃÂ¾ÃÂ½Ã‘â€ ÃÂµ ÃÂ¿ÃÂµÃ‘â‚¬ÃÂµÃÂ´ Sign-off details
+  // Parts record — right at the end, before Sign-off details
 
   const partsUsedRows = (partsRows || []).filter((row) => row.hasData);
 
@@ -7970,7 +7973,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const signatureHeight = 180;
 
-  // ÃÂ¢Ã‘â‚¬ÃÂµÃÂ±Ã‘Æ’ÃÂµÃÂ¼ ÃÂ¼ÃÂµÃ‘ÂÃ‘â€šÃÂ¾ ÃÂ´ÃÂ»Ã‘Â ÃÂ±ÃÂ»ÃÂ¾ÃÂºÃÂ° ÃÂ´ÃÂ°ÃÂ½ÃÂ½Ã‘â€¹Ã‘â€¦ + ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂµÃÂ¹, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ·ÃÂ°ÃÂ³ÃÂ¾ÃÂ»ÃÂ¾ÃÂ²ÃÂºÃÂ¸ ÃÂ½ÃÂµ ÃÂ¿Ã‘â‚¬ÃÂ¸ÃÂ»ÃÂ¸ÃÂ¿ÃÂ°ÃÂ»ÃÂ¸ ÃÂº ÃÂ¿Ã‘â‚¬ÃÂµÃÂ´Ã‘â€¹ÃÂ´Ã‘Æ’Ã‘â€°ÃÂµÃÂ¹ Ã‘â€šÃÂ°ÃÂ±ÃÂ»ÃÂ¸Ã‘â€ ÃÂµ
+  // Reserve room for the details block plus the signatures, so the headings do not stick to the table above
 
   const combinedRequired = detailHeight * detailRows + signatureHeight + 140;
 
@@ -8124,7 +8127,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
-  // ÃÅ¸ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂ¸ ÃÂºÃ‘â‚¬Ã‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂµ, ÃÂ½ÃÂ¾ ÃÂ·ÃÂ°ÃÂ½ÃÂ¸ÃÂ¼ÃÂ°Ã‘Å½Ã‘â€š ÃÂ¼ÃÂµÃÂ½Ã‘Å’Ã‘Ë†ÃÂµ ÃÂ²Ã‘â€¹Ã‘ÂÃÂ¾Ã‘â€šÃ‘â€¹.
+  // The signature boxes are wide but need less height.
 
   ensureSpace(signatureHeight + 40);
 
@@ -8181,7 +8184,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     });
 
-    // Ã‘â‚¬ÃÂ°ÃÂ¼ÃÂºÃ‘Æ’ Ã‘Æ’ÃÂ±Ã‘â‚¬ÃÂ°ÃÂ»ÃÂ¸, ÃÂ¾Ã‘ÂÃ‘â€šÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃÂµÃÂ¼ Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃ‘Å’ ÃÂ¸ Ã‘ÂÃÂ¾ÃÂ´ÃÂµÃ‘â‚¬ÃÂ¶ÃÂ¸ÃÂ¼ÃÂ¾ÃÂµ
+    // The frame was dropped; only the signature and its contents are drawn
 
     if (entry) {
 
@@ -12469,17 +12472,19 @@ ${renderTextInput('attendee_supplier', 'Attendee (supplier)', { allowUnknown: tr
 
         <section class="card" data-form-types="installation_report">
 
-          <h2>Acceptance scope</h2>
+          <h2>What is being accepted</h2>
+
+          <p>A part accepted on its own starts its own warranty, so tick it only when that part is genuinely finished and handed over.</p>
 
           <div class="grid two-col">
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>Contractually agreed overall performance</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The whole agreed job</span></label>
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Following self-contained partial service(s)</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the job, accepted on its own</span></label>
 
           </div>
 
-${renderTextInput('partial_services', 'Partial services (Annex 1)', { textarea: true, allowUnknown: true })}
+${renderTextInput('partial_services', 'Which part of the job', { textarea: true, allowUnknown: true, placeholder: 'Name the finished part being accepted, e.g. the main wall only' })}
 
         </section>
 
@@ -13850,7 +13855,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const rows = Array.from(table.querySelectorAll('tbody tr')).filter((r) => !r.classList.contains('is-hidden-row'));
 
-          // Ãâ€”ÃÂ°ÃÂ¿ÃÂ¾ÃÂ»ÃÂ½Ã‘ÂÃÂµÃÂ¼ ÃÂ¿ÃÂ¾Ã‘ÂÃÂ»ÃÂµÃÂ´ÃÂ½Ã‘Å½Ã‘Å½ ÃÂ¾Ã‘â€šÃÂºÃ‘â‚¬Ã‘â€¹Ã‘â€šÃ‘Æ’Ã‘Å½ Ã‘ÂÃ‘â€šÃ‘â‚¬ÃÂ¾ÃÂºÃ‘Æ’ (ÃÂ¾ÃÂ±Ã‘â€¹Ã‘â€¡ÃÂ½ÃÂ¾ Ã‘â€šÃÂ¾ÃÂ»Ã‘Å’ÃÂºÃÂ¾ Ã‘â€¡Ã‘â€šÃÂ¾ ÃÂ´ÃÂ¾ÃÂ±ÃÂ°ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½ÃÂ°Ã‘Â)
+          // Fill the last open row (normally the one just added)
 
           return rows.length ? rows[rows.length - 1] : null;
 
@@ -21636,7 +21641,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
-            // ÃÂ»ÃÂ¾ÃÂºÃÂ°ÃÂ»Ã‘Å’ÃÂ½Ã‘â€¹ÃÂµ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ½ÃÂ° ÃÂ¾Ã‘ÂÃÂ½ÃÂ¾ÃÂ²ÃÂµ Ã‘Æ’ÃÂ¶ÃÂµ ÃÂ²ÃÂ²ÃÂµÃÂ´Ã‘â€˜ÃÂ½ÃÂ½Ã‘â€¹Ã‘â€¦ ÃÂ·ÃÂ½ÃÂ°Ã‘â€¡ÃÂµÃÂ½ÃÂ¸ÃÂ¹ (ÃÂ²ÃÂºÃÂ»Ã‘Å½Ã‘â€¡ÃÂ°Ã‘Â ÃÂ²ÃÂ¾Ã‘ÂÃ‘ÂÃ‘â€šÃÂ°ÃÂ½ÃÂ¾ÃÂ²ÃÂ»ÃÂµÃÂ½ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ´Ã‘â‚¬ÃÂ°Ã‘â€žÃ‘â€š)
+            // local suggestions built from what has already been typed, including a restored draft
 
             const localSeeds = [];
 
@@ -21650,7 +21655,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
               localSeeds.push(next);
 
-              // ÃÂ¾Ã‘â€šÃÂ¿Ã‘â‚¬ÃÂ°ÃÂ²ÃÂ»Ã‘ÂÃÂµÃÂ¼ ÃÂ½ÃÂ° Ã‘ÂÃÂµÃ‘â‚¬ÃÂ²ÃÂµÃ‘â‚¬, Ã‘â€¡Ã‘â€šÃÂ¾ÃÂ±Ã‘â€¹ ÃÂ¿ÃÂ¾ÃÂ´Ã‘ÂÃÂºÃÂ°ÃÂ·ÃÂºÃÂ¸ ÃÂ±Ã‘â€¹ÃÂ»ÃÂ¸ ÃÂ¾ÃÂ±Ã‘â€°ÃÂ¸ÃÂ¼ÃÂ¸
+              // send them to the server so the suggestions are shared
 
               if (next.length >= ${MIN_SUGGESTION_LENGTH}) {
 
@@ -23997,7 +24002,7 @@ app.post(['/suggest/save', '/service2/suggest/save'], (req, res) => {
 
   if (!recordSuggestionValue(fieldName, value)) {
 
-    // ÃÂÃÂ¸Ã‘â€¡ÃÂµÃÂ³ÃÂ¾ ÃÂ½ÃÂµ ÃÂ·ÃÂ°ÃÂ¿ÃÂ¸Ã‘ÂÃÂ°ÃÂ»ÃÂ¸ (ÃÂ¿Ã‘Æ’Ã‘ÂÃ‘â€šÃÂ¾ÃÂµ/ÃÂºÃÂ¾Ã‘â‚¬ÃÂ¾Ã‘â€šÃÂºÃÂ¾ÃÂµ/ÃÂ½ÃÂµÃÂ¸ÃÂ·ÃÂ²ÃÂµÃ‘ÂÃ‘â€šÃÂ½ÃÂ¾ÃÂµ ÃÂ¿ÃÂ¾ÃÂ»ÃÂµ) Ã¢â‚¬â€ ÃÂ½ÃÂµ Ã‘ÂÃ‘â€¡ÃÂ¸Ã‘â€šÃÂ°ÃÂµÃÂ¼ Ã‘ÂÃ‘â€šÃÂ¾ ÃÂ¾Ã‘Ë†ÃÂ¸ÃÂ±ÃÂºÃÂ¾ÃÂ¹
+    // Nothing was written (empty / too short / unknown field) — not treated as an error
 
     return res.json({ ok: true, skipped: true });
 
@@ -24409,7 +24414,7 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
 
 
-  // ÃÂ£ÃÂ´ÃÂ°ÃÂ»Ã‘ÂÃÂµÃÂ¼ Ã‘â€žÃÂ°ÃÂ¹ÃÂ», ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ¾ÃÂ½ Ã‘ÂÃ‘Æ’Ã‘â€°ÃÂµÃ‘ÂÃ‘â€šÃÂ²Ã‘Æ’ÃÂµÃ‘â€š
+  // Delete the file if it is there
 
   try {
 
@@ -24431,13 +24436,13 @@ app.post('/admin/templates/delete', requireAdmin, (req, res) => {
 
 
 
-  // ÃÂ£ÃÂ´ÃÂ°ÃÂ»Ã‘ÂÃÂµÃÂ¼ ÃÂ·ÃÂ°ÃÂ¿ÃÂ¸Ã‘ÂÃ‘Å’ ÃÂ¸ÃÂ· ÃÂ¼ÃÂ°ÃÂ½ÃÂ¸Ã‘â€žÃÂµÃ‘ÂÃ‘â€šÃÂ°
+  // Drop the entry from the manifest
 
   templateManifest.templates = templateManifest.templates.filter((tpl) => tpl.id !== entry.id);
 
 
 
-  // Ãâ€¢Ã‘ÂÃÂ»ÃÂ¸ Ã‘Æ’ÃÂ´ÃÂ°ÃÂ»ÃÂ¸ÃÂ»ÃÂ¸ ÃÂ°ÃÂºÃ‘â€šÃÂ¸ÃÂ²ÃÂ½Ã‘â€¹ÃÂ¹ Ã¢â‚¬â€ ÃÂ¿ÃÂµÃ‘â‚¬ÃÂµÃÂºÃÂ»Ã‘Å½Ã‘â€¡ÃÂ°ÃÂµÃÂ¼Ã‘ÂÃ‘Â ÃÂ½ÃÂ° ÃÂ¿ÃÂµÃ‘â‚¬ÃÂ²Ã‘â€¹ÃÂ¹ ÃÂ´ÃÂ¾Ã‘ÂÃ‘â€šÃ‘Æ’ÃÂ¿ÃÂ½Ã‘â€¹ÃÂ¹ ÃÂ¸ÃÂ»ÃÂ¸ builtin
+  // If the active one was deleted, fall back to the first available or the builtin
 
   if (templateManifest.activeTemplateId === entry.id) {
 
@@ -25693,7 +25698,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
 
 
-  // Ãâ€™Ã‘ÂÃÂµÃÂ³ÃÂ´ÃÂ° ÃÂ¿ÃÂ¾ÃÂ´Ã‘â€¦ÃÂ²ÃÂ°Ã‘â€šÃ‘â€¹ÃÂ²ÃÂ°ÃÂµÃÂ¼ ÃÂ¿ÃÂ¾ÃÂ´ÃÂ¿ÃÂ¸Ã‘ÂÃÂ¸, ÃÂ´ÃÂ°ÃÂ¶ÃÂµ ÃÂµÃ‘ÂÃÂ»ÃÂ¸ ÃÂ¿ÃÂ¾ÃÂ»Ã‘Â ÃÂ½ÃÂµ Ã‘ÂÃÂ¾ÃÂ²ÃÂ¿ÃÂ°ÃÂ´ÃÂ°Ã‘Å½Ã‘â€š Ã‘Â Ã‘Ë†ÃÂ°ÃÂ±ÃÂ»ÃÂ¾ÃÂ½ÃÂ¾ÃÂ¼.
+  // Always pick up the signatures, even when the fields do not match the template.
 
   Object.entries(signatureInputs).forEach(([sigName, raw]) => {
 
