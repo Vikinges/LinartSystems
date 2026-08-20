@@ -135,7 +135,8 @@
 
     td.file-cell { max-width: 320px; word-break: break-all; }
 
-    .row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .row-actions > div { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .row-actions { white-space: nowrap; }
 
     .expiry-soon { color: #b45309; font-weight: 600; }
 
@@ -359,6 +360,7 @@
 
             const actions = document.createElement('td');
             actions.className = 'row-actions';
+            const actionBox = document.createElement('div');
 
             const restore = document.createElement('button');
             restore.type = 'button';
@@ -395,7 +397,8 @@
               }
             });
 
-            actions.append(restore, purge);
+            actionBox.append(restore, purge);
+            actions.appendChild(actionBox);
             row.appendChild(actions);
             bodyEl.appendChild(row);
           });
