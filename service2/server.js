@@ -5375,7 +5375,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     [
       { label: 'Appointment date', value: dateVal('acceptance_date') || dateVal('date_of_service') },
       // Where the handover took place — collected by the form but previously never printed.
-      { label: 'Acceptance location', value: val('acceptance_location') },
+      { label: 'Acceptance location', value: val('acceptance_location') || val('site_location') },
     ],
     { halfWidth: true },
   );
@@ -12742,7 +12742,7 @@ ${renderTextInput('completion_date', 'Completion date', { type: 'date', allowUnk
 
 ${renderTextInput('acceptance_date', 'Acceptance date', { type: 'date', allowUnknown: true })}
 
-${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true })}
+${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: true, placeholder: 'Defaults to the site address - change it if the handover was somewhere else' })}
 
           </div>
 
@@ -14122,6 +14122,41 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         });
 
         updateWarrantyEnd();
+
+
+
+        // The handover is almost always at the site, so the acceptance location follows the
+        // site address until someone types their own. Tracking "still the copy" rather than
+        // "is empty" means clearing the field on purpose is respected instead of refilled.
+        const siteLocationInput = formEl.querySelector('[name="site_location"]');
+
+        const acceptanceLocationInput = formEl.querySelector('[name="acceptance_location"]');
+
+        if (siteLocationInput && acceptanceLocationInput) {
+
+          let acceptanceLocationOwned = String(acceptanceLocationInput.value || '').trim() !== '';
+
+          acceptanceLocationInput.addEventListener('input', () => {
+
+            acceptanceLocationOwned = true;
+
+          });
+
+          const mirrorSiteLocation = () => {
+
+            if (acceptanceLocationOwned) return;
+
+            acceptanceLocationInput.value = siteLocationInput.value;
+
+          };
+
+          siteLocationInput.addEventListener('input', mirrorSiteLocation);
+
+          siteLocationInput.addEventListener('change', mirrorSiteLocation);
+
+          mirrorSiteLocation();
+
+        }
 
 
 
