@@ -12807,9 +12807,9 @@ ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: 
 
           <div class="grid two-col">
 
-${renderTextInput('attendee_client', 'For the client', { allowUnknown: true, placeholder: 'Who attended for the client, e.g. Marcus Janker' })}
+${renderTextInput('attendee_client', 'For the client', { allowUnknown: true, placeholder: 'Who attended for the client, e.g. Max Mustermann' })}
 
-${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true, placeholder: 'Who attended for us, e.g. Vladimir Linart' })}
+${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true, placeholder: 'Who attended for us, e.g. Erika Mustermann' })}
 
           </div>
 
