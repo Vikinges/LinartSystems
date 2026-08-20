@@ -5210,6 +5210,15 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // Date fields arrive ISO from type="date" inputs; non-ISO values ('unknown') pass through.
   const dateVal = (key) => formatDisplayDate(val(key));
 
+  // Recent app builds stopped sending engineer_name, which left the supplier side of this
+  // certificate unnamed - a signature with nobody's name beside it. The submitter is not a
+  // guess: it is who filled the report in, and we already print it in the footer.
+  const submittedByName = (() => {
+    const detected = detectSubmitterName(body || {});
+    return detected && detected !== 'Unknown' ? detected : '';
+  })();
+
+
 
 
   setCurrentPage(page, headingTitle);
@@ -5270,13 +5279,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // announced only when something was filled in for it.
   const anyFilled = (...keys) => keys.some((key) => String(val(key) || '').trim() !== '' || boolVal(key));
 
-  if (anyFilled('attendee_client', 'customer_name', 'attendee_supplier', 'engineer_name')) {
+  if (anyFilled('attendee_client', 'customer_name', 'attendee_supplier', 'engineer_name') || submittedByName) {
 
     drawSectionTitle('Attendees');
 
     drawBlockRow([
       { label: 'For the client', value: val('attendee_client') || val('customer_name') },
-      { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') },
+      { label: 'For the supplier', value: val('attendee_supplier') || val('engineer_name') || submittedByName },
     ]);
 
   }
@@ -5626,7 +5635,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       x: margin + columnWidth + 12,
 
-      name: val('attendee_supplier') || val('engineer_name'),
+      name: val('attendee_supplier') || val('engineer_name') || submittedByName,
 
       company: val('engineer_company'),
 
@@ -8012,12 +8021,17 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
 
 
+  const submittedByName = (() => {
+    const detected = detectSubmitterName(body || {});
+    return detected && detected !== 'Unknown' ? detected : '';
+  })();
+
   const engineerDetails = [
 
     // No date & time here: the visit is dated once, by "Date of service" in Site information.
     { label: 'On-site engineer company', value: toSingleValue(body?.engineer_company) || '' },
 
-    { label: 'Engineer name', value: toSingleValue(body?.engineer_name) || '' },
+    { label: 'Engineer name', value: toSingleValue(body?.engineer_name) || submittedByName },
 
   ].filter((d) => d.value && String(d.value).trim());
 
@@ -8255,7 +8269,26 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     });
 
-    // The frame was dropped; only the signature and its contents are drawn
+    // Frame restored, matching the acceptance certificate: on a printed sheet the box is
+    // what tells a customer where to sign. Drawn before anything else goes inside it -
+    // it is filled white, so painting it afterwards hides the contents.
+    page.drawRectangle({
+
+      x: boxRect.x,
+
+      y: boxRect.y,
+
+      width: boxRect.width,
+
+      height: boxRect.height,
+
+      borderWidth: TABLE_BORDER_WIDTH,
+
+      borderColor: TABLE_BORDER_COLOR,
+
+      color: rgb(1, 1, 1),
+
+    });
 
     if (entry) {
 
