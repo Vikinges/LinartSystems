@@ -322,6 +322,24 @@
       vertical-align: middle;
     }
 
+    /* Which client produced the file. Quiet by design - it matters when a document is
+       wrong months later, not while you are reading the list. */
+    .via-badge {
+      display: inline-block;
+      margin-right: 6px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: #e2e8f0;
+      color: #334155;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      vertical-align: middle;
+      text-transform: uppercase;
+    }
+
+    .via-badge.is-ios { background: #e0e7ff; color: #3730a3; }
+
     /* Created column: keep date and time on their own lines so the column stays
        narrow and predictable rather than wrapping mid-timestamp. */
     .cell-created {
@@ -805,6 +823,17 @@
               : 'Marked as a test submission';
             linkCell.appendChild(testBadge);
           }
+          // Which client made this report. Reports from before provenance simply have no
+          // badge - absence says "we do not know", which is honest and is itself a clue.
+          if (file.submittedVia) {
+            const viaBadge = document.createElement('span');
+            viaBadge.className = 'via-badge' + (file.submittedVia === 'ios' ? ' is-ios' : '');
+            viaBadge.textContent = file.submittedVia;
+            viaBadge.title = file.clientVersion
+              ? 'Made in ' + file.submittedVia + ' ' + file.clientVersion
+              : 'Made in ' + file.submittedVia;
+            linkCell.appendChild(viaBadge);
+          }
           const link = document.createElement('a');
           link.className = 'file-link';
           link.href = buildAppUrl(file.downloadPath || '');
@@ -1141,6 +1170,9 @@
           ['Project', s.projectNumber || daily.projectNumber],
           ['Date', formatIsoDateOnly(s.reportDate || daily.reportDate)],
           ['Engineer', file.submittedBy || s.engineerName],
+          ['Made in', file.submittedVia
+            ? file.submittedVia + (file.clientVersion ? ' ' + file.clientVersion : '')
+            : null],
           ['Contact', s.customerContact || s.customerRepresentative || s.customerName],
           ['Display', s.ledDisplayModel],
         ].filter((pair) => pair[1] && String(pair[1]).trim());

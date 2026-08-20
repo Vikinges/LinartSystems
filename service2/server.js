@@ -376,6 +376,10 @@ function buildFileListEntry(meta, type, fallbackFilename) {
     serviceCompanyName: rb.service_company_name || null,
   };
 
+  // Normalised so the archive can group on it: the apps send 'ios', we send 'web'.
+  const submittedVia = String(rb.submitted_via || '').trim().toLowerCase() || null;
+  const clientVersion = String(rb.client_version || '').trim() || null;
+
   return {
     templateType,
     templateLabel: normalizeQueryText(meta.templateLabel),
@@ -397,6 +401,8 @@ function buildFileListEntry(meta, type, fallbackFilename) {
       const n = String(detectSubmitterName(rb) || '').trim();
       return n && n !== 'Unknown' ? n : ((dailyReport && dailyReport.submitterName) || null);
     })(),
+    submittedVia,
+    clientVersion,
     summary,
     dailyReport,
   };
@@ -1007,6 +1013,15 @@ const OCR_CDN_HOST = 'https://cdn.jsdelivr.net';
 const OCR_DATA_HOST = 'https://tessdata.projectnaptha.com';
 
 const SERVICE2_VERSION = '0.73';
+
+// Which client made a report, and which build of it. The web form stamps itself; the apps
+// send their own pair. Absence means the report predates provenance, which is itself
+// information rather than a gap to paper over.
+const SUBMITTED_VIA_WEB = 'web';
+const SERVICE2_CLIENT_VERSION = (() => {
+  const sha = String(process.env.GIT_SHA || '').trim();
+  return sha ? `${SERVICE2_VERSION} (${sha.slice(0, 7)})` : SERVICE2_VERSION;
+})();
 
 // LED model catalog (series -> models). Defined early: the web form template uses it.
 // The numeric suffix encodes pixel pitch (first two digits = pitch x10) and version (last digit).
@@ -2900,6 +2915,10 @@ const PARTS_FIELD_PREFIXES = [
   'parts_removed_desc_',
 
   'parts_removed_part_',
+
+  // The removed part's serial: printed by the maintenance renderer and sent by the app,
+  // but missing here, so a row carrying only that value did not count as a filled row.
+  'parts_removed_serial_',
 
   'parts_used_part_',
 
@@ -8733,7 +8752,7 @@ function generateIndexHtml() {
 
 
 
-  const renderInlineInput = (name) => {
+  const renderInlineInput = (name, placeholder = '') => {
 
     const descriptor = descriptorByName.get(name);
 
@@ -8753,7 +8772,11 @@ function generateIndexHtml() {
 
     const valueAttr = initial ? ` value="${escapeHtml(initial)}"` : '';
 
-    return `<input type="text" name="${escapeHtml(descriptor.requestName)}"${valueAttr} />`;
+    // A column header alone is too terse in a narrow cell: "Part number" was being read as
+    // "how many". Each box says what it wants, with an example.
+    const placeholderAttr = placeholder ? ` placeholder="${escapeHtml(placeholder)}"` : '';
+
+    return `<input type="text" name="${escapeHtml(descriptor.requestName)}"${valueAttr}${placeholderAttr} />`;
 
   };
 
@@ -8851,13 +8874,13 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
               <td>${renderTypeInput(i)}</td>
 
-              <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_used_part_${i}`, 'Part number printed on the part, e.g. A5s')}</td>
 
-              <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_desc_${i}`, 'What the part is')}</td>
 
-              <td>${renderInlineInput(`parts_removed_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_part_${i}`, 'How many')}</td>
 
-              <td>${renderInlineInput(`parts_used_serial_${i}`)}</td>
+              <td>${renderInlineInput(`parts_used_serial_${i}`, 'Why it was replaced')}</td>
 
             </tr>`);
 
@@ -8867,13 +8890,15 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
               <td>${renderTypeInput(i)}</td>
 
-              <td>${renderInlineInput(`parts_removed_desc_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_desc_${i}`, 'What was taken out')}</td>
 
-              <td>${renderInlineInput(`parts_removed_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_part_${i}`, 'Part number printed on it, e.g. A5s')}</td>
 
-              <td>${renderInlineInput(`parts_used_part_${i}`)}</td>
+              <td>${renderInlineInput(`parts_removed_serial_${i}`, 'Serial of the part taken out')}</td>
 
-              <td>${renderInlineInput(`parts_used_serial_${i}`)}</td>
+              <td>${renderInlineInput(`parts_used_part_${i}`, 'Part number of the new one')}</td>
+
+              <td>${renderInlineInput(`parts_used_serial_${i}`, 'Serial of the new one')}</td>
 
             </tr>`);
 
@@ -8883,9 +8908,16 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
     const headers = isService
 
-      ? ['Type', 'Part / Batch', 'Desc', 'Qty', 'Reason']
+      ? ['Type', 'Part number', 'Description', 'Quantity', 'Reason']
 
-      : ['Type', 'Part batch (description)', 'Part number', 'Part used in display', 'Serial number'];
+      : [
+          'Type',
+          'Part removed (description)',
+          'Part number',
+          'Serial number (removed)',
+          'Part used in display',
+          'Serial number (used)',
+        ];
 
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
 
@@ -12337,6 +12369,11 @@ ${rows.join('\n')}
       </header>
 
       <form id="pm-form" enctype="multipart/form-data">
+
+        <!-- Provenance: which client made this report and which build of it. Hidden because
+             it is about the software, not about the visit - nobody should have to fill it in. -->
+        <input type="hidden" name="submitted_via" value="${escapeHtml(SUBMITTED_VIA_WEB)}" />
+        <input type="hidden" name="client_version" value="${escapeHtml(SERVICE2_CLIENT_VERSION)}" />
 
         <section class="card" data-template-selector>
 
@@ -16635,10 +16672,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         // report: submitting with any of them empty produces a document that is useless to
         // the customer, so the form sends the engineer back to fill them instead of
         // generating it. Keyed by form type — each document needs its own answer.
+        const PROJECT_NAME_REQUIRED = { name: 'lsc_project_name', label: 'LSC project name' };
+
         const REQUIRED_FIELDS = {
           service_report: [
             { name: 'end_customer_name', label: 'End customer name' },
             { name: 'batch_number', label: 'LSC Project number', projectNumber: true },
+            PROJECT_NAME_REQUIRED,
             { name: 'customer_representative', label: 'Customer representative' },
             { name: 'date_of_service', label: 'Date of service' },
             { name: 'site_location', label: 'Site location' },
@@ -16646,6 +16686,11 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             { name: 'led_display_model', label: 'LED display model / batch' },
             { name: 'work_performed', label: 'Work performed' },
           ],
+          // Vladimir's call: a report must not be able to enter the archive nameless. The
+          // browser has to refuse the same submission the app refuses, or the rule only
+          // holds for whoever happens to be using a phone.
+          maintenance: [PROJECT_NAME_REQUIRED],
+          installation_report: [PROJECT_NAME_REQUIRED],
         };
 
         const requiredFieldsFor = (formType) => REQUIRED_FIELDS[formType] || [];
@@ -26517,6 +26562,19 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
     }
 
 
+
+    // Stamp who generated this file into the PDF's own metadata. Invisible on the printed
+    // page, readable in any file inspector - so a document that has travelled away from the
+    // archive still says which client and which build produced it.
+    try {
+      const via = String(toSingleValue(req.body?.submitted_via) || SUBMITTED_VIA_WEB).trim();
+      const clientVersion = String(toSingleValue(req.body?.client_version) || SERVICE2_CLIENT_VERSION).trim();
+      pdfDoc.setCreator(`LSC LED Doc ${via} ${clientVersion}`.trim());
+      pdfDoc.setProducer(`LinArt service2 ${SERVICE2_CLIENT_VERSION}`);
+    } catch (err) {
+      // Metadata is a nice-to-have; never fail a submission over it.
+      console.warn(`[server] Unable to stamp PDF metadata: ${err.message}`);
+    }
 
     const pdfOutput = await pdfDoc.save();
 
