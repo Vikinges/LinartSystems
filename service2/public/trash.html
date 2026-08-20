@@ -5,187 +5,46 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trash — PDF files archive</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #f5f5fb;
-      color: #1c1c1e;
-      --base-font-size: 16px;
-      --accent: #1f3bf5;
-      --surface: #ffffff;
-      --surface-muted: #f1f5f9;
-      --border: #d8d8e5;
-      --text-muted: #475569;
-    }
-
-    body {
-      margin: 0;
-      padding: 1.5rem;
-      font-size: var(--base-font-size);
-    }
-
-    .container {
-      max-width: 1800px;
-      margin: 0 auto;
-      display: flex;
-      flex-direction: column;
-      gap: 1.5rem;
-      width: 100%;
-    }
-
-    header {
-      background: var(--surface);
-      padding: 1.5rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    header h1 { margin: 0; font-size: 1.75rem; }
-    header p { margin: 0; color: var(--text-muted); line-height: 1.4; }
-
-    .header-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
-    .header-meta { margin-top: 0.4rem; color: var(--text-muted); font-size: 0.95rem; }
-
-    .card {
-      background: var(--surface);
-      padding: 1.5rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .card h2 { margin: 0; font-size: 1.3rem; color: #1f2a5b; }
-
-    .button, .button:visited {
-      border: none;
-      background: var(--accent);
-      color: #fff;
-      padding: 0.75rem 1.25rem;
-      border-radius: 999px;
-      font-weight: 600;
-      cursor: pointer;
-      text-decoration: none;
-      text-align: center;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.35rem;
-    }
-
-    .button.secondary { background: #e2e8f0; color: #1e293b; }
-    .button.ghost { background: transparent; color: #1e293b; border: 1px solid var(--border); }
-    .button.small { padding: 0.45rem 0.8rem; font-size: 0.85rem; }
-    .button[disabled] { opacity: 0.5; cursor: default; }
-
-    /* The irreversible ones look irreversible. Everything on this page can be undone
-       except these, so they are the only red things here. */
-    .button.danger { background: #dc2626; color: #fff; }
-    .button.danger[disabled] { background: #fca5a5; }
-
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-
-    .toolbar-group { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-
-    .badge {
-      background: #e0e7ff;
-      color: #1e3a8a;
-      border-radius: 999px;
-      padding: 0.25rem 0.75rem;
-      font-size: 0.85rem;
-      font-weight: 600;
-    }
-
-    .table-wrap {
-      width: 100%;
-      overflow-x: auto;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-
-    table { width: 100%; border-collapse: collapse; min-width: 720px; }
-    thead { background: var(--surface-muted); }
-
-    th, td {
-      padding: 0.5rem 0.6rem;
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-      font-size: 0.9rem;
-      vertical-align: middle;
-    }
-
-    td.file-cell { max-width: 320px; word-break: break-all; }
-
-    .row-actions > div { display: flex; gap: 0.4rem; flex-wrap: wrap; }
-    .row-actions { white-space: nowrap; }
-
-    .expiry-soon { color: #b45309; font-weight: 600; }
-
-    .empty { text-align: center; color: var(--text-muted); padding: 1.5rem; }
-
-    .status { min-height: 1.2rem; color: var(--text-muted); }
-    .status.error { color: #dc2626; }
-
-    .notice {
-      padding: 0.75rem 1rem;
-      border-radius: 10px;
-      background: #eff6ff;
-      color: #1e3a8a;
-      font-size: 0.9rem;
-      line-height: 1.45;
-    }
-  </style>
+  <link rel="stylesheet" href="./theme.css" />
 </head>
 
 <body>
+  <div class="chrome">
+    <div class="chrome__brand"><span class="chrome__mark">SHARP</span> LED Solution Center</div>
+    <nav class="chrome__nav">
+      <a href="./files.html"><svg class="ic"><use href="./icons.svg#i-folder"></use></svg> <span>Archive</span></a>
+      <a href="./"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span>New report</span></a>
+      <a href="./trash.html" class="is-active"><svg class="ic"><use href="./icons.svg#i-trash"></use></svg> <span>Trash</span></a>
+    </nav>
+    <div class="chrome__spacer"></div>
+    <div class="chrome__meta" id="user-meta"></div>
+    <div class="chrome__meta" id="version-meta"></div>
+  </div>
+
   <div class="container">
-    <header>
-      <div class="header-row">
-        <div>
-          <h1>Trash</h1>
-          <p>Reports deleted from the archive. They stay here until you remove them, or until the retention period runs out.</p>
-          <div class="header-meta" id="user-meta"></div>
-          <div class="header-meta" id="version-meta"></div>
-        </div>
-        <div class="header-actions">
-          <a class="button secondary" href="./files.html">Back to archive</a>
-          <button class="button" type="button" id="refresh">Refresh</button>
-        </div>
+    <div class="page-head">
+      <div>
+        <h1>Trash</h1>
+        <p>Reports deleted from the archive. They stay here until you remove them, or until the retention period runs out.</p>
       </div>
-    </header>
+      <div class="stat-rail">
+        <div class="stat"><span class="stat__num" id="trash-count-num">0</span><span class="stat__label">In trash</span></div>
+        <div class="stat is-alert" style="display:none"><span class="stat__num" id="trash-soon-num">0</span><span class="stat__label">Expiring soon</span></div>
+      </div>
+    </div>
 
     <section class="card">
-      <p class="notice" id="retention-note">Deleted reports can be put back from here. Only “Delete permanently” removes them for good.</p>
-
-      <div class="toolbar">
-        <div class="toolbar-group">
-          <span class="badge" id="trash-count">0 in trash</span>
-        </div>
-        <div class="toolbar-group">
-          <button class="button danger" type="button" id="empty-trash" disabled>Empty trash</button>
+      <div class="card__head">
+        <p class="notice" id="retention-note" style="margin:0;flex:1;min-width:300px">Deleted reports can be put back from here. Only “Delete permanently” removes them for good.</p>
+        <div class="toolbar__group">
+          <button class="button ghost" type="button" id="refresh"><svg class="ic"><use href="./icons.svg#i-refresh"></use></svg> Refresh</button>
+          <button class="button danger" type="button" id="empty-trash" disabled><svg class="ic"><use href="./icons.svg#i-trash"></use></svg> Empty trash</button>
         </div>
       </div>
 
-      <div class="status" id="status" aria-live="polite"></div>
+      <div class="status-bar" id="status-wrap" hidden>
+        <div class="status" id="status" aria-live="polite"></div>
+      </div>
 
       <div class="table-wrap">
         <table id="trash-table">
@@ -271,13 +130,17 @@
       };
 
       const statusEl = document.getElementById('status');
+      const statusWrap = document.getElementById('status-wrap');
       const setStatus = (message, isError) => {
         statusEl.textContent = message || '';
         statusEl.classList.toggle('error', Boolean(isError));
+        if (statusWrap) statusWrap.hidden = !message;
       };
 
       const bodyEl = document.getElementById('trash-body');
-      const countEl = document.getElementById('trash-count');
+      const countEl = document.getElementById('trash-count-num');
+
+      const soonEl = document.getElementById('trash-soon-num');
       const emptyBtn = document.getElementById('empty-trash');
       const retentionNote = document.getElementById('retention-note');
 
@@ -297,6 +160,15 @@
         if (!response.ok) throw new Error(`Request failed (${response.status})`);
         return response.json().catch(() => ({ ok: true }));
       };
+
+      const TYPE_LABELS = {
+        service_report: 'Service',
+        maintenance: 'Maintenance',
+        installation_report: 'Installation',
+        daily_report: 'Daily report',
+      };
+
+      const typeLabel = (value) => TYPE_LABELS[value] || value || '-';
 
       const reportPath = (item, action) =>
         'api/files/' + encodeURIComponent(item.templateType)
@@ -318,7 +190,19 @@
               + 'Only “Delete permanently” removes them sooner.';
           }
 
-          countEl.textContent = items.length + (items.length === 1 ? ' in trash' : ' in trash');
+          countEl.textContent = String(items.length);
+
+          // How many the retention sweep is about to take on its own. Shown only when
+          // it is not zero: an alert that is always on screen is not an alert.
+          const soon = items.filter((it) => {
+            const left = daysUntil(it.expiresAt || it.expiryAt);
+            return left !== null && left <= 3;
+          }).length;
+          if (soonEl && soonEl.closest('.stat')) {
+            soonEl.textContent = String(soon);
+            soonEl.closest('.stat').style.display = soon ? '' : 'none';
+          }
+
           emptyBtn.disabled = items.length === 0;
 
           if (!items.length) {
@@ -333,7 +217,7 @@
 
             const summary = item.summary || {};
             const cells = [
-              item.templateType || '-',
+              typeLabel(item.templateType),
               summary.projectNumber || item.projectNumber || '-',
               item.filename || '-',
               formatDateTime(item.deletedAt || item.trashedAt),
@@ -341,7 +225,7 @@
             ];
             cells.forEach((value, index) => {
               const td = document.createElement('td');
-              if (index === 2) td.className = 'file-cell';
+              if (index === 2) td.className = 'file-cell mono';
               td.textContent = value || '-';
               row.appendChild(td);
             });
@@ -352,9 +236,15 @@
             const expires = item.expiresAt || item.expiryAt;
             if (expires) {
               const left = daysUntil(expires);
-              expiryCell.textContent = formatDay(expires)
-                + (left !== null && left >= 0 ? ` (${left}d)` : '');
-              if (left !== null && left <= 3) expiryCell.className = 'expiry-soon';
+              const soonHere = left !== null && left <= 3;
+              const chip = document.createElement('span');
+              chip.className = 'chip' + (soonHere ? ' is-warn' : '');
+              chip.innerHTML = '<svg class="ic"><use href="./icons.svg#i-clock"></use></svg>';
+              chip.append(document.createTextNode(
+                left !== null && left >= 0 ? left + 'd' : formatDay(expires),
+              ));
+              chip.title = 'Removed for good on ' + formatDay(expires);
+              expiryCell.appendChild(chip);
             } else {
               expiryCell.textContent = '-';
             }
@@ -366,8 +256,10 @@
 
             const restore = document.createElement('button');
             restore.type = 'button';
-            restore.className = 'button ghost small';
-            restore.textContent = 'Restore';
+            restore.className = 'button icon';
+            restore.title = 'Restore to the archive';
+            restore.setAttribute('aria-label', 'Restore ' + item.filename);
+            restore.innerHTML = '<svg class="ic"><use href="./icons.svg#i-restore"></use></svg>';
             restore.addEventListener('click', async () => {
               restore.disabled = true;
               try {
@@ -382,8 +274,10 @@
 
             const purge = document.createElement('button');
             purge.type = 'button';
-            purge.className = 'button danger small';
-            purge.textContent = 'Delete permanently';
+            purge.className = 'button icon is-danger';
+            purge.title = 'Delete permanently';
+            purge.setAttribute('aria-label', 'Delete ' + item.filename + ' permanently');
+            purge.innerHTML = '<svg class="ic"><use href="./icons.svg#i-trash"></use></svg>';
             purge.addEventListener('click', async () => {
               // Names the file rather than counting: a count is not enough when nothing
               // can be undone afterwards.
@@ -414,7 +308,7 @@
 
       emptyBtn.addEventListener('click', async () => {
         const count = countEl.textContent;
-        if (!confirm('Permanently delete everything in the trash (' + count + ')?\n\nThis cannot be undone.')) return;
+        if (!confirm('Permanently delete all ' + count + ' report(s) in the trash?\n\nThis cannot be undone.')) return;
         emptyBtn.disabled = true;
         setStatus('Emptying trash…');
         try {
