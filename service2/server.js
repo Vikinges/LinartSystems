@@ -5350,9 +5350,9 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     [
 
-      { label: 'The whole agreed job', value: boolVal('acceptance_overall') },
+      { label: 'The whole agreed project', value: boolVal('acceptance_overall') },
 
-      { label: 'Only a finished part of the job, accepted on its own', value: boolVal('acceptance_partial') },
+      { label: 'Only a finished part of the project, accepted on its own', value: boolVal('acceptance_partial') },
 
     ],
 
@@ -5363,7 +5363,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   drawBlockRow(
     [
       {
-        label: 'Which part of the job',
+        label: 'Which part of the project',
         value: val('partial_services'),
         height: 60,
         align: 'left',
@@ -12540,7 +12540,7 @@ ${renderTextInput('customer_representative', 'Contact person', { allowUnknown: t
 
 ${renderTextInput('batch_number', 'LSC Project number')}
 
-${renderTextInput('lsc_project_name', 'LSC project name', { allowUnknown: true, placeholder: 'What the customer calls this job, e.g. Hub Leipzig hall 3' })}
+${renderTextInput('lsc_project_name', 'LSC project name', { allowUnknown: true, placeholder: 'What the customer calls this project, e.g. Hub Leipzig hall 3' })}
 
 ${renderTextInput('service_company_name', 'Service company name')}
 
@@ -12645,17 +12645,17 @@ ${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true,
 
           <h2>What is being accepted</h2>
 
-          <p>A part accepted on its own starts its own warranty, so tick it only when that part is genuinely finished and handed over.</p>
+          <p>A part accepted on its own starts its own warranty, so tick it only when that part of the project is genuinely finished and handed over.</p>
 
           <div class="grid two-col">
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The whole agreed job</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The whole agreed project</span></label>
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the job, accepted on its own</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the project, accepted on its own</span></label>
 
           </div>
 
-${renderTextInput('partial_services', 'Which part of the job', { textarea: true, allowUnknown: true, placeholder: 'Name the finished part being accepted, e.g. the main wall only' })}
+${renderTextInput('partial_services', 'Which part of the project', { textarea: true, allowUnknown: true, placeholder: 'Name the finished part being accepted, e.g. the main wall only' })}
 
         </section>
 
