@@ -159,12 +159,12 @@ async function checkReports() {
       fields: {
         ...common,
         template_type: 'maintenance',
-        parts_type_1: 'Receiver card',
+        parts_type_1: 'Receiving card',
         parts_used_part_1: 'RC-A5',
         spare_stock_type_1: 'Hub board',
         spare_stock_qty_1: '2',
       },
-      expect: ['Smoke Test GmbH', '20-0000', 'Siemens Erlangen', 'Receiver card', 'Hub board'],
+      expect: ['Smoke Test GmbH', '20-0000', 'Siemens Erlangen', 'Receiving card', 'Hub board'],
     },
     {
       name: 'installation report',

@@ -2966,7 +2966,7 @@ const PARTS_FIELD_PREFIXES = [
 // Full names only — the abbreviations were dropped so the document reads the same to
 // anyone, including a customer who has never seen the internal shorthand.
 const SPARE_PART_TYPES = [
-  'Receiver card',
+  'Receiving card',
   'Hub board',
   'Pixel card',
   'Power supply',
@@ -3515,26 +3515,102 @@ function resolveTextFieldStyle(name) {
 // One Site-information block for every document, so a service, maintenance and installation
 // report open with the same grid instead of three near-identical variants. Empty fields are
 // dropped, so a form that never asks for a phone number simply prints one row fewer.
-function buildSiteInfoRows(body, options = {}) {
+// Height of the small caption strip that names each column on the page.
+const SITE_INFO_CAPTION_HEIGHT = 14;
+
+// The foot of every sheet: the baseline the page number and the submitted-by line sit on,
+// and the strip above the paper edge that no content block may be laid into.
+const PAGE_FOOTER_BASELINE = 24;
+const PAGE_FOOTER_BAND = 34;
+
+// Marks a column position that must stay empty rather than let its neighbour slide across.
+const PLACEHOLDER_FIELD = Symbol('placeholder');
+
+// The two sides of the job, in the order the web form asks for them. Kept as two lists
+// rather than one flat array because the page draws them as two columns: with a flat list
+// split in half, one empty field moved the boundary and a customer field landed on our
+// side of the page.
+function buildSiteInfoColumns(body, options = {}) {
   // No "Service type" row: the document already says which report this is, so repeating
   // "installation" on an installation report told the reader nothing.
   // dateLabel: an installation runs over days, so its first date is a start date, not the
   // single "date of service" the other two reports describe.
   const dateLabel = options.dateLabel || 'Date of service';
-  return [
-    { label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' },
-    { label: 'LSC project number', value: resolveProjectNumber(body) },
-    { label: 'LSC project name', value: resolveProjectName(body) },
-    { label: 'Site location', value: toSingleValue(body?.site_location) || '' },
-    { label: dateLabel, value: formatDisplayDate(toSingleValue(body?.date_of_service)) },
-    { label: 'LED display model / batch', value: toSingleValue(body?.led_display_model) || '' },
-    { label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' },
-    // The person who received the work on site, plus how to reach them — the app collects
-    // all three and they were previously nowhere on the page.
-    { label: 'Contact person', value: toSingleValue(body?.customer_contact) || toSingleValue(body?.customer_representative) || '' },
-    { label: 'Phone', value: toSingleValue(body?.customer_phone) || '' },
-    { label: 'Email', value: toSingleValue(body?.customer_email) || '' },
-  ].filter((row) => row.value && String(row.value).trim());
+  // A row is a list of cells. Two cells share the line, the way the web form asks for them:
+  // a project number belongs beside its name, a phone beside its email.
+  const clean = (rows) =>
+    rows
+      .map((row) => row.filter((cell) => cell.value && String(cell.value).trim()))
+      .filter((row) => row.length);
+  return {
+    // Ours: who did the work, under which project, when, on which display.
+    // The date sits second and the project pair third so that the split row lands on the
+    // same line as the customer's phone-and-email: with the pair second, one side of the
+    // block was divided a row above the other and the grid looked accidental.
+    service: clean([
+      [{ label: 'Service company name', value: toSingleValue(body?.service_company_name) || '' }],
+      [{ label: dateLabel, value: formatDisplayDate(toSingleValue(body?.date_of_service)) }],
+      [
+        { label: 'LSC project number', value: resolveProjectNumber(body), span: 1 },
+        { label: 'LSC project name', value: resolveProjectName(body), span: 1.6 },
+      ],
+      [{ label: 'LED display model / batch', value: joinModelAndBatch(body) }],
+    ]),
+    // Theirs: who received it, how to reach them, and where the display stands.
+    customer: clean([
+      [{ label: 'End customer name', value: toSingleValue(body?.end_customer_name) || '' }],
+      // The person who received the work on site, plus how to reach them: the app collects
+      // all three and they were previously nowhere on the page.
+      [{ label: 'Contact person', value: toSingleValue(body?.customer_contact) || toSingleValue(body?.customer_representative) || '' }],
+      [
+        { label: 'Phone', value: toSingleValue(body?.customer_phone) || '', span: 1 },
+        { label: 'Email', value: toSingleValue(body?.customer_email) || '', span: 1.5 },
+      ],
+      [{ label: 'Site location', value: toSingleValue(body?.site_location) || '' }],
+    ]),
+  };
+}
+
+// The cell is labelled "LED display model / batch" and prints both when both are known -
+// the model alone when the batch was not recorded, which is most app submissions today.
+function joinModelAndBatch(body) {
+  const model = String(toSingleValue(body?.led_display_model) || '').trim();
+  const batch = String(toSingleValue(body?.led_batch) || '').trim();
+  if (model && batch) return `${model} / ${batch}`;
+  return model || batch;
+}
+
+// One entry per printed row: [our field, their field]. Either side may be null when that
+// side has fewer filled fields - the other keeps its column.
+function buildSiteInfoPairs(body, options = {}) {
+  const { service, customer } = buildSiteInfoColumns(body, options);
+  const rowCount = Math.max(service.length, customer.length);
+  const pairs = [];
+  for (let i = 0; i < rowCount; i += 1) pairs.push([service[i] || null, customer[i] || null]);
+  return pairs;
+}
+
+// Flat reading of the same data, for callers that only want to know whether there is
+// anything to print.
+function buildSiteInfoRows(body, options = {}) {
+  const { service, customer } = buildSiteInfoColumns(body, options);
+  return [...service, ...customer].flat();
+}
+
+// Names the two columns above the grid. A caption rather than another framed row: it
+// labels the table, it is not a value in it.
+function drawSiteInfoSideCaptions(page, font, color, colX, columnWidth, y) {
+  ['SERVICE COMPANY', 'CUSTOMER'].forEach((text, index) => {
+    const size = 8;
+    const width = font.widthOfTextAtSize(text, size);
+    page.drawText(text, {
+      x: colX[index] + Math.max(0, (columnWidth - width) / 2),
+      y,
+      size,
+      font,
+      color,
+    });
+  });
 }
 
 // Spares left with the customer after a maintenance visit — the stock the next crew will
@@ -4158,7 +4234,10 @@ function addPageNumbers(pdfDoc, font, options = {}) {
 
   const xMargin = options.margin || 18;
 
-  const footerY = options.footerY || 10;
+  // 24pt baseline keeps the descenders about 7.7mm clear of the edge - inside what every
+  // office printer can put ink on. At the old 10pt this line was 2.6mm from the edge and
+  // came off the printer cut in half.
+  const footerY = options.footerY || PAGE_FOOTER_BASELINE;
 
   const total = pages.length;
 
@@ -4952,6 +5031,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   const BLOCK_VALUE_MIN_HEIGHT = 34;
   const BLOCK_VALUE_FONT_SIZE = 10.5;
   const BLOCK_COL_GAP = 10;
+
+  // The halves of a paired column share their border, the way cells of one table do. With
+  // a gap they read as two separate boxes that happen to be next to each other.
+  const BLOCK_PAIR_GAP = 0;
   // Zero: the maintenance grid stacks its rows with shared borders, and a gap here made
   // the same block read as a looser, different table.
   const BLOCK_ROW_GAP = 0;
@@ -5040,7 +5123,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   const ensureSpace = (requiredHeight, heading) => {
 
-    if (cursorY - requiredHeight < margin) {
+    if (cursorY - requiredHeight < PAGE_FOOTER_BAND) {
 
       addPageWithHeading(heading || headingTitle);
 
@@ -5109,15 +5192,51 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // page: an odd number of rows in a two-column grid otherwise ends with one value (an
   // email address, say) running the full width and looking like a different kind of field.
   const drawBlockRow = (fields, { fullWidth = false, halfWidth = false } = {}) => {
-    const normalized = (fields || []).map(normalizeBlockField).filter(Boolean);
-    if (!normalized.length) return;
+    // Two kinds of empty are not the same kind. A field that normalises away is dropped and
+    // the next one moves up, as it always has. An explicit null is a placeholder: it holds
+    // its column, so a lone customer-side value stays on the customer side.
+    // An array in a slot is a pair that belongs on one line - a project number beside its
+    // name, a phone beside an email - and splits that column in two.
+    const slots = (fields || []).map((field) => {
+      if (field === null) return PLACEHOLDER_FIELD;
+      if (Array.isArray(field)) {
+        const kept = field.map(normalizeBlockField).filter(Boolean);
+        return kept.length ? kept : null;
+      }
+      return normalizeBlockField(field);
+    });
+    const normalized = [];
+    slots.forEach((slot) => {
+      if (!slot) return;
+      normalized.push(slot === PLACEHOLDER_FIELD ? null : slot);
+    });
+    while (normalized.length && normalized[normalized.length - 1] === null) normalized.pop();
+    if (!normalized.some(Boolean)) return;
     const columns = !fullWidth && (halfWidth || normalized.length > 1) ? 2 : 1;
     const colGap = columns === 1 ? 0 : BLOCK_COL_GAP;
     const columnWidth =
       columns === 1 ? page.getWidth() - margin * 2 : (page.getWidth() - margin * 2 - colGap) / 2;
+    // Every box that will actually be drawn, with the width it gets: one per column, or two
+    // side by side where the column carries a pair.
+    const cells = [];
+    normalized.forEach((slot, index) => {
+      if (!slot) return;
+      const baseX = margin + index * (columnWidth + colGap);
+      const group = Array.isArray(slot) ? slot : [slot];
+      const available = columnWidth - BLOCK_PAIR_GAP * (group.length - 1);
+      const spans = group.map((field) => (Number(field.span) > 0 ? Number(field.span) : 1));
+      const spanTotal = spans.reduce((sum, span) => sum + span, 0);
+      let cellX = baseX;
+      group.forEach((field, position) => {
+        const width = (available * spans[position]) / spanTotal;
+        cells.push({ field, x: cellX, width });
+        cellX += width + BLOCK_PAIR_GAP;
+      });
+    });
+    if (!cells.length) return;
     const maxDataHeight = Math.max(
       BLOCK_VALUE_MIN_HEIGHT,
-      ...normalized.map((field) => {
+      ...cells.map(({ field, width }) => {
         const paddingY = field.paddingY ?? 10;
         const text = String(field.text ?? '');
         // An empty box keeps the minimum height; measuring nothing yields nothing useful.
@@ -5126,7 +5245,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
           // The same function the drawing path uses, so the measured height and the drawn
           // height cannot disagree - measuring with a different one is how the address box
           // stayed 34pt tall while two lines were painted into it.
-          const layout = layoutMultilineText(text, font, columnWidth - 16, {
+          const layout = layoutMultilineText(text, font, width - 16, {
             fontSize: BLOCK_VALUE_FONT_SIZE,
             minFontSize: 9,
             lineHeightMultiplier: 1.15,
@@ -5145,14 +5264,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     const rowHeight = BLOCK_HEADER_HEIGHT + maxDataHeight;
     if (ensureSpace(rowHeight + BLOCK_ROW_GAP)) resumeSection();
     atPageTop = false;
-    normalized.forEach((field, index) => {
-      const x = margin + index * (columnWidth + colGap);
+    cells.forEach(({ field, x, width }) => {
       const headerY = cursorY - BLOCK_HEADER_HEIGHT;
       const dataY = headerY - maxDataHeight;
       page.drawRectangle({
         x,
         y: headerY,
-        width: columnWidth,
+        width,
         height: BLOCK_HEADER_HEIGHT,
         borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
@@ -5162,7 +5280,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       const labelWidth = font.widthOfTextAtSize(field.label, BLOCK_HEADER_FONT_SIZE);
 
       page.drawText(field.label, {
-        x: x + Math.max(6, (columnWidth - labelWidth) / 2),
+        x: x + Math.max(6, (width - labelWidth) / 2),
         y: headerY + BLOCK_HEADER_HEIGHT - BLOCK_HEADER_FONT_SIZE,
         size: BLOCK_HEADER_FONT_SIZE,
         font,
@@ -5171,13 +5289,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       page.drawRectangle({
         x,
         y: dataY,
-        width: columnWidth,
+        width,
         height: maxDataHeight,
         borderWidth: TABLE_BORDER_WIDTH,
         borderColor: TABLE_BORDER_COLOR,
         color: rgb(1, 1, 1),
       });
-      drawCenteredTextBlock(page, String(field.text ?? ''), font, { x, y: dataY, width: columnWidth, height: maxDataHeight }, {
+      drawCenteredTextBlock(page, String(field.text ?? ''), font, { x, y: dataY, width, height: maxDataHeight }, {
         align: field.align || 'center',
         verticalAlign: field.verticalAlign || 'middle',
         paddingX: 8,
@@ -5320,24 +5438,33 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   // "Project details": one grid, one order, so the three documents read alike.
   // "Building project" struck off by Vladimir — the project number identifies the job and
   // the second line only repeated it in words.
-  const installSiteRows = buildSiteInfoRows(body, { dateLabel: 'Installation start date' });
+  const installSitePairs = buildSiteInfoPairs(body, { dateLabel: 'Installation start date' });
 
-  if (installSiteRows.length) {
+  if (installSitePairs.length) {
 
     drawSectionTitle('Site information');
 
-    const siteRowsPerCol = Math.ceil(installSiteRows.length / 2);
+    const installColWidth = (page.getWidth() - margin * 2 - BLOCK_COL_GAP) / 2;
 
-    for (let i = 0; i < siteRowsPerCol; i += 1) {
+    drawSiteInfoSideCaptions(
+      page,
+      font,
+      headingColor,
+      [margin, margin + installColWidth + BLOCK_COL_GAP],
+      installColWidth,
+      cursorY - SITE_INFO_CAPTION_HEIGHT + 4,
+    );
 
-      const pair = [installSiteRows[i], installSiteRows[i + siteRowsPerCol]].filter(Boolean);
+    cursorY -= SITE_INFO_CAPTION_HEIGHT;
+
+    installSitePairs.forEach((pair) => {
 
       drawBlockRow(
-        pair.map((row) => ({ label: row.label, value: row.value })),
-        pair.length === 1 ? { halfWidth: true } : {},
+        pair.map((cells) => (cells ? cells.map((cell) => ({ label: cell.label, value: cell.value, span: cell.span })) : null)),
+        pair.filter(Boolean).length === 1 ? { halfWidth: true } : {},
       );
 
-    }
+    });
 
   }
 
@@ -6101,7 +6228,7 @@ async function drawDailyReportPage(pdfDoc, font, reportData, options = {}) {
 
     const rowHeight = labelHeight + valueHeight;
 
-    if (cursorY - rowHeight < margin) {
+    if (cursorY - rowHeight < PAGE_FOOTER_BAND) {
 
       page = pdfDoc.addPage([pageSize.width, pageSize.height]);
 
@@ -6468,7 +6595,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const ensureSpace = (requiredHeight, heading) => {
 
-    if (cursorY - requiredHeight < margin) {
+    if (cursorY - requiredHeight < PAGE_FOOTER_BAND) {
 
       return addContinuationPage(heading);
 
@@ -6525,7 +6652,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   const ensureBlock = (height, heading) => {
 
-    if (cursorY - height < margin) {
+    if (cursorY - height < PAGE_FOOTER_BAND) {
 
       addPageWithHeading(heading);
 
@@ -7621,13 +7748,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   // Only filled fields make it onto the page — an empty framed box says nothing and makes
   // the document look half-finished. Checklists keep their own rule (a row shows when it is
   // ticked or carries a note), so anything the engineer actually touched still prints.
-  const siteInfoRows = buildSiteInfoRows(body);
+  const sitePairs = buildSiteInfoPairs(body);
 
-  const hasSiteInfo = siteInfoRows.length > 0;
+  const hasSiteInfo = sitePairs.length > 0;
 
   if (hasSiteInfo) {
 
-    const rowsPerCol = Math.ceil(siteInfoRows.length / 2);
+    const rowsPerCol = sitePairs.length;
 
     const columnWidth = (page.getWidth() - margin * 2 - 8) / 2;
 
@@ -7637,7 +7764,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const rowHeight = headerHeight + dataHeight;
 
-    const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20;
+    const blockHeight = rowsPerCol * (headerHeight + dataHeight) + 20 + SITE_INFO_CAPTION_HEIGHT;
 
     ensureBlock(blockHeight);
 
@@ -7645,13 +7772,45 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const colX = [margin, margin + columnWidth + 8];
 
-    siteInfoRows.forEach((row, idx) => {
+    drawSiteInfoSideCaptions(page, font, headingColor, colX, columnWidth, cursorY - SITE_INFO_CAPTION_HEIGHT + 4);
 
-      const colIdx = idx < rowsPerCol ? 0 : 1;
+    cursorY -= SITE_INFO_CAPTION_HEIGHT;
 
-      const rowIdx = idx % rowsPerCol;
+    // One cell per filled field, carrying the column it belongs to: the sides are decided
+    // by buildSiteInfoPairs, never by counting halfway down a flat list.
+    const siteCells = [];
 
-      const x = colX[colIdx];
+    const SITE_PAIR_GAP = 0;
+
+    sitePairs.forEach((cellRows, rowIdx) => {
+
+      cellRows.forEach((cells, colIdx) => {
+
+        if (!cells) return;
+
+        const available = columnWidth - SITE_PAIR_GAP * (cells.length - 1);
+
+        const spans = cells.map((cell) => (Number(cell.span) > 0 ? Number(cell.span) : 1));
+
+        const spanTotal = spans.reduce((sum, span) => sum + span, 0);
+
+        let cellX = colX[colIdx];
+
+        cells.forEach((row, position) => {
+
+          const width = (available * spans[position]) / spanTotal;
+
+          siteCells.push({ row, x: cellX, width, rowIdx });
+
+          cellX += width + SITE_PAIR_GAP;
+
+        });
+
+      });
+
+    });
+
+    siteCells.forEach(({ row, x, width: columnWidth, rowIdx }) => {
 
       const y = cursorY - rowHeight * rowIdx;
 
@@ -9263,7 +9422,7 @@ ${rows.join('\n')}
 
       .container {
 
-        max-width: 960px;
+        max-width: 1240px;
 
         margin: 0 auto;
 
@@ -12292,6 +12451,140 @@ ${rows.join('\n')}
 
       /* Both header controls sit in one row instead of the Admin button being
          absolutely positioned on its own - a second control had nowhere to go. */
+      /* Two named columns: our side of the job and the customer's. The rule between
+         them does the separating, so neither needs a box of its own. */
+      .site-info {
+
+        display: grid;
+
+        /* minmax(0,...) and not plain 1fr: a date input and two selects have an intrinsic
+           minimum width, and plain 1fr lets them push the column wider than its half —
+           the two sides came out 450 and 491 and the block overflowed its card. */
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+        /* The gutter is split evenly between the two sides so both get the same width;
+           the rule between them sits in the middle of it. */
+        gap: 0;
+
+      }
+
+      .site-info__col {
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 1rem;
+
+        min-width: 0;
+
+      }
+
+      /* Both sides have four rows, and they have to sit on the same lines: the hint under
+         the project number is taller than a plain field, and with two independent columns
+         it pushed our side down so Date of service no longer lined up with Phone. Subgrid
+         makes the two columns share the parent's rows, so whatever grows on one side
+         grows the matching row on the other. Browsers without it fall back to the flex
+         stacking above - unaligned, but never broken. */
+      @supports (grid-template-rows: subgrid) {
+
+        .site-info {
+
+          grid-template-rows: repeat(5, auto);
+
+          row-gap: 1rem;
+
+        }
+
+        .site-info__col {
+
+          display: grid;
+
+          grid-row: 1 / -1;
+
+          grid-template-rows: subgrid;
+
+          gap: 0;
+
+        }
+
+      }
+
+      .site-info__col:first-child {
+
+        padding-right: 2.5rem;
+
+      }
+
+      .site-info__col + .site-info__col {
+
+        padding-left: 2.5rem;
+
+        border-left: 1px solid #e2e2e5;
+
+      }
+
+      .site-info input,
+      .site-info select {
+
+        width: 100%;
+
+        min-width: 0;
+
+      }
+
+      .site-info__title {
+
+        margin: 0 0 0.25rem;
+
+        font-size: 0.72rem;
+
+        font-weight: 700;
+
+        letter-spacing: 0.08em;
+
+        text-transform: uppercase;
+
+        color: #6e6e77;
+
+      }
+
+      /* Three on a line: display type, model number and the batch they came from. */
+      .site-info__trio {
+
+        display: grid;
+
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.7fr);
+
+        gap: 0.75rem;
+
+      }
+
+      /* Fields that belong together on one line: number and name, phone and email. */
+      .site-info__pair {
+
+        display: grid;
+
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+        gap: 0.75rem;
+
+      }
+
+      @media (max-width: 900px) {
+
+        .site-info { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; row-gap: 1.75rem; }
+
+        .site-info__col { display: flex; grid-row: auto; grid-template-rows: none; gap: 1rem; }
+
+        .site-info__trio { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+        .site-info__col:first-child { padding-right: 0; }
+
+        .site-info__col + .site-info__col { padding-left: 0; border-left: 0; padding-top: 1.75rem; border-top: 1px solid #e2e2e5; }
+
+      }
+
       .header-nav {
 
         position: absolute;
@@ -12747,52 +13040,81 @@ ${renderTextInput(DAILY_REPORT_FIELDS.reportText, 'Report text', { textarea: tru
 
           <h2>Site information</h2>
 
-          <div class="grid two-col">
+          <!-- Two columns, because these ten fields answer two different questions: who we
+               are on this job, and who the customer is. Mixed into one grid the engineer had
+               to read every label to find the one field they were looking for. -->
+          <div class="site-info">
 
-${renderTextInput('end_customer_name', 'End customer name')}
+            <div class="site-info__col">
 
-${renderTextInput('site_location', 'Site location')}
-
-${renderTextInput('customer_representative', 'Contact person', { allowUnknown: true })}
-<input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
-
-${renderTextInput('batch_number', 'LSC Project number')}
-
-${renderTextInput('lsc_project_name', 'LSC project name', { allowUnknown: true, placeholder: 'What the customer calls this project, e.g. Hub Leipzig hall 3' })}
+              <p class="site-info__title">Service company</p>
 
 ${renderTextInput('service_company_name', 'Service company name')}
 
 ${renderTextInput('date_of_service', 'Date of service', { type: 'date' })}
 
+              <!-- Third, not second: this is the row that splits in two, and it lines up
+                   with the customer's phone-and-email row only from here. -->
+              <div class="site-info__pair">
+
+${renderTextInput('batch_number', 'LSC project number')}
+
+${renderTextInput('lsc_project_name', 'LSC project name', { allowUnknown: true, placeholder: 'What the customer calls this project' })}
+
+              </div>
+
+              <!-- The display the document is about, picked here rather than in a card of its
+                   own: it is part of what we installed, not a separate subject. -->
+              <div class="field" data-form-types="service_report,maintenance,installation_report">
+                <span>LED display model / batch</span>
+                <!-- The document prints this cell as "LED display model / batch" and the
+                     batch was nowhere to be entered: the word was left over from
+                     batch_number, which is the project number under an old name. -->
+                <div class="site-info__trio">
+                  <select id="led-code-select">
+                    <option value="">Type&hellip;</option>
+                    ${ledCodeGroups().map((g) => `<option value="${escapeHtml(g.code)}">${escapeHtml(g.code)}</option>`).join('')}
+                  </select>
+                  <select id="led-number-select" disabled>
+                    <option value="">Model No.&hellip;</option>
+                  </select>
+                  <input type="text" name="led_batch" id="led-batch-input" placeholder="Batch" autocomplete="off" />
+                </div>
+              </div>
+
+            </div>
+
+            <div class="site-info__col">
+
+              <p class="site-info__title">Customer</p>
+
+${renderTextInput('end_customer_name', 'End customer name')}
+
+${renderTextInput('customer_representative', 'Contact person', { allowUnknown: true })}
+<input type="hidden" name="attendee_client" id="attendee-client-hidden" data-form-types="service_report,maintenance" />
+
+              <div class="site-info__pair">
+
 ${renderTextInput('customer_phone', 'Phone', { type: 'tel', allowUnknown: true })}
 
 ${renderTextInput('customer_email', 'Email', { type: 'email', allowUnknown: true })}
+
+              </div>
+
+${renderTextInput('site_location', 'Site location')}
+
+            </div>
 
           </div>
 
         </section>
 
-        <section class="card" data-form-types="service_report,maintenance,installation_report">
+        <section data-form-types="service_report,maintenance,installation_report">
 
-          <h2>Display model</h2>
-
-
-<!-- Wherever the document talks about the display, the engineer picks its model here —
-     acceptance certificates name the installed display too, so this belongs on the
-     installation form as well (only the daily report has no use for it). -->
-<div class="field" data-form-types="service_report,maintenance,installation_report">
-  <label for="led-code-select">LED model picker (type &rarr; number)</label>
-  <div style="display:flex;gap:8px;">
-    <select id="led-code-select" style="flex:1;min-width:0;">
-      <option value="">Type&hellip;</option>
-      ${ledCodeGroups().map((g) => `<option value="${escapeHtml(g.code)}">${escapeHtml(g.code)}</option>`).join('')}
-    </select>
-    <select id="led-number-select" style="flex:1;min-width:0;" disabled>
-      <option value="">Model No.&hellip;</option>
-    </select>
-  </div>
-</div>
-<!-- led_display_model is derived from the picker above; kept as a hidden field so the
+<!-- The picker itself moved into Site information; what stays here is the hidden field
+     it writes into and the script that drives it. Rendered without a heading so the
+     card collapses to nothing visible. -->
+<!-- led_display_model is derived from the picker; kept as a hidden field so the
      user does not re-enter the same value (was a visible duplicate). -->
 <input type="hidden" name="led_display_model" id="led-display-model-hidden" />
 <script>
@@ -15085,6 +15407,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           led_display_model: formEl.querySelector('input[name="led_display_model"]'),
 
+          led_batch: formEl.querySelector('input[name="led_batch"]'),
+
           date_of_service: formEl.querySelector('input[name="date_of_service"]'),
 
           service_company_name: formEl.querySelector('input[name="service_company_name"]'),
@@ -15148,6 +15472,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             site_location: card.site_location,
 
             led_display_model: card.led_display_model,
+
+            led_batch: card.led_batch,
 
             date_of_service: card.date_of_service,
 
@@ -26570,6 +26896,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
       assignIfValue('site_location', toSingleValue(req.body?.site_location));
 
       assignIfValue('led_display_model', toSingleValue(req.body?.led_display_model));
+      assignIfValue('led_batch', toSingleValue(req.body?.led_batch));
       assignIfValue('batch_number', toSingleValue(req.body?.batch_number));
       assignIfValue('lsc_project_name', resolveProjectName(req.body));
       assignIfValue('date_of_service', toSingleValue(req.body?.date_of_service));
@@ -26960,7 +27287,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
         x: 36,
 
-        y: 24,
+        y: PAGE_FOOTER_BASELINE,
 
         size: 10,
 
