@@ -7408,10 +7408,11 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       },
     },
 
-    // Renamed from "Brightness uniformity" in plain words: the people filling this in are not
-    // all confident in English, and "uniformity" is the kind of term that gets guessed at.
+    // "Uniformity" is the term the trade uses and the one Vladimir wants on the document;
+    // the plain-words version stays in brackets for the engineers who are less sure in
+    // English, which was the reason the wording was softened in the first place.
     {
-      action: 'Even brightness (no dark or bright spots)',
+      action: 'Brightness uniformity (no dark or bright spots)',
       resolveChecked: (b) => /^(ok|yes|good)$/i.test(String(toSingleValue(b?.led_brightness_uniformity) || '').trim()),
       resolveNote: (b) => {
         const v = String(toSingleValue(b?.led_brightness_uniformity) || '').trim();
@@ -7419,10 +7420,10 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
       },
     },
 
-    // Same judgement, same wording problem, and it now sits directly under the brightness
-    // row — leaving one plain and the other as "Colour uniformity" would read as an oversight.
+    // Sits directly under the brightness row, so it is worded the same way: term first,
+    // plain description in brackets.
     {
-      action: 'Even colour (no patchy areas)',
+      action: 'Colour uniformity (no patchy areas)',
       resolveChecked: (b) => /^(ok|yes|good)$/i.test(String(toSingleValue(b?.led_color_uniformity) || '').trim()),
       resolveNote: (b) => {
         const v = String(toSingleValue(b?.led_color_uniformity) || '').trim();
