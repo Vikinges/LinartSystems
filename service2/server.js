@@ -5476,13 +5476,19 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
     { label: 'Summary', value: val('signoff_summary') },
     // The customer's own words about the handover, and the engineer's notes. Both were
     // collected by the form and dropped by this renderer - found by the read-back check.
-    { label: 'Customer comments', value: val('customer_comments') },
+    // Plain "Comments" on an acceptance certificate: at a handover the remark can come from
+    // either side of the table, and the service and maintenance reports keep the longer
+    // label because there it really is the customer speaking.
+    { label: 'Comments', value: val('customer_comments') },
     { label: 'Additional notes', value: val('general_notes') || val('client_notes') },
   ].filter((row) => row.value && String(row.value).trim());
 
   if (installSummaryRows.length) {
 
-    drawSectionTitle('Service summary');
+    // "Summary" on an acceptance certificate: the section carries the handover in the
+    // engineer's and the customer's words, and calling it a service summary reads as if
+    // a service visit had happened. The service and maintenance reports keep their title.
+    drawSectionTitle('Summary');
 
     installSummaryRows.forEach((row) => {
 
