@@ -12527,6 +12527,11 @@ ${rows.join('\n')}
       .site-info input,
       .site-info select {
 
+        /* The page's controls are content-box, so width:100% meant 100% PLUS 12px of padding
+           on each side and the border - 26px wider than the cell. The right column ran past
+           the card's padding and the divider sat 14px from one side and 41px from the other. */
+        box-sizing: border-box;
+
         width: 100%;
 
         min-width: 0;
