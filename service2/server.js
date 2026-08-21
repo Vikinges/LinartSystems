@@ -5898,7 +5898,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       x: margin,
 
-      name: val('attendee_client') || resolveCustomerSignatoryName(body),
+      // The signer, not whoever was in the room. These are two questions on the form -
+      // "Signs for the customer" and the Attendees row "For the client" - and they are
+      // often but not always the same person. Naming the attendee above a signature the
+      // attendee did not give is wrong on a document the customer signs, so the signer
+      // leads here and the attendee is only the fallback. The Attendees row keeps the
+      // opposite precedence, because there the question really is who attended.
+      name: resolveCustomerSignatoryName(body) || val('attendee_client'),
 
       company: val('customer_company'),
 
@@ -13181,7 +13187,7 @@ ${renderTextInput('acceptance_location', 'Acceptance location', { allowUnknown: 
 
           </div>
 
-          <p>Who was present at the handover. Names of people, not companies - these two go under "Attendees" on the document and above the signature boxes.</p>
+          <p>Who was present at the handover. Names of people, not companies - these two print under "Attendees" on the document. Not the same question as who signs: the person who accepts and signs is named in the Signatures section, and is often but not always one of the attendees.</p>
 
           <div class="grid two-col">
 
@@ -13207,6 +13213,34 @@ ${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true,
 
           </div>
 
+<script>
+(function () {
+  // These two are one choice. A certificate that says both "the whole agreed project" and
+  // "only a finished part" contradicts itself, and it is a document the customer signs -
+  // it should be impossible to produce, not merely unlikely. Kept as checkboxes rather than
+  // radios so the wire keys stay acceptance_overall / acceptance_partial, and so an engineer
+  // can still untick both while the form is half filled.
+  function bind() {
+    var overall = document.querySelector('input[name="acceptance_overall"]');
+    var partial = document.querySelector('input[name="acceptance_partial"]');
+    if (!overall || !partial) return;
+    function exclusive(clicked, other) {
+      clicked.addEventListener('change', function () {
+        // No recursion: by the time the other one hears this, it is already unticked.
+        if (clicked.checked && other.checked) {
+          other.checked = false;
+          other.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    }
+    exclusive(overall, partial);
+    exclusive(partial, overall);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+</script>
+
 ${renderTextInput('partial_services', 'Which part of the project', { textarea: true, allowUnknown: true, placeholder: 'Name the finished part being accepted, e.g. the main wall only' })}
 
         </section>
@@ -13231,7 +13265,42 @@ ${renderTextInput('partial_services', 'Which part of the project', { textarea: t
 
           </label>
 
-${renderTextInput('installation_partial_notes', 'What is still outstanding (if not fully finished)', { textarea: true, allowUnknown: true })}
+          <!-- Shown only when the installation is not finished. The renderer drops this text
+               when the status says "finished completely", so leaving the box open was an
+               invitation to write something that would be thrown away without a word. -->
+          <div id="installation-partial-notes">
+
+${renderTextInput('installation_partial_notes', 'What is still outstanding', { textarea: true, allowUnknown: true })}
+
+          </div>
+
+<script>
+(function () {
+  function sync() {
+    var select = document.querySelector('select[name="installation_status"]');
+    var wrap = document.getElementById('installation-partial-notes');
+    if (!select || !wrap) return;
+    var show = select.value === 'not_finished';
+    wrap.style.display = show ? '' : 'none';
+    if (!show) {
+      var field = wrap.querySelector('textarea, input');
+      // Cleared, not just hidden: a value the page will not print must not travel either.
+      if (field && field.value) {
+        field.value = '';
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    }
+  }
+  function bind() {
+    var select = document.querySelector('select[name="installation_status"]');
+    if (!select) return;
+    select.addEventListener('change', sync);
+    sync();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+</script>
 
           <p>If anything is still open, agree here and now when it will be done - this is the date the customer is signing up to.</p>
 
@@ -13635,6 +13704,17 @@ ${renderTextInput('general_notes', 'Overall notes', { textarea: true, type: 'tex
 
           </div>
 
+          <!-- The acceptance certificate has always had a "Comments" row and no way to fill
+               it: neither this form nor the app was sending customer_comments on an
+               installation, so the row could not exist on any document from any client. -->
+          <div data-form-types="installation_report">
+
+            <h2>Comments</h2>
+
+${renderTextInput('customer_comments', 'Comments', { textarea: true, type: 'textarea-lg', placeholder: 'Anything said at the handover, from either side', allowUnknown: true })}
+
+          </div>
+
         </section>
 
         <section class="card photos-card" data-form-types="service_report,maintenance">
@@ -13781,6 +13861,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           <h2>Signatures</h2>
 
+          <p>Who signs this document. On an installation report this is the person who accepts the work, which is not necessarily whoever attended the handover.</p>
+
           <div class="grid two-col signature-info">
 
             <!-- Engineer/customer date & time removed: the visit is already dated by
@@ -13792,9 +13874,9 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             ${renderTextInput('customer_company', 'Customer company', { id: 'customer-company-signoff', dataFormTypes: 'service_report,maintenance' })}
 
-            ${renderTextInput('customer_name', 'Customer representative(s)', {
+            ${renderTextInput('customer_name', 'Signs for the customer', {
               allowUnknown: true,
-              placeholder: 'List representatives (comma-separated)',
+              placeholder: 'Who accepts and signs (comma-separated if more than one)',
             })}
 
           </div>
