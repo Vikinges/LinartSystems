@@ -5547,7 +5547,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
       { label: 'The whole agreed project', value: boolVal('acceptance_overall') },
 
-      { label: 'Only a finished part of the project, accepted on its own', value: boolVal('acceptance_partial') },
+      { label: 'Only a finished part of the project', value: boolVal('acceptance_partial') },
 
     ],
 
@@ -13203,7 +13203,7 @@ ${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true,
 
             <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The whole agreed project</span></label>
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the project, accepted on its own</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the project</span></label>
 
           </div>
 
