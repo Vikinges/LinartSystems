@@ -199,10 +199,27 @@ function findStoredSubmission(clientReportId) {
   return entry;
 }
 
-function rememberSubmission(clientReportId, response) {
+function rememberSubmission(clientReportId, response, contentHash) {
   const store = loadSubmissionsStore();
-  store[clientReportId] = { at: Date.now(), response };
+  store[clientReportId] = { at: Date.now(), response, contentHash: contentHash || null };
   saveSubmissionsStore(pruneSubmissionsStore(store));
+}
+
+// A resubmission with the same client_report_id but a changed body (a follow-up visit
+// adding notes/readings to an already-signed report, say) used to be mistaken for a
+// harmless network retry and silently discarded — see GitLab lsc_led#1 note "Nachträgliche
+// Ergänzungen stehen nicht im Bericht". Fingerprinting the body lets a real content change
+// auto-route through the edit path even when the client forgets to set edit=1.
+const SUBMISSION_FINGERPRINT_SKIP_FIELDS = new Set([
+  'client_report_id', 'clientReportId', 'edit', 'is_edit', 'drop_photos',
+]);
+function fingerprintSubmissionBody(body) {
+  const clean = {};
+  for (const key of Object.keys(body || {}).sort()) {
+    if (SUBMISSION_FINGERPRINT_SKIP_FIELDS.has(key)) continue;
+    clean[key] = body[key];
+  }
+  return crypto.createHash('sha256').update(JSON.stringify(clean)).digest('hex');
 }
 
 
@@ -26554,11 +26571,16 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
     String(toSingleValue(req.body?.edit) || toSingleValue(req.body?.is_edit) || '').trim().toLowerCase()
   );
   let editingPrevious = null;
+  const bodyFingerprint = fingerprintSubmissionBody(req.body);
 
   if (clientReportId) {
     const stored = findStoredSubmission(clientReportId);
     if (stored) {
-      if (!isEditRequest) {
+      // A body that changed since the stored submission is a real edit even if the
+      // client didn't say so explicitly — only a byte-identical resubmit (a plain
+      // network retry) is safe to answer from cache.
+      const contentChanged = !!stored.contentHash && stored.contentHash !== bodyFingerprint;
+      if (!isEditRequest && !contentChanged) {
         return res.json({ ...stored.response, duplicate: true });
       }
       editingPrevious = stored.response || null;
@@ -27861,7 +27883,7 @@ app.post('/submit', journalSubmit, rateLimitSubmit, (req, res, next) => {
 
     if (clientReportId) {
 
-      rememberSubmission(clientReportId, successPayload);
+      rememberSubmission(clientReportId, successPayload, bodyFingerprint);
 
     }
 
