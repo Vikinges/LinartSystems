@@ -24199,14 +24199,30 @@ function requireDeleteFiles(req, res, next) {
   return res.status(403).json({ ok: false, error: 'Forbidden: requires delete files permission.' });
 }
 
-// Write access to the Projects planning module (create/edit projects, assignments,
-// logistics pins, assets). Read (GET) endpoints stay open to any hub-authenticated user —
-// engineers are read-only by design, gated by the hub proxy requiring a session at all.
-function requirePlanProjects(req, res, next) {
+// Projects planning module has two tiers, both gated (2026-09-15: the calendar itself
+// used to be open to any hub-authenticated user — Vladimir asked for it closed by default).
+//
+// - View: role admin/planner, OR the opt-in canPlanProjects flag on a manager account.
+//   This is the "can see the calendar at all" gate — engineers only get in once granted.
+// - Write (create/edit a project, assignments, pins, assets): role admin/planner ONLY.
+//   The opt-in flag alone does not grant write — an engineer given the flag can look at
+//   project files/addresses/logistics but not create or change anything. Managers
+//   (role planner) always get both, automatically, same as admin.
+function hasProjectsView(req) {
   const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
-  if (role === 'admin') return next();
-  if (req.headers['x-hub-can-plan-projects'] === '1') return next();
+  if (role === 'admin' || role === 'planner') return true;
+  return req.headers['x-hub-can-plan-projects'] === '1';
+}
+
+function requireProjectsView(req, res, next) {
+  if (hasProjectsView(req)) return next();
   return res.status(403).json({ ok: false, error: 'Forbidden: requires plan projects permission.' });
+}
+
+function requireProjectsWrite(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin' || role === 'planner') return next();
+  return res.status(403).json({ ok: false, error: 'Forbidden: requires manager (planner) or admin role.' });
 }
 
 function requireGenerateLinks(req, res, next) {
@@ -24949,7 +24965,10 @@ app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], asy
     }
     const summary = projectCardSummary(projectKey, card, stat);
     const lastFields = (card && typeof card === 'object') ? card : ((stat && stat.lastFields) || {});
-    const planning = projectPublicShape(projectKey, card || {});
+    // Planning fields (assignments/logistics/pins/assets/chat) are additive to this
+    // pre-existing autofill endpoint, which stays open to any submitting engineer —
+    // but the planning data itself is calendar-view-gated, not just tacked on for anyone.
+    const planning = hasProjectsView(req) ? projectPublicShape(projectKey, card || {}) : {};
     return res.json({ ok: true, project: { ...summary, lastFields, ...planning } });
   } catch (err) {
     console.error('[server] Failed to load project', err);
@@ -25040,9 +25059,10 @@ app.get(['/api/projects/:projectKey/history', '/service2/api/projects/:projectKe
 // GitLab lsc_led#1 notes 576/577/581. Deliberately extends the existing projects.json
 // site-info card rather than a new entity — Project.id === lsc_project_number everywhere,
 // and project history stays the derived collectProjectVisits() above, not a stored log.
-// Write access gated by requirePlanProjects (hub role admin/planner, or the opt-in
-// canPlanProjects flag); reads are open to any hub-authenticated caller (engineers are
-// read-only by product design, not by a server-side field-level restriction here).
+// Two-tier access: requireProjectsView (role admin/planner, or the opt-in
+// canPlanProjects flag) gates seeing the calendar at all; requireProjectsWrite
+// (role admin/planner only — the flag alone is NOT enough) gates every mutation.
+// An engineer granted the flag can look but not create/edit/delete.
 const PROJECT_ASSETS_DIR = path.join(DATA_DIR, 'project-assets');
 
 function newProjectSubId(prefix) {
@@ -25091,7 +25111,7 @@ function projectPublicShape(projectKey, card) {
 // Create-or-enrich: a brand new number makes a fresh project; a number that already has
 // report history (or a bare projects.json card) just gets a title/status/logistics attached —
 // matches "if it's a new project we create it, if not we add to what's already there".
-app.post(['/api/projects', '/service2/api/projects'], requirePlanProjects, (req, res) => {
+app.post(['/api/projects', '/service2/api/projects'], requireProjectsWrite, (req, res) => {
   const body = req.body || {};
   const projectKey = strictProjectNumber(toSingleValue(body.lsc_project_number) || toSingleValue(body.projectNumber));
   if (!projectKey) {
@@ -25117,7 +25137,7 @@ app.post(['/api/projects', '/service2/api/projects'], requirePlanProjects, (req,
   return res.status(existed ? 200 : 201).json({ ok: true, created: !existed, project: projectPublicShape(projectKey, card) });
 });
 
-app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], requirePlanProjects, (req, res) => {
+app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25144,7 +25164,7 @@ app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], r
 });
 
 // --- Assignments: who's scheduled on this project, and when ---
-app.post(['/api/projects/:projectKey/assignments', '/service2/api/projects/:projectKey/assignments'], requirePlanProjects, (req, res) => {
+app.post(['/api/projects/:projectKey/assignments', '/service2/api/projects/:projectKey/assignments'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25164,7 +25184,7 @@ app.post(['/api/projects/:projectKey/assignments', '/service2/api/projects/:proj
   return res.status(201).json({ ok: true, assignment, project: projectPublicShape(projectKey, card) });
 });
 
-app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/api/projects/:projectKey/assignments/:assignmentId'], requirePlanProjects, (req, res) => {
+app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/api/projects/:projectKey/assignments/:assignmentId'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25179,7 +25199,7 @@ app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/ap
 });
 
 // --- Pins: hotel / parking / site / custom geo points ---
-app.post(['/api/projects/:projectKey/pins', '/service2/api/projects/:projectKey/pins'], requirePlanProjects, (req, res) => {
+app.post(['/api/projects/:projectKey/pins', '/service2/api/projects/:projectKey/pins'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25206,7 +25226,7 @@ app.post(['/api/projects/:projectKey/pins', '/service2/api/projects/:projectKey/
   return res.status(201).json({ ok: true, pin, project: projectPublicShape(projectKey, card) });
 });
 
-app.patch(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requirePlanProjects, (req, res) => {
+app.patch(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25225,7 +25245,7 @@ app.patch(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:pro
   return res.json({ ok: true, pin, project: projectPublicShape(projectKey, card) });
 });
 
-app.delete(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requirePlanProjects, (req, res) => {
+app.delete(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requireProjectsWrite, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25246,7 +25266,7 @@ const projectAssetUpload = multer({
   limits: { fileSize: 25 * 1024 * 1024, files: 1 },
 }).single('file');
 
-app.post(['/api/projects/:projectKey/assets', '/service2/api/projects/:projectKey/assets'], requirePlanProjects, (req, res) => {
+app.post(['/api/projects/:projectKey/assets', '/service2/api/projects/:projectKey/assets'], requireProjectsWrite, (req, res) => {
   projectAssetUpload(req, res, async (err) => {
     if (err) return res.status(400).json({ ok: false, error: err.message || 'upload_failed' });
     const projectKey = strictProjectNumber(req.params.projectKey);
@@ -25288,7 +25308,7 @@ app.post(['/api/projects/:projectKey/assets', '/service2/api/projects/:projectKe
   });
 });
 
-app.get(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], (req, res) => {
+app.get(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], requireProjectsView, (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25303,7 +25323,7 @@ app.get(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:p
   return res.sendFile(filePath, { dotfiles: 'allow' });
 });
 
-app.delete(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], requirePlanProjects, async (req, res) => {
+app.delete(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], requireProjectsWrite, async (req, res) => {
   const projectKey = strictProjectNumber(req.params.projectKey);
   if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
   const store = loadProjectsStore() || {};
@@ -25324,7 +25344,7 @@ app.delete(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects
 
 // --- Calendar: projects with an assignment overlapping [from, to] ---
 // Per iOS's ask (note 581): enough for the calendar strip without a detail fetch.
-app.get(['/api/projects', '/service2/api/projects'], (req, res) => {
+app.get(['/api/projects', '/service2/api/projects'], requireProjectsView, (req, res) => {
   const from = String(req.query.from || '').trim();
   const to = String(req.query.to || '').trim();
   const mineOnly = String(req.query.mine || '') === 'true';

@@ -278,6 +278,11 @@ body {
 .button:hover { background: var(--accent-hover); }
 .button:active { background: var(--accent-active); }
 
+/* Same fix as .admin-actions/.toolbar__group above, one level down: a single button
+   toggled with the `hidden` attribute (not a wrapping container) needs this too, or its
+   own `display: inline-flex` above keeps beating the browser's default [hidden] rule. */
+.button[hidden] { display: none; }
+
 .button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--focus-ring);

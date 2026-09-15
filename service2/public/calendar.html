@@ -119,6 +119,9 @@
 
     .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; }
     .inline-form .field { flex: 1 1 120px; min-width: 0; }
+    /* Same [hidden]-losing-to-display fix as .button/.toolbar__group in theme.css — these
+       forms are hidden per-viewer (canWrite), not just at load. */
+    .inline-form[hidden] { display: none; }
   </style>
 </head>
 
@@ -289,7 +292,8 @@
     const lockedView = document.getElementById('locked-view');
     const newProjectBtn = document.getElementById('new-project-btn');
 
-    let canPlan = false;
+    let canView = false;
+    let canWrite = false;
     let currentUsername = '';
     let cursor = new Date();
     cursor.setDate(1);
@@ -467,7 +471,7 @@
       document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId);
 
       const editForm = document.getElementById('d-edit-form');
-      editForm.hidden = !canPlan;
+      editForm.hidden = !canWrite;
       document.getElementById('d-edit-title').value = p.title || '';
       document.getElementById('d-edit-address').value = p.address || '';
       document.getElementById('d-edit-status').value = p.status || 'planned';
@@ -481,7 +485,7 @@
           const row = document.createElement('div');
           row.className = 'list-row';
           row.innerHTML = `<div><div class="list-row__main">${a.engineerId}</div><div class="list-row__meta">${a.plannedFrom} → ${a.plannedTo}</div></div>`;
-          if (canPlan) {
+          if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
@@ -496,7 +500,7 @@
           assignEl.appendChild(row);
         });
       }
-      document.getElementById('d-assign-form').hidden = !canPlan;
+      document.getElementById('d-assign-form').hidden = !canWrite;
 
       const logEl = document.getElementById('d-logistics');
       logEl.innerHTML = '';
@@ -509,7 +513,7 @@
           row.className = 'list-row';
           const mapsUrl = 'https://www.google.com/maps?q=' + pin.lat + ',' + pin.lng;
           row.innerHTML = `<div><div class="list-row__main">${pin.kind}: ${pin.label || mapsUrl}</div><div class="list-row__meta"><a href="${mapsUrl}" target="_blank">${pin.lat}, ${pin.lng}</a>${pin.note ? ' — ' + pin.note : ''}</div></div>`;
-          if (canPlan) {
+          if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
@@ -523,7 +527,7 @@
           logEl.appendChild(row);
         });
       }
-      document.getElementById('d-pin-form').hidden = !canPlan;
+      document.getElementById('d-pin-form').hidden = !canWrite;
 
       const assetsEl = document.getElementById('d-assets');
       assetsEl.innerHTML = '';
@@ -546,7 +550,7 @@
           dl.className = 'button icon';
           dl.innerHTML = '<svg class="ic"><use href="./icons.svg#i-download"></use></svg>';
           actions.appendChild(dl);
-          if (canPlan) {
+          if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
@@ -561,7 +565,7 @@
           assetsEl.appendChild(row);
         });
       }
-      document.getElementById('d-asset-form').hidden = !canPlan;
+      document.getElementById('d-asset-form').hidden = !canWrite;
     }
 
     document.getElementById('d-edit-save').addEventListener('click', async () => {
@@ -641,7 +645,12 @@
 
     (async () => {
       const user = await loadUser();
-      canPlan = Boolean(user && user.canPlanProjects);
+      canView = Boolean(user && user.canPlanProjects);
+      // Write (create/edit) is a role thing, not the opt-in flag: admin/planner always
+      // get it, an engineer granted the flag only gets to look. See requireProjectsWrite
+      // on the server — this mirrors it, but the server is what actually enforces it.
+      const role = user ? (user.role || (user.isSuperadmin ? 'admin' : 'manager')) : '';
+      canWrite = Boolean(user && (user.isSuperadmin || role === 'admin' || role === 'planner'));
       currentUsername = (user && user.username) || '';
       if (userMetaEl) {
         userMetaEl.textContent = user ? `Logged in as ${user.username}` : '';
@@ -652,15 +661,13 @@
         lockedView.querySelector('p').textContent = 'This page needs a hub session.';
         return;
       }
-      // Calendar access is gated on canPlanProjects entirely for now, same as the
-      // nav icon on the other pages (see nav-lock there) — not just its write tools.
-      // An engineer-facing read-only view (their own assignments) is a natural
-      // follow-up once this first version is in use.
-      if (!canPlan) {
+      // The calendar itself needs canPlanProjects (or the admin/planner role that implies
+      // it) — closed by default, same as the nav icon on the other pages (see nav-lock).
+      if (!canView) {
         lockedView.hidden = false;
         return;
       }
-      newProjectBtn.hidden = false;
+      newProjectBtn.hidden = !canWrite;
       document.getElementById('cal-toolbar').hidden = false;
       calView.hidden = false;
       await loadMonth();
