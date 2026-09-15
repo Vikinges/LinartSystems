@@ -368,6 +368,8 @@ function loadAdminCredentials() {
                   canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
                   canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
                   canUseChat: user.canUseChat !== false,
+                  canViewFeedback: normalizeFilesAccess(user.canViewFeedback, false),
+                  canPlanProjects: normalizeFilesAccess(user.canPlanProjects, false),
                 };
                 // Preserve account-lifecycle fields (Apple deletion flow) across reloads.
                 if (user.appReviewProtected === true) normalizedUser.appReviewProtected = true;
@@ -491,6 +493,15 @@ function resolveFeedbackAccess(role, isSuperadmin, canViewFeedback) {
   return Boolean(canViewFeedback);
 }
 
+// Same shape as resolveFilesAccess: the Projects planning module (manager calendar,
+// assignments, logistics) is auto-on for admin/planner — they already schedule the team
+// via file/chat access — and opt-in for an individual manager who also plans work.
+function resolvePlanProjectsAccess(role, isSuperadmin, canPlanProjects) {
+  if (isSuperadmin || role === USER_ROLE_ADMIN || role === USER_ROLE_PLANNER) return true;
+  if (role === USER_ROLE_BLOCKED) return false;
+  return Boolean(canPlanProjects);
+}
+
 function normalizeSessionUser(user) {
   if (!user || typeof user !== 'object') return null;
   const username = typeof user.username === 'string' ? user.username.trim() : '';
@@ -522,7 +533,12 @@ function normalizeSessionUser(user) {
     isSuperadmin,
     normalizeFilesAccess(user.canViewFeedback, false)
   );
-  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback };
+  const canPlanProjects = resolvePlanProjectsAccess(
+    role,
+    isSuperadmin,
+    normalizeFilesAccess(user.canPlanProjects, false)
+  );
+  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback, canPlanProjects };
 }
 
 function getNextPort() {
@@ -654,6 +670,8 @@ function buildAdminAuthToken(user) {
     g: normalized.canGenerateLinks ? 1 : 0,
     d: normalized.canDeleteFiles ? 1 : 0,
     c: normalized.canUseChat ? 1 : 0,
+    v: normalized.canViewFeedback ? 1 : 0,
+    p: normalized.canPlanProjects ? 1 : 0,
     s: Array.isArray(normalized.allowedServices) ? normalized.allowedServices : [],
     t: Date.now(),
   });
@@ -691,6 +709,11 @@ function parseAdminAuthToken(token) {
   const canDeleteFiles = normalizeFilesAccess(data.d, false);
   // Legacy tokens have no `c`; treat absence as enabled (default-on for chat).
   const canUseChat = data.c === 0 ? false : true;
+  // Legacy tokens issued before these flags existed have no `v`/`p` — normalizeFilesAccess
+  // defaults that to false, and normalizeSessionUser still re-applies the real access rules
+  // (role-based auto-grant for admin/planner, blocked, etc.) on top either way.
+  const canViewFeedback = normalizeFilesAccess(data.v, false);
+  const canPlanProjects = normalizeFilesAccess(data.p, false);
   return normalizeSessionUser({
     username: String(data.u),
     isSuperadmin,
@@ -699,6 +722,8 @@ function parseAdminAuthToken(token) {
     canGenerateLinks,
     canDeleteFiles,
     canUseChat,
+    canViewFeedback,
+    canPlanProjects,
     allowedServices: Array.isArray(data.s) ? data.s : [],
   });
 }
@@ -781,12 +806,14 @@ function attachHubProxyHeaders(req, _res, next) {
   delete req.headers['x-hub-user'];
   delete req.headers['x-hub-can-generate-links'];
   delete req.headers['x-hub-can-delete-files'];
+  delete req.headers['x-hub-can-plan-projects'];
   const user = getSessionUser(req);
   if (user) {
     req.headers['x-hub-role'] = user.role || (user.isSuperadmin ? USER_ROLE_ADMIN : USER_ROLE_MANAGER);
     req.headers['x-hub-user'] = user.username;
     if (user.canGenerateLinks) req.headers['x-hub-can-generate-links'] = '1';
     if (user.canDeleteFiles) req.headers['x-hub-can-delete-files'] = '1';
+    if (user.canPlanProjects) req.headers['x-hub-can-plan-projects'] = '1';
   }
   next();
 }
@@ -798,6 +825,7 @@ function stripClientHubHeaders(req, _res, next) {
   delete req.headers['x-hub-user'];
   delete req.headers['x-hub-can-generate-links'];
   delete req.headers['x-hub-can-delete-files'];
+  delete req.headers['x-hub-can-plan-projects'];
   next();
 }
 
@@ -1139,6 +1167,18 @@ app.use('/service2/api/reports', requireDashboardAccess, attachHubProxyHeaders, 
   logLevel: 'warn'
 }));
 
+// Projects planning module. Broad gate here (anyone allowed to use service2 at all, same
+// as feedback) — the actual write/read split lives server-side in service2's
+// requirePlanProjects, driven by the x-hub-can-plan-projects header attachHubProxyHeaders
+// sets below. Must precede registerProxies' open /service2 catch-all (stripClientHubHeaders),
+// same reasoning as reports/admin above.
+app.use('/service2/api/projects', requireServiceAccess('service2', '/service2'), attachHubProxyHeaders, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
+
 // Sign endpoints (service2 gates them on x-hub-can-generate-links). Registered
 // BEFORE registerProxies' open /service2 catch-all so the authoritative header is
 // attached: admin/superadmin and canGenerateLinks managers pass; others get 403,
@@ -1369,6 +1409,8 @@ app.get('/api/status', async (req, res) => {
             canGenerateLinks: user.canGenerateLinks,
             canDeleteFiles: user.canDeleteFiles,
             canUseChat: user.canUseChat,
+            canViewFeedback: user.canViewFeedback,
+            canPlanProjects: user.canPlanProjects,
             allowedServices: user.allowedServices || [],
           }
         : null,
@@ -1421,6 +1463,8 @@ async function authenticateCredentials(usernameRaw, pass) {
           canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
           canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
           canUseChat: user.canUseChat,
+          canViewFeedback: normalizeFilesAccess(user.canViewFeedback, false),
+          canPlanProjects: normalizeFilesAccess(user.canPlanProjects, false),
           allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
         };
         break;
@@ -1463,6 +1507,8 @@ function buildSessionUserFromStore(username) {
         canGenerateLinks: normalizeFilesAccess(user.canGenerateLinks, false),
         canDeleteFiles: normalizeFilesAccess(user.canDeleteFiles, false),
         canUseChat: user.canUseChat,
+        canViewFeedback: normalizeFilesAccess(user.canViewFeedback, false),
+        canPlanProjects: normalizeFilesAccess(user.canPlanProjects, false),
         allowedServices: Array.isArray(user.allowedServices) ? user.allowedServices : [],
       });
     }
@@ -1610,6 +1656,7 @@ app.get('/api/auth/me', (req, res) => {
       canDeleteFiles: user.canDeleteFiles,
       canUseChat: user.canUseChat,
       canViewFeedback: user.canViewFeedback,
+      canPlanProjects: user.canPlanProjects,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -2258,6 +2305,7 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         canDeleteFiles: normalizeFilesAccess(u.canDeleteFiles, false),
         canUseChat: u.canUseChat !== false,
         canViewFeedback: normalizeFilesAccess(u.canViewFeedback, false),
+        canPlanProjects: normalizeFilesAccess(u.canPlanProjects, false),
         // Read-only status so the admin UI / app can show a 2FA badge and offer a reset
         // only where there is something to reset. The secret itself is never exposed.
         twoFactorEnabled: !!(u.twoFactor && u.twoFactor.enabled),
@@ -2312,6 +2360,7 @@ app.get('/admin/me', requireSuperadmin, (req, res) => {
       canDeleteFiles: user.canDeleteFiles,
       canUseChat: user.canUseChat,
       canViewFeedback: user.canViewFeedback,
+      canPlanProjects: user.canPlanProjects,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -2330,6 +2379,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const canDeleteFiles = resolveFilesAccess(role, false, normalizeFilesAccess(body.canDeleteFiles, false));
   const canUseChat = resolveChatAccess(role, false, body.canUseChat);
   const canViewFeedback = resolveFeedbackAccess(role, false, normalizeFilesAccess(body.canViewFeedback, false));
+  const canPlanProjects = resolvePlanProjectsAccess(role, false, normalizeFilesAccess(body.canPlanProjects, false));
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -2343,7 +2393,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback };
+  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback, canPlanProjects };
   // appReviewProtected accounts are exempt from the account-deletion sweeper (Apple review account).
   if (body.appReviewProtected === true) newUser.appReviewProtected = true;
   adminCredentials.users.push(newUser);
@@ -2391,6 +2441,9 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   if (Object.prototype.hasOwnProperty.call(body, 'canViewFeedback')) {
     user.canViewFeedback = normalizeFilesAccess(body.canViewFeedback, false);
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'canPlanProjects')) {
+    user.canPlanProjects = normalizeFilesAccess(body.canPlanProjects, false);
+  }
   user.canUseChat = resolveChatAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
     false,
@@ -2400,6 +2453,11 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
     false,
     normalizeFilesAccess(user.canViewFeedback, false)
+  );
+  user.canPlanProjects = resolvePlanProjectsAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    normalizeFilesAccess(user.canPlanProjects, false)
   );
   user.canViewFiles = resolveFilesAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),

@@ -395,6 +395,10 @@
               <input type="checkbox" id="newUserCanViewFeedback">
               <span><span>Read user feedback</span><span class="perm-hint">Sees the admin-only "Feedback & reports" chat feed, nothing else admin-only.</span></span>
             </label>
+            <label class="perm-label">
+              <input type="checkbox" id="newUserCanPlanProjects">
+              <span><span>Plan projects</span><span class="perm-hint">Creates/edits projects, schedules engineers, sets logistics.</span></span>
+            </label>
           </div>
         </div>
         <div id="newUserServicesSection" class="services-section" style="grid-column: 1 / -1;">
@@ -703,6 +707,7 @@
       { key: 'canDeleteFiles', label: 'Delete files', hint: 'Can permanently remove PDFs from the archive.' },
       { key: 'canUseChat', label: 'Use chat (LSC LED Chat)', hint: 'Can open the team chat, send messages and attachments.' },
       { key: 'canViewFeedback', label: 'Read user feedback', hint: 'Sees the admin-only "Feedback & reports" chat feed, nothing else admin-only (e.g. Reported chats stays hidden).' },
+      { key: 'canPlanProjects', label: 'Plan projects', hint: 'Creates/edits projects, schedules engineers, sets logistics (hotel/parking/pins). Always on for Manager (planner) role.' },
     ];
     function summarizeUser(roleValue, user) {
       if (roleValue === 'admin') return 'Full access to everything.';
@@ -713,6 +718,7 @@
       if (user.canGenerateLinks) extras.push('creates sign links');
       if (user.canDeleteFiles) extras.push('deletes files');
       if (user.canViewFeedback) extras.push('reads user feedback');
+      if (user.canPlanProjects) extras.push('plans projects');
       const base = extras.length ? `Creates report forms + ${extras.join(', ')}.` : 'Creates report forms only.';
       return user.canUseChat === false ? `${base} Chat: off.` : `${base} Chat: on.`;
     }
@@ -774,6 +780,7 @@
     const newUserCanDeleteFiles = document.getElementById('newUserCanDeleteFiles');
     const newUserCanUseChat = document.getElementById('newUserCanUseChat');
     const newUserCanViewFeedback = document.getElementById('newUserCanViewFeedback');
+    const newUserCanPlanProjects = document.getElementById('newUserCanPlanProjects');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const newUserSummary = document.getElementById('newUserSummary');
@@ -814,12 +821,13 @@
           canDeleteFiles: newUserCanDeleteFiles && newUserCanDeleteFiles.checked,
           canUseChat: newUserCanUseChat ? newUserCanUseChat.checked : true,
           canViewFeedback: newUserCanViewFeedback && newUserCanViewFeedback.checked,
+          canPlanProjects: newUserCanPlanProjects && newUserCanPlanProjects.checked,
         });
       }
       if (newUserPermSection) newUserPermSection.classList.toggle('is-hidden', current !== 'manager');
       if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager' && current !== 'planner');
     }
-    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat, newUserCanViewFeedback].forEach((cb) => {
+    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat, newUserCanViewFeedback, newUserCanPlanProjects].forEach((cb) => {
       if (cb) cb.addEventListener('change', () => refreshNewUserSummary());
     });
     if (newUserRoles) {
@@ -1205,6 +1213,7 @@
         const canDeleteFilesInput = permInputs.canDeleteFiles;
         const canUseChatInput = permInputs.canUseChat;
         const canViewFeedbackInput = permInputs.canViewFeedback;
+        const canPlanProjectsInput = permInputs.canPlanProjects;
         controls.appendChild(permSection);
 
         // Services
@@ -1239,11 +1248,12 @@
             canDeleteFiles: canDeleteFilesInput.checked,
             canUseChat: canUseChatInput.checked,
             canViewFeedback: canViewFeedbackInput.checked,
+            canPlanProjects: canPlanProjectsInput.checked,
           });
           permSection.classList.toggle('is-hidden', currentRole !== 'manager');
           servicesSection.classList.toggle('is-hidden', currentRole !== 'manager' && currentRole !== 'planner');
         };
-        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput, canViewFeedbackInput].forEach((cb) => {
+        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput, canViewFeedbackInput, canPlanProjectsInput].forEach((cb) => {
           cb.addEventListener('change', refreshSummary);
         });
         allowAllInput.addEventListener('change', () => {
@@ -1280,6 +1290,7 @@
             payload.canDeleteFiles = canDeleteFilesInput.checked;
             payload.canUseChat = canUseChatInput.checked;
             payload.canViewFeedback = canViewFeedbackInput.checked;
+            payload.canPlanProjects = canPlanProjectsInput.checked;
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {
@@ -2141,6 +2152,7 @@
         const canUseChat = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanUseChat ? newUserCanUseChat.checked : true);
         // Never auto-granted (not even to planner) — deliberately opt-in only, see resolveFeedbackAccess.
         const canViewFeedback = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanViewFeedback && newUserCanViewFeedback.checked);
+        const canPlanProjects = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanPlanProjects && newUserCanPlanProjects.checked);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -2154,7 +2166,7 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback, canPlanProjects, allowedServices: selectedServices })
           });
           showHandoff(username, password);
           newUserPasswordInput.value = '';
@@ -2167,6 +2179,7 @@
           if (newUserCanDeleteFiles) newUserCanDeleteFiles.checked = false;
           if (newUserCanUseChat) newUserCanUseChat.checked = true;
           if (newUserCanViewFeedback) newUserCanViewFeedback.checked = false;
+          if (newUserCanPlanProjects) newUserCanPlanProjects.checked = false;
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
               syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);

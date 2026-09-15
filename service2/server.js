@@ -8007,6 +8007,21 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   checklistSections.forEach((section) => drawChecklistSection(section));
 
+  // Maintenance's own "Spare parts" freeform fields (`spares_list`/`spares_notes`) — the
+  // iOS app sends these on maintenance submissions too, but they were only ever drawn inside
+  // drawIosServiceSections(), which is service-only. Submitted, stored, never on the page.
+  // Reported by iOS dev, GitLab lsc_led#1 note 579 ("Notes field dropped", maintenance).
+  if (checklistSections.length) {
+    const sparesList = toSingleValue(body?.spares_list) || '';
+    const sparesNotes = toSingleValue(body?.spares_notes) || '';
+    if (sparesList || sparesNotes) {
+      drawTextBlocks('Spare parts', [
+        { label: 'Parts list', value: sparesList },
+        { label: 'Notes', value: sparesNotes },
+      ]);
+    }
+  }
+
   const signoffRows = isInstallation || isService ? [] : SIGN_OFF_CHECKLIST_ROWS;
 
   if (signoffRows.length) {
@@ -24184,6 +24199,16 @@ function requireDeleteFiles(req, res, next) {
   return res.status(403).json({ ok: false, error: 'Forbidden: requires delete files permission.' });
 }
 
+// Write access to the Projects planning module (create/edit projects, assignments,
+// logistics pins, assets). Read (GET) endpoints stay open to any hub-authenticated user —
+// engineers are read-only by design, gated by the hub proxy requiring a session at all.
+function requirePlanProjects(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin') return next();
+  if (req.headers['x-hub-can-plan-projects'] === '1') return next();
+  return res.status(403).json({ ok: false, error: 'Forbidden: requires plan projects permission.' });
+}
+
 function requireGenerateLinks(req, res, next) {
   const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
   if (role === 'admin') return next();
@@ -24924,7 +24949,8 @@ app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], asy
     }
     const summary = projectCardSummary(projectKey, card, stat);
     const lastFields = (card && typeof card === 'object') ? card : ((stat && stat.lastFields) || {});
-    return res.json({ ok: true, project: { ...summary, lastFields } });
+    const planning = projectPublicShape(projectKey, card || {});
+    return res.json({ ok: true, project: { ...summary, lastFields, ...planning } });
   } catch (err) {
     console.error('[server] Failed to load project', err);
     return res.status(500).json({ ok: false, error: 'project_failed' });
@@ -25008,6 +25034,323 @@ app.get(['/api/projects/:projectKey/history', '/service2/api/projects/:projectKe
     console.error('[server] Failed to load project history', err);
     return res.status(500).json({ ok: false, error: 'project_history_failed' });
   }
+});
+
+// --- Projects planning module: manager calendar, assignments, logistics, assets ---
+// GitLab lsc_led#1 notes 576/577/581. Deliberately extends the existing projects.json
+// site-info card rather than a new entity — Project.id === lsc_project_number everywhere,
+// and project history stays the derived collectProjectVisits() above, not a stored log.
+// Write access gated by requirePlanProjects (hub role admin/planner, or the opt-in
+// canPlanProjects flag); reads are open to any hub-authenticated caller (engineers are
+// read-only by product design, not by a server-side field-level restriction here).
+const PROJECT_ASSETS_DIR = path.join(DATA_DIR, 'project-assets');
+
+function newProjectSubId(prefix) {
+  return `${prefix}_${Date.now().toString(36)}${crypto.randomBytes(4).toString('hex')}`;
+}
+
+// Reject rather than silently mask on create/edit — a manager typing a project number
+// wants an error, not a half-digit number saved under the wrong key.
+function strictProjectNumber(value) {
+  const normalized = normalizeProjectNumber(value);
+  return /^\d{2}-\d{4}$/.test(normalized) ? normalized : null;
+}
+
+function ensureProjectCardShape(card) {
+  if (!Array.isArray(card.pins)) card.pins = [];
+  if (!Array.isArray(card.assignments)) card.assignments = [];
+  if (!Array.isArray(card.assets)) card.assets = [];
+  if (!card.logistics || typeof card.logistics !== 'object') card.logistics = {};
+  return card;
+}
+
+// Same id the hub's existing lazy `POST /api/chat/conversations {kind:'project', projectKey}`
+// already produces (chatSanitizeId there is the same allow-list, dash included) — the app can
+// open this chat with no new hub endpoint, and we can hand back the id it'll resolve to.
+function projectChatConversationId(projectKey) {
+  return `prj_${String(projectKey || '').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 120)}`;
+}
+
+function projectPublicShape(projectKey, card) {
+  const c = ensureProjectCardShape(card && typeof card === 'object' ? card : {});
+  return {
+    lsc_project_number: projectKey,
+    title: c.title || null,
+    address: c.site_location || c.address || null,
+    status: c.status || null,
+    createdBy: c.createdBy || null,
+    createdAt: c.createdAt || null,
+    logistics: c.logistics,
+    pins: c.pins,
+    assignments: c.assignments,
+    assets: c.assets,
+    chatConversationId: projectChatConversationId(projectKey),
+  };
+}
+
+// Create-or-enrich: a brand new number makes a fresh project; a number that already has
+// report history (or a bare projects.json card) just gets a title/status/logistics attached —
+// matches "if it's a new project we create it, if not we add to what's already there".
+app.post(['/api/projects', '/service2/api/projects'], requirePlanProjects, (req, res) => {
+  const body = req.body || {};
+  const projectKey = strictProjectNumber(toSingleValue(body.lsc_project_number) || toSingleValue(body.projectNumber));
+  if (!projectKey) {
+    return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  }
+  const store = loadProjectsStore() || {};
+  const existed = Boolean(store[projectKey]);
+  const card = ensureProjectCardShape(store[projectKey] && typeof store[projectKey] === 'object' ? store[projectKey] : {});
+  card.lsc_project_number = projectKey;
+  if (!existed) {
+    card.createdBy = req.headers['x-hub-user'] || null;
+    card.createdAt = new Date().toISOString();
+  }
+  const title = toSingleValue(body.title);
+  if (title != null && String(title).trim() !== '') card.title = String(title).trim().slice(0, 200);
+  const address = toSingleValue(body.address);
+  if (address != null && String(address).trim() !== '') card.site_location = String(address).trim();
+  const status = toSingleValue(body.status);
+  if (status != null && String(status).trim() !== '') card.status = String(status).trim().slice(0, 40);
+  card.updated_at = new Date().toISOString();
+  store[projectKey] = card;
+  saveProjectsStore(store);
+  return res.status(existed ? 200 : 201).json({ ok: true, created: !existed, project: projectPublicShape(projectKey, card) });
+});
+
+app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const card = ensureProjectCardShape(store[projectKey]);
+  const body = req.body || {};
+  if (Object.prototype.hasOwnProperty.call(body, 'title')) {
+    card.title = String(toSingleValue(body.title) || '').trim().slice(0, 200) || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'address')) {
+    card.site_location = String(toSingleValue(body.address) || '').trim() || null;
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'status')) {
+    card.status = String(toSingleValue(body.status) || '').trim().slice(0, 40) || null;
+  }
+  if (body.logistics && typeof body.logistics === 'object') {
+    if (Object.prototype.hasOwnProperty.call(body.logistics, 'hotel')) card.logistics.hotel = body.logistics.hotel || null;
+    if (Object.prototype.hasOwnProperty.call(body.logistics, 'parking')) card.logistics.parking = body.logistics.parking || null;
+  }
+  card.updated_at = new Date().toISOString();
+  store[projectKey] = card;
+  saveProjectsStore(store);
+  return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Assignments: who's scheduled on this project, and when ---
+app.post(['/api/projects/:projectKey/assignments', '/service2/api/projects/:projectKey/assignments'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const card = ensureProjectCardShape(store[projectKey]);
+  const body = req.body || {};
+  const engineerId = String(toSingleValue(body.engineerId) || '').trim();
+  const plannedFrom = String(toSingleValue(body.plannedFrom) || '').trim();
+  const plannedTo = String(toSingleValue(body.plannedTo) || '').trim();
+  if (!engineerId || !plannedFrom || !plannedTo) {
+    return res.status(400).json({ ok: false, error: 'engineerId_plannedFrom_plannedTo_required' });
+  }
+  const assignment = { id: newProjectSubId('asg'), engineerId, plannedFrom, plannedTo };
+  card.assignments.push(assignment);
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  return res.status(201).json({ ok: true, assignment, project: projectPublicShape(projectKey, card) });
+});
+
+app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/api/projects/:projectKey/assignments/:assignmentId'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const before = card.assignments.length;
+  card.assignments = card.assignments.filter((a) => a.id !== req.params.assignmentId);
+  if (card.assignments.length === before) return res.status(404).json({ ok: false, error: 'assignment_not_found' });
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Pins: hotel / parking / site / custom geo points ---
+app.post(['/api/projects/:projectKey/pins', '/service2/api/projects/:projectKey/pins'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const card = ensureProjectCardShape(store[projectKey]);
+  const body = req.body || {};
+  const kind = ['site', 'parking', 'hotel', 'custom'].includes(body.kind) ? body.kind : 'custom';
+  const lat = Number(body.lat);
+  const lng = Number(body.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ ok: false, error: 'lat_lng_required' });
+  }
+  const pin = {
+    id: newProjectSubId('pin'),
+    kind,
+    lat,
+    lng,
+    label: String(toSingleValue(body.label) || '').trim().slice(0, 120) || null,
+    note: String(toSingleValue(body.note) || '').trim().slice(0, 500) || null,
+  };
+  card.pins.push(pin);
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  return res.status(201).json({ ok: true, pin, project: projectPublicShape(projectKey, card) });
+});
+
+app.patch(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const pin = card.pins.find((p) => p.id === req.params.pinId);
+  if (!pin) return res.status(404).json({ ok: false, error: 'pin_not_found' });
+  const body = req.body || {};
+  if (body.lat != null && Number.isFinite(Number(body.lat))) pin.lat = Number(body.lat);
+  if (body.lng != null && Number.isFinite(Number(body.lng))) pin.lng = Number(body.lng);
+  if (Object.prototype.hasOwnProperty.call(body, 'label')) pin.label = String(toSingleValue(body.label) || '').trim().slice(0, 120) || null;
+  if (Object.prototype.hasOwnProperty.call(body, 'note')) pin.note = String(toSingleValue(body.note) || '').trim().slice(0, 500) || null;
+  if (['site', 'parking', 'hotel', 'custom'].includes(body.kind)) pin.kind = body.kind;
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  return res.json({ ok: true, pin, project: projectPublicShape(projectKey, card) });
+});
+
+app.delete(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:projectKey/pins/:pinId'], requirePlanProjects, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const before = card.pins.length;
+  card.pins = card.pins.filter((p) => p.id !== req.params.pinId);
+  if (card.pins.length === before) return res.status(404).json({ ok: false, error: 'pin_not_found' });
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Assets: pre-report photos/schemes/files, freely add/removable (unlike report photos,
+// which are embedded once and frozen after signing) ---
+const projectAssetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024, files: 1 },
+}).single('file');
+
+app.post(['/api/projects/:projectKey/assets', '/service2/api/projects/:projectKey/assets'], requirePlanProjects, (req, res) => {
+  projectAssetUpload(req, res, async (err) => {
+    if (err) return res.status(400).json({ ok: false, error: err.message || 'upload_failed' });
+    const projectKey = strictProjectNumber(req.params.projectKey);
+    if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+    if (!req.file || !req.file.buffer) return res.status(400).json({ ok: false, error: 'file_required' });
+    const store = loadProjectsStore() || {};
+    if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
+    const card = ensureProjectCardShape(store[projectKey]);
+    try {
+      const dir = path.join(PROJECT_ASSETS_DIR, sanitizeFilename(projectKey));
+      await fsExtra.ensureDir(dir);
+      const assetId = newProjectSubId('asset');
+      const ext = path.extname(req.file.originalname || '').toLowerCase().slice(0, 12);
+      const storedName = `${assetId}${ext}`;
+      await fs.promises.writeFile(path.join(dir, storedName), req.file.buffer);
+      const mime = String(req.file.mimetype || '').toLowerCase();
+      const kindGuess = mime.startsWith('image/') ? 'photo' : (mime === 'application/pdf' ? 'scheme' : 'file');
+      const kind = ['photo', 'scheme', 'file'].includes(toSingleValue(req.body?.kind)) ? toSingleValue(req.body.kind) : kindGuess;
+      const asset = {
+        id: assetId,
+        kind,
+        file: storedName,
+        mime: req.file.mimetype || null,
+        name: String(req.file.originalname || storedName).slice(0, 200),
+        caption: String(toSingleValue(req.body?.caption) || '').slice(0, 300) || null,
+        pinId: toSingleValue(req.body?.pinId) || null,
+        url: `/api/projects/${encodeURIComponent(projectKey)}/assets/${encodeURIComponent(assetId)}`,
+        uploadedBy: req.headers['x-hub-user'] || null,
+        uploadedAt: new Date().toISOString(),
+      };
+      card.assets.push(asset);
+      card.updated_at = new Date().toISOString();
+      saveProjectsStore(store);
+      return res.status(201).json({ ok: true, asset, project: projectPublicShape(projectKey, card) });
+    } catch (e) {
+      console.error('[server] project asset upload failed', e);
+      return res.status(500).json({ ok: false, error: 'asset_upload_failed' });
+    }
+  });
+});
+
+app.get(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey];
+  const asset = card && Array.isArray(card.assets) && card.assets.find((a) => a.id === req.params.assetId);
+  if (!asset) return res.status(404).json({ ok: false, error: 'asset_not_found' });
+  const dir = path.join(PROJECT_ASSETS_DIR, sanitizeFilename(projectKey));
+  const filePath = safeResolvePath(dir, path.join(dir, sanitizeFilename(asset.file)));
+  if (!filePath || !fs.existsSync(filePath)) return res.status(404).json({ ok: false, error: 'asset_file_missing' });
+  if (asset.mime) res.setHeader('Content-Type', asset.mime);
+  res.setHeader('Cache-Control', 'private, max-age=3600');
+  return res.sendFile(filePath, { dotfiles: 'allow' });
+});
+
+app.delete(['/api/projects/:projectKey/assets/:assetId', '/service2/api/projects/:projectKey/assets/:assetId'], requirePlanProjects, async (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const asset = card.assets.find((a) => a.id === req.params.assetId);
+  if (!asset) return res.status(404).json({ ok: false, error: 'asset_not_found' });
+  card.assets = card.assets.filter((a) => a.id !== req.params.assetId);
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  try {
+    const dir = path.join(PROJECT_ASSETS_DIR, sanitizeFilename(projectKey));
+    const filePath = safeResolvePath(dir, path.join(dir, sanitizeFilename(asset.file)));
+    if (filePath && fs.existsSync(filePath)) await fs.promises.unlink(filePath);
+  } catch (e) { /* file cleanup is best-effort */ }
+  return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Calendar: projects with an assignment overlapping [from, to] ---
+// Per iOS's ask (note 581): enough for the calendar strip without a detail fetch.
+app.get(['/api/projects', '/service2/api/projects'], (req, res) => {
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  const mineOnly = String(req.query.mine || '') === 'true';
+  const caller = req.headers['x-hub-user'] || null;
+  const overlaps = (assignment) => {
+    if (!from && !to) return true;
+    if (from && assignment.plannedTo && assignment.plannedTo < from) return false;
+    if (to && assignment.plannedFrom && assignment.plannedFrom > to) return false;
+    return true;
+  };
+  const store = loadProjectsStore() || {};
+  const results = [];
+  for (const [key, rawCard] of Object.entries(store)) {
+    const card = ensureProjectCardShape(rawCard && typeof rawCard === 'object' ? rawCard : {});
+    const matchingAssignments = card.assignments.filter(overlaps);
+    if (!matchingAssignments.length) continue;
+    if (mineOnly && caller && !matchingAssignments.some((a) => a.engineerId === caller)) continue;
+    results.push({
+      lsc_project_number: key,
+      title: card.title || null,
+      address: card.site_location || null,
+      status: card.status || null,
+      assignments: matchingAssignments.map((a) => ({ ...a, mine: caller ? a.engineerId === caller : false })),
+    });
+  }
+  return res.json({ ok: true, from: from || null, to: to || null, projects: results });
 });
 
 // --- Manager dashboard (P2): aggregate report stats over all meta + PDF sizes ---
