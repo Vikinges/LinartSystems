@@ -10,7 +10,7 @@
     /* ----------------------------------------------------------- month grid -- */
     .cal {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: 44px repeat(7, 1fr);
       gap: 1px;
       background: var(--border);
       border: 1px solid var(--border);
@@ -27,6 +27,22 @@
       text-transform: uppercase;
       color: var(--text-muted);
     }
+
+    /* German-style "KW" (Kalenderwoche) column: one narrow cell per week row,
+       the ISO 8601 week number of that row's Monday. */
+    .cal__kw {
+      background: var(--bg-sunken);
+      padding: 8px 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cal__kw-head { background: var(--surface-header); }
 
     .cal__day {
       background: var(--surface);
@@ -322,7 +338,20 @@
 
     function renderDowHeader() {
       const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return names.map((n) => `<div class="cal__dow"><span>${n}</span></div>`).join('');
+      const kwHead = '<div class="cal__dow cal__kw-head">KW</div>';
+      return kwHead + names.map((n) => `<div class="cal__dow"><span>${n}</span></div>`).join('');
+    }
+
+    // ISO 8601 week number (German "Kalenderwoche") of a date's week — the week
+    // containing that week's Thursday decides the year, per the standard.
+    function isoWeekNumber(date) {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = (d.getUTCDay() + 6) % 7; // Mon=0..Sun=6
+      d.setUTCDate(d.getUTCDate() - dayNum + 3);
+      const firstThursday = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
+      const firstThursdayDayNum = (firstThursday.getUTCDay() + 6) % 7;
+      firstThursday.setUTCDate(firstThursday.getUTCDate() - firstThursdayDayNum + 3);
+      return 1 + Math.round((d - firstThursday) / (7 * 86400000));
     }
 
     function buildMonthCells(monthStart) {
@@ -367,7 +396,13 @@
 
       calGrid.innerHTML = renderDowHeader();
       const today = new Date();
-      cells.forEach((day) => {
+      cells.forEach((day, i) => {
+        if (i % 7 === 0) {
+          const kwEl = document.createElement('div');
+          kwEl.className = 'cal__kw';
+          kwEl.textContent = 'KW ' + isoWeekNumber(day);
+          calGrid.appendChild(kwEl);
+        }
         const dayEl = document.createElement('div');
         dayEl.className = 'cal__day';
         if (day.getMonth() !== cursor.getMonth()) dayEl.classList.add('is-outside');
