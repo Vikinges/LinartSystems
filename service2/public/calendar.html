@@ -138,6 +138,58 @@
     /* Same [hidden]-losing-to-display fix as .button/.toolbar__group in theme.css — these
        forms are hidden per-viewer (canWrite), not just at load. */
     .inline-form[hidden] { display: none; }
+
+    /* ------------------------------------------------------------ my trips -- */
+    /* The engineer's screen: the next job first, everything needed on site on one card. */
+    .hero { display: grid; grid-template-columns: 1.4fr 1fr; }
+    .hero__main { padding: 24px; border-right: 1px solid var(--border); }
+    .hero__side { padding: 24px; background: var(--surface-header); display: flex; flex-direction: column; gap: 16px; }
+    .hero__eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); }
+    .hero__eyebrow.is-live { color: var(--success); }
+    .hero__title { margin: 6px 0 2px; font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -.02em; }
+    .hero__dates { font-size: 13px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+    .hero__address { margin-top: 14px; font-size: 14px; color: var(--text-primary); line-height: 1.45; }
+    .hero__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .hero__block h5 { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+    .hero__block a { color: var(--text-primary); }
+    .hero__block .kv-empty { font-size: 12px; }
+    .hero__empty { padding: 48px 24px; text-align: center; color: var(--text-muted); font-size: 13px; }
+    @media (max-width: 860px) {
+      .hero { grid-template-columns: 1fr; }
+      .hero__main { border-right: 0; border-bottom: 1px solid var(--border); }
+    }
+
+    .upcoming__row { display: flex; align-items: center; gap: 14px; padding: 12px 20px; border-top: 1px solid var(--border-subtle); cursor: pointer; }
+    .upcoming__row:hover { background: var(--surface-hover); }
+    .upcoming__date { flex: 0 0 150px; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-secondary); }
+    .upcoming__title { font-weight: 500; }
+    .upcoming__meta { font-size: 12px; color: var(--text-muted); }
+
+    /* ------------------------------------------------------------- summary -- */
+    /* Manager-only: "who was there last, who knows this site, what's still missing". */
+    .summary-strip { display: flex; flex-wrap: wrap; padding: 2px 0 8px; }
+    .summary-strip .stat { padding: 2px 18px 2px 0; }
+    .summary-strip .stat + .stat { border-left: 1px solid var(--border); padding-left: 18px; }
+    .summary-strip .stat__num { font-size: 20px; line-height: 24px; }
+    .summary-strip .stat__num.is-text { font-size: 14px; line-height: 24px; font-weight: 500; }
+    .completeness { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .history__row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-subtle); font-size: 12.5px; }
+    .history__row:last-child { border-bottom: none; }
+    .history__who { color: var(--text-primary); font-weight: 500; }
+    .history__meta { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+    /* --------------------------------------------------------------- hours -- */
+    /* One row per day of an assignment: plan by default, the engineer's actual once set. */
+    .hours { margin-top: 8px; display: grid; grid-template-columns: 118px 1fr 1fr 84px 30px; gap: 6px 8px; align-items: center; font-size: 12px; }
+    .hours__head { color: var(--text-muted); font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+    .hours input[type="time"], .hours input[type="number"] { height: 30px; font-size: 12px; padding: 0 8px; width: 100%; }
+    .hours__date { font-variant-numeric: tabular-nums; }
+    .hours__date small { display: block; color: var(--text-muted); font-size: 10.5px; }
+    .hours__date.is-actual small { color: var(--success); }
+    .hours .button.icon { width: 28px; height: 28px; }
+    /* Keep the reset arrow in the grid flow when it's not applicable — display:none would
+       pull the cell out and shift every following row one column to the left. */
+    .hours .button.icon.is-off { visibility: hidden; pointer-events: none; }
   </style>
 </head>
 
@@ -170,6 +222,14 @@
     </div>
 
     <div class="status" id="status"></div>
+
+    <div id="my-trips" hidden>
+      <div class="card" id="hero-card"><div class="hero__empty">Loading your next job…</div></div>
+      <div class="card">
+        <div class="card__head"><h2>Upcoming</h2><span class="badge" id="upcoming-count">0</span></div>
+        <div id="upcoming-list"></div>
+      </div>
+    </div>
 
     <div id="locked-view" class="card" hidden>
       <div class="locked">
@@ -250,13 +310,23 @@
           </div>
         </div>
 
+        <div class="modal__section" id="d-summary-section" hidden>
+          <h4>At a glance</h4>
+          <div class="summary-strip stat-rail" id="d-summary-strip"></div>
+          <div class="completeness" id="d-completeness"></div>
+        </div>
+
         <div class="modal__section">
           <h4>Assignments</h4>
           <div id="d-assignments"></div>
           <div class="inline-form" id="d-assign-form" hidden>
             <div class="field"><span>Engineer (hub username)</span><input type="text" id="d-a-engineer" placeholder="uli" /></div>
-            <div class="field"><span>From</span><input type="date" id="d-a-from" /></div>
-            <div class="field"><span>To</span><input type="date" id="d-a-to" /></div>
+            <div class="field"><span>Display name (optional)</span><input type="text" id="d-a-name" placeholder="Ulrich Maurer" /></div>
+            <div class="field" style="flex:0 0 140px;"><span>From</span><input type="date" id="d-a-from" /></div>
+            <div class="field" style="flex:0 0 140px;"><span>To</span><input type="date" id="d-a-to" /></div>
+            <div class="field" style="flex:0 0 100px;"><span>Day starts</span><input type="time" id="d-a-start" value="08:00" /></div>
+            <div class="field" style="flex:0 0 100px;"><span>Day ends</span><input type="time" id="d-a-end" value="17:00" /></div>
+            <div class="field" style="flex:0 0 90px;"><span>Break (min)</span><input type="number" id="d-a-break" value="30" min="0" step="5" /></div>
             <button type="button" class="button secondary small" id="d-a-save">Add</button>
           </div>
         </div>
@@ -290,6 +360,11 @@
           </div>
         </div>
 
+        <div class="modal__section" id="d-history-section" hidden>
+          <h4>Service history</h4>
+          <div id="d-history"></div>
+        </div>
+
         <div class="status" id="d-status-line"></div>
       </div>
     </div>
@@ -310,6 +385,7 @@
 
     let canView = false;
     let canWrite = false;
+    let mineOnly = false; // engineer view: only the caller's own assignments on the grid
     let currentUsername = '';
     let cursor = new Date();
     cursor.setDate(1);
@@ -324,6 +400,17 @@
     function pad2(n) { return String(n).padStart(2, '0'); }
     function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
     function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+    // User-facing dates are dd.mm.yyyy everywhere in this product; ISO stays on the wire.
+    function fmtDMY(iso) {
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+      return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || '');
+    }
+    function fmtRange(from, to) { return from === to ? fmtDMY(from) : `${fmtDMY(from)} – ${fmtDMY(to)}`; }
+    function addDaysIso(iso, n) { const d = new Date(`${iso}T00:00:00`); d.setDate(d.getDate() + n); return isoDate(d); }
+    function todayIso() { return isoDate(new Date()); }
+    function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function mapsDirectionsUrl(dest) { return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest); }
+    function mapsPointUrl(pin) { return 'https://www.google.com/maps?q=' + pin.lat + ',' + pin.lng; }
 
     async function loadUser() {
       try {
@@ -385,7 +472,7 @@
 
       let projects = [];
       try {
-        const resp = await api(`/api/projects?from=${from}&to=${to}`);
+        const resp = await api(`/api/projects?from=${from}&to=${to}${mineOnly ? '&mine=true' : ''}`);
         const payload = await resp.json();
         if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
         projects = payload.projects || [];
@@ -414,7 +501,7 @@
         dayEl.appendChild(num);
 
         projects.forEach((p) => {
-          const hits = (p.assignments || []).filter((a) => assignmentCoversDay(a, day));
+          const hits = (p.assignments || []).filter((a) => assignmentCoversDay(a, day) && (!mineOnly || a.mine));
           if (!hits.length) return;
           const chip = document.createElement('button');
           chip.type = 'button';
@@ -502,8 +589,10 @@
       document.getElementById('d-number').textContent = p.lsc_project_number;
       document.getElementById('d-address').textContent = p.address || '—';
       const statusEl2 = document.getElementById('d-status');
-      statusEl2.textContent = p.status || 'no status';
+      statusEl2.textContent = (p.status || 'no status').replace(/_/g, ' ');
       document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId);
+      renderSummary(p);
+      renderHistory(p);
 
       const editForm = document.getElementById('d-edit-form');
       editForm.hidden = !canWrite;
@@ -517,9 +606,15 @@
         assignEl.innerHTML = '<div class="kv-empty">No one scheduled yet.</div>';
       } else {
         p.assignments.forEach((a) => {
-          const row = document.createElement('div');
-          row.className = 'list-row';
-          row.innerHTML = `<div><div class="list-row__main">${a.engineerId}</div><div class="list-row__meta">${a.plannedFrom} → ${a.plannedTo}</div></div>`;
+          const block = document.createElement('div');
+          block.className = 'list-row';
+          block.style.alignItems = 'flex-start';
+          block.style.flexDirection = 'column';
+          const head = document.createElement('div');
+          head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;';
+          const sched = a.schedule || {};
+          const isMe = a.engineerId === currentUsername;
+          head.innerHTML = `<div><div class="list-row__main">${escapeHtml(a.engineerName || a.engineerId)}${isMe ? ' <span class="chip is-active">you</span>' : ''}</div><div class="list-row__meta">${fmtRange(a.plannedFrom, a.plannedTo)}${sched.start ? ` · plan ${escapeHtml(sched.start)}–${escapeHtml(sched.end)}, break ${sched.breakMinutes} min` : ''}</div></div>`;
           if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
@@ -530,9 +625,17 @@
               openDetail(p.lsc_project_number);
               loadMonth();
             });
-            row.appendChild(del);
+            head.appendChild(del);
           }
-          assignEl.appendChild(row);
+          block.appendChild(head);
+          // Managers see everyone's hours; an engineer sees (and edits) only their own row.
+          if (canWrite || isMe) {
+            const hours = document.createElement('div');
+            hours.style.width = '100%';
+            renderHoursEditor(hours, p.lsc_project_number, a, { editable: canWrite || isMe });
+            block.appendChild(hours);
+          }
+          assignEl.appendChild(block);
         });
       }
       document.getElementById('d-assign-form').hidden = !canWrite;
@@ -603,6 +706,174 @@
       document.getElementById('d-asset-form').hidden = !canWrite;
     }
 
+    // -------------------------------------------------------- summary / history --
+    // Manager-only blocks in the project dialog: the two-click answer when a customer calls.
+    function renderSummary(p) {
+      const section = document.getElementById('d-summary-section');
+      const s = p.summary;
+      if (!canWrite || !s) { section.hidden = true; return; }
+      section.hidden = false;
+      const last = s.lastVisit;
+      const top = (s.topEngineers || [])[0];
+      const stat = (num, label, cls) => `<div class="stat"><div class="stat__num${cls ? ' ' + cls : ''}">${num}</div><div class="stat__label">${label}</div></div>`;
+      document.getElementById('d-summary-strip').innerHTML =
+        stat(String(s.visitCount || 0), 'visits') +
+        stat(last ? `${escapeHtml(last.submitterName || '—')} · ${fmtDMY(last.submittedAt)}` : '—', 'last on site', 'is-text') +
+        stat(last ? escapeHtml(String(last.type || '').replace(/_report$/, '').replace(/_/g, ' ')) : '—', 'last report', 'is-text') +
+        stat(top ? `${escapeHtml(top.name)} (${top.count})` : '—', 'knows this site best', 'is-text');
+      const labels = { address: 'Address', representative: 'Signatory', parking: 'Parking', model: 'Screen model' };
+      document.getElementById('d-completeness').innerHTML = Object.keys(labels).map((k) => {
+        const ok = Boolean(s.completeness && s.completeness[k]);
+        return `<span class="chip ${ok ? 'is-ok' : 'is-danger'}">${ok ? '✓' : '!'} ${labels[k]}</span>`;
+      }).join('');
+    }
+
+    function renderHistory(p) {
+      const section = document.getElementById('d-history-section');
+      const s = p.summary;
+      if (!canWrite || !s) { section.hidden = true; return; }
+      section.hidden = false;
+      const el = document.getElementById('d-history');
+      const visits = s.recentVisits || [];
+      if (!visits.length) { el.innerHTML = '<div class="kv-empty">No reports on this project yet.</div>'; return; }
+      el.innerHTML = visits.map((v) => `<div class="history__row"><div><span class="history__who">${escapeHtml(v.submitterName || '—')}</span> <span class="history__meta">· ${fmtDMY(v.submittedAt)} · ${escapeHtml(String(v.type || '').replace(/_report$/, '').replace(/_/g, ' '))}</span></div><a class="button icon" href="${apiBase}/${escapeHtml(v.url)}" target="_blank" title="Open PDF"><svg class="ic"><use href="./icons.svg#i-document"></use></svg></a></div>`).join('');
+    }
+
+    // ----------------------------------------------------------------- hours --
+    // One row per day of an assignment: the plan by default, the engineer's actual once
+    // they've changed it (PUT …/days/:date — idempotent, so a re-save is harmless). The
+    // reset arrow deletes the override and the day is back on plan. The server enforces
+    // who may edit whose row; `editable` only mirrors that so the inputs read as disabled.
+    function renderHoursEditor(container, projectKey, a, opts) {
+      const sched = a.schedule || { start: '08:00', end: '17:00', breakMinutes: 30 };
+      const days = [];
+      let cur = a.plannedFrom;
+      let guard = 0;
+      while (cur && cur <= a.plannedTo && guard++ < 31) { days.push(cur); cur = addDaysIso(cur, 1); }
+      const grid = document.createElement('div');
+      grid.className = 'hours';
+      grid.innerHTML = '<div class="hours__head">Day</div><div class="hours__head">Start</div><div class="hours__head">End</div><div class="hours__head">Break</div><div></div>';
+      const dayUrl = (d) => `/api/projects/${encodeURIComponent(projectKey)}/assignments/${encodeURIComponent(a.id)}/days/${d}`;
+      days.forEach((d) => {
+        const ov = a.days && a.days[d];
+        const v = ov || sched;
+        const dateEl = document.createElement('div');
+        dateEl.className = 'hours__date' + (ov ? ' is-actual' : '');
+        dateEl.innerHTML = `${fmtDMY(d)}<small>${ov ? 'actual' : 'planned'}</small>`;
+        const s = document.createElement('input'); s.type = 'time'; s.value = v.start || '';
+        const e = document.createElement('input'); e.type = 'time'; e.value = v.end || '';
+        const b = document.createElement('input'); b.type = 'number'; b.min = '0'; b.step = '5'; b.value = String(v.breakMinutes == null ? 0 : v.breakMinutes);
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.className = 'button icon';
+        reset.title = 'Back to plan';
+        reset.innerHTML = '<svg class="ic"><use href="./icons.svg#i-restore"></use></svg>';
+        reset.classList.toggle('is-off', !ov || !opts.editable);
+        const markActual = (on) => {
+          dateEl.classList.toggle('is-actual', on);
+          dateEl.querySelector('small').textContent = on ? 'actual' : 'planned';
+          reset.classList.toggle('is-off', !on);
+        };
+        const save = async () => {
+          if (!s.value || !e.value) return;
+          const resp = await api(dayUrl(d), {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ start: s.value, end: e.value, breakMinutes: Number(b.value) || 0 }),
+          });
+          if (resp.ok) markActual(true);
+        };
+        [s, e, b].forEach((inp) => { inp.disabled = !opts.editable; inp.addEventListener('change', save); });
+        reset.addEventListener('click', async () => {
+          await api(dayUrl(d), { method: 'DELETE' });
+          s.value = sched.start; e.value = sched.end; b.value = String(sched.breakMinutes);
+          markActual(false);
+        });
+        grid.append(dateEl, s, e, b, reset);
+      });
+      container.appendChild(grid);
+    }
+
+    // -------------------------------------------------------------- my trips --
+    // The engineer's landing view: what's on now (or next), with everything needed on site.
+    async function loadMyTrips() {
+      const heroCard = document.getElementById('hero-card');
+      const list = document.getElementById('upcoming-list');
+      const countEl = document.getElementById('upcoming-count');
+      const today = todayIso();
+      let projects = [];
+      try {
+        const resp = await api(`/api/projects?from=${addDaysIso(today, -30)}&to=${addDaysIso(today, 365)}&mine=true`);
+        const payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
+        projects = payload.projects || [];
+      } catch (err) {
+        heroCard.innerHTML = `<div class="hero__empty">Could not load your jobs: ${escapeHtml(err.message)}</div>`;
+        return;
+      }
+      const mine = [];
+      projects.forEach((p) => (p.assignments || []).forEach((a) => { if (a.mine) mine.push({ p, a }); }));
+      mine.sort((x, y) => x.a.plannedFrom.localeCompare(y.a.plannedFrom));
+      const live = mine.find(({ a }) => a.plannedFrom <= today && today <= a.plannedTo) || null;
+      const next = live || mine.find(({ a }) => a.plannedFrom > today) || null;
+      const upcoming = mine.filter((x) => x !== next && x.a.plannedTo >= today);
+      countEl.textContent = String(upcoming.length);
+      countEl.classList.toggle('is-active', upcoming.length > 0);
+      list.innerHTML = upcoming.length ? '' : '<div class="kv-empty" style="padding:16px 20px;">Nothing else scheduled.</div>';
+      upcoming.forEach(({ p, a }) => {
+        const row = document.createElement('div');
+        row.className = 'upcoming__row';
+        row.innerHTML = `<div class="upcoming__date">${fmtRange(a.plannedFrom, a.plannedTo)}</div><div><div class="upcoming__title">${escapeHtml(p.title || p.lsc_project_number)}</div><div class="upcoming__meta">${escapeHtml(p.address || '')}</div></div>`;
+        row.addEventListener('click', () => openDetail(p.lsc_project_number));
+        list.appendChild(row);
+      });
+      if (!next) { heroCard.innerHTML = '<div class="hero__empty">No upcoming jobs assigned to you.</div>'; return; }
+      let full = next.p;
+      try {
+        const resp = await api(`/api/projects/${encodeURIComponent(next.p.lsc_project_number)}`);
+        const payload = await resp.json();
+        if (resp.ok && payload.ok) full = payload.project;
+      } catch (err) { /* the list shape is enough to render */ }
+      const myRow = (full.assignments || []).find((x) => x.id === next.a.id) || next.a;
+      renderHero(heroCard, full, myRow, Boolean(live));
+    }
+
+    function renderHero(card, p, a, isLive) {
+      const pins = p.pins || [];
+      const hotel = pins.find((x) => x.kind === 'hotel') || (p.logistics && p.logistics.hotel) || null;
+      const parking = pins.find((x) => x.kind === 'parking') || (p.logistics && p.logistics.parking) || null;
+      const site = pins.find((x) => x.kind === 'site') || null;
+      const pinLink = (pin, fallback) => (pin && pin.lat != null && pin.lng != null)
+        ? `<a href="${mapsPointUrl(pin)}" target="_blank">${escapeHtml(pin.label || fallback)}</a>`
+        : `<span class="kv-empty">${fallback}: not set</span>`;
+      const mates = (p.assignments || []).filter((x) => x.engineerId !== currentUsername && x.plannedFrom <= a.plannedTo && x.plannedTo >= a.plannedFrom);
+      const files = p.assets || [];
+      const dest = p.address || (site ? `${site.lat},${site.lng}` : '');
+      card.innerHTML = `
+        <div class="hero">
+          <div class="hero__main">
+            <div class="hero__eyebrow${isLive ? ' is-live' : ''}">${isLive ? 'On site now' : 'Next job'}</div>
+            <div class="hero__title">${escapeHtml(p.title || p.lsc_project_number)}</div>
+            <div class="hero__dates"><span class="mono">${escapeHtml(p.lsc_project_number)}</span> · ${fmtRange(a.plannedFrom, a.plannedTo)}</div>
+            <div class="hero__address">${escapeHtml(p.address || 'Address not set yet')}</div>
+            <div class="hero__actions">
+              ${dest ? `<a class="button" href="${mapsDirectionsUrl(dest)}" target="_blank"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> Route</a>` : ''}
+              <a class="button secondary" href="/chat?c=${encodeURIComponent(p.chatConversationId || ('prj_' + p.lsc_project_number))}" target="_blank"><svg class="ic"><use href="./icons.svg#i-link"></use></svg> Project chat</a>
+              <button type="button" class="button ghost" id="hero-details">Details</button>
+            </div>
+            <div class="hero__block" style="margin-top:20px;"><h5>My hours</h5><div id="hero-hours"></div></div>
+          </div>
+          <div class="hero__side">
+            <div class="hero__block"><h5>Hotel</h5>${pinLink(hotel, 'Hotel')}</div>
+            <div class="hero__block"><h5>Parking</h5>${pinLink(parking, 'Parking')}</div>
+            <div class="hero__block"><h5>Team on this job</h5>${mates.length ? mates.map((m) => `<div>${escapeHtml(m.engineerName || m.engineerId)} <span class="kv-empty">${fmtRange(m.plannedFrom, m.plannedTo)}</span></div>`).join('') : '<span class="kv-empty">Just you</span>'}</div>
+            <div class="hero__block"><h5>Files</h5>${files.length ? files.map((f) => `<div><a href="${apiBase}${escapeHtml(f.url)}" target="_blank">${escapeHtml(f.name)}</a>${f.caption ? ` <span class="kv-empty">${escapeHtml(f.caption)}</span>` : ''}</div>`).join('') : '<span class="kv-empty">No files yet</span>'}</div>
+          </div>
+        </div>`;
+      renderHoursEditor(card.querySelector('#hero-hours'), p.lsc_project_number, a, { editable: true });
+      card.querySelector('#hero-details').addEventListener('click', () => openDetail(p.lsc_project_number));
+    }
+
     document.getElementById('d-edit-save').addEventListener('click', async () => {
       if (!currentProjectKey) return;
       await api(`/api/projects/${encodeURIComponent(currentProjectKey)}`, {
@@ -621,15 +892,22 @@
     document.getElementById('d-a-save').addEventListener('click', async () => {
       if (!currentProjectKey) return;
       const engineerId = document.getElementById('d-a-engineer').value.trim();
+      const engineerName = document.getElementById('d-a-name').value.trim();
       const plannedFrom = document.getElementById('d-a-from').value;
       const plannedTo = document.getElementById('d-a-to').value;
       if (!engineerId || !plannedFrom || !plannedTo) return;
+      const schedule = {
+        start: document.getElementById('d-a-start').value || '08:00',
+        end: document.getElementById('d-a-end').value || '17:00',
+        breakMinutes: Number(document.getElementById('d-a-break').value) || 0,
+      };
       await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/assignments`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ engineerId, plannedFrom, plannedTo }),
+        body: JSON.stringify({ engineerId, engineerName: engineerName || undefined, plannedFrom, plannedTo, schedule }),
       });
       document.getElementById('d-a-engineer').value = '';
+      document.getElementById('d-a-name').value = '';
       openDetail(currentProjectKey);
       loadMonth();
     });
@@ -702,10 +980,21 @@
         lockedView.hidden = false;
         return;
       }
-      newProjectBtn.hidden = !canWrite;
       document.getElementById('cal-toolbar').hidden = false;
-      calView.hidden = false;
-      await loadMonth();
+      if (canWrite) {
+        // Manager/admin: the planner — every project, create/edit, summary and history.
+        newProjectBtn.hidden = false;
+        calView.hidden = false;
+        await loadMonth();
+      } else {
+        // Engineer with access: their next job first, then only their own assignments on
+        // the grid. No create/edit controls, no statistics — none of that is their task.
+        mineOnly = true;
+        document.querySelector('.page-head p').textContent = 'Your next job, and what you need on site.';
+        document.getElementById('my-trips').hidden = false;
+        calView.hidden = false;
+        await Promise.all([loadMyTrips(), loadMonth()]);
+      }
     })();
   </script>
 </body>

@@ -21146,6 +21146,74 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
 
 
+          // Team hours pre-fill from the calendar's plan/actuals: once a valid project number
+          // and the service date are in, fetch api/projects/<key>/time for that window and
+          // seed one row per person-day — but only while the table is still untouched, so it
+          // never overwrites hours someone already typed. Whoever files the report corrects
+          // what's wrong and submits as usual; the report writes nothing back into the plan.
+          // (Plain string concatenation on purpose: this whole page is a server-side template
+          // literal, so a client-side placeholder or a regex backslash here gets eaten.)
+          const prefillTeamHours = (() => {
+            let lastKey = '';
+            const numberSelector = 'input[name="batch_number"], input[name="lsc_project_number"], input[name="daily_project_number"]';
+            const numberInputs = () => Array.from(document.querySelectorAll(numberSelector));
+            const dateInput = document.querySelector('input[name="date_of_service"]');
+            const endInput = document.querySelector('input[name="completion_date"]');
+            const digitsOnly = (value) => String(value || '').split('').filter((ch) => ch >= '0' && ch <= '9').join('');
+            const isUntouched = () => rowElements().every((row) => {
+              const st = rowStates.get(row);
+              return !st || !st.hasData;
+            });
+            const run = async () => {
+              const candidate = numberInputs().map((el) => el.value).find((v) => digitsOnly(v).length === 6) || '';
+              const digits = digitsOnly(candidate);
+              if (digits.length !== 6) return;
+              const projectKey = digits.slice(0, 2) + '-' + digits.slice(2);
+              const from = dateInput && dateInput.value ? dateInput.value : '';
+              if (!from) return;
+              const to = endInput && endInput.value && endInput.value >= from ? endInput.value : from;
+              const key = projectKey + '|' + from + '|' + to;
+              if (key === lastKey || !isUntouched()) return;
+              lastKey = key;
+              let payload = null;
+              try {
+                const resp = await fetch(
+                  buildAppUrl('api/projects/' + encodeURIComponent(projectKey) + '/time?from=' + from + '&to=' + to),
+                  { credentials: 'same-origin' },
+                );
+                if (!resp.ok) return;
+                payload = await resp.json();
+              } catch (err) {
+                return;
+              }
+              const employees = payload && Array.isArray(payload.employees) ? payload.employees : [];
+              if (!employees.length || !isUntouched()) return;
+              const stale = rowElements();
+              suppressSummaryLog = true;
+              employees.forEach((emp) => {
+                const groupId = createGroupId();
+                (emp.days || []).forEach((day) => {
+                  addRow(
+                    { name: emp.name, role: emp.role || '', arrival: day.date + 'T' + day.arrival, departure: day.date + 'T' + day.departure },
+                    { silent: true, summaryTrigger: 'seed', groupId: groupId, markSynced: false, skipPropagation: true },
+                  );
+                });
+              });
+              stale.forEach((row) => {
+                const btn = row.querySelector('[data-action="employee-remove"]');
+                if (btn) btn.click();
+              });
+              suppressSummaryLog = false;
+              updateSummary('seed');
+              recordDebug('employee-prefill-from-calendar', { projectKey: projectKey, from: from, to: to, people: employees.length });
+            };
+            [].concat(numberInputs(), [dateInput, endInput]).filter(Boolean).forEach((el) => {
+              el.addEventListener('change', run);
+            });
+            return run;
+          })();
+          setTimeout(prefillTeamHours, 0);
+
           if (addButton) {
 
             addButton.addEventListener('click', async (event) => {
