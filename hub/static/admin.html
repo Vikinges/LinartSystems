@@ -698,6 +698,7 @@
       { key: 'canGenerateLinks', label: 'Create sign links', hint: 'Can send documents to customers for signature.' },
       { key: 'canDeleteFiles', label: 'Delete files', hint: 'Can permanently remove PDFs from the archive.' },
       { key: 'canUseChat', label: 'Use chat (LSC LED Chat)', hint: 'Can open the team chat, send messages and attachments.' },
+      { key: 'canViewFeedback', label: 'Read user feedback', hint: 'Sees the admin-only "Feedback & reports" chat feed, nothing else admin-only (e.g. Reported chats stays hidden).' },
     ];
     function summarizeUser(roleValue, user) {
       if (roleValue === 'admin') return 'Full access to everything.';
@@ -707,6 +708,7 @@
       if (user.canViewFiles) extras.push('views files archive');
       if (user.canGenerateLinks) extras.push('creates sign links');
       if (user.canDeleteFiles) extras.push('deletes files');
+      if (user.canViewFeedback) extras.push('reads user feedback');
       const base = extras.length ? `Creates report forms + ${extras.join(', ')}.` : 'Creates report forms only.';
       return user.canUseChat === false ? `${base} Chat: off.` : `${base} Chat: on.`;
     }
@@ -1196,6 +1198,7 @@
         const canGenerateLinksInput = permInputs.canGenerateLinks;
         const canDeleteFilesInput = permInputs.canDeleteFiles;
         const canUseChatInput = permInputs.canUseChat;
+        const canViewFeedbackInput = permInputs.canViewFeedback;
         controls.appendChild(permSection);
 
         // Services
@@ -1229,11 +1232,12 @@
             canGenerateLinks: canGenerateLinksInput.checked,
             canDeleteFiles: canDeleteFilesInput.checked,
             canUseChat: canUseChatInput.checked,
+            canViewFeedback: canViewFeedbackInput.checked,
           });
           permSection.classList.toggle('is-hidden', currentRole !== 'manager');
           servicesSection.classList.toggle('is-hidden', currentRole !== 'manager' && currentRole !== 'planner');
         };
-        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput].forEach((cb) => {
+        [filesAccessInput, canGenerateLinksInput, canDeleteFilesInput, canUseChatInput, canViewFeedbackInput].forEach((cb) => {
           cb.addEventListener('change', refreshSummary);
         });
         allowAllInput.addEventListener('change', () => {
@@ -1269,6 +1273,7 @@
             payload.canGenerateLinks = canGenerateLinksInput.checked;
             payload.canDeleteFiles = canDeleteFilesInput.checked;
             payload.canUseChat = canUseChatInput.checked;
+            payload.canViewFeedback = canViewFeedbackInput.checked;
             if (allowAllInput.checked) {
               payload.allowedServices = [];
             } else {

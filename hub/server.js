@@ -482,6 +482,15 @@ function resolveChatAccess(role, isSuperadmin, canUseChat) {
   return canUseChat !== false;
 }
 
+// Feedback-channel access is opt-in per account and, unlike files/chat, never auto-granted
+// to planners — it's a narrow exception carved out for outside collaborators (e.g. the iOS
+// dev) who need to read user bug reports without full admin rights.
+function resolveFeedbackAccess(role, isSuperadmin, canViewFeedback) {
+  if (isSuperadmin || role === USER_ROLE_ADMIN) return true;
+  if (role === USER_ROLE_BLOCKED) return false;
+  return Boolean(canViewFeedback);
+}
+
 function normalizeSessionUser(user) {
   if (!user || typeof user !== 'object') return null;
   const username = typeof user.username === 'string' ? user.username.trim() : '';
@@ -508,7 +517,12 @@ function normalizeSessionUser(user) {
     normalizeFilesAccess(user.canDeleteFiles, false)
   );
   const canUseChat = resolveChatAccess(role, isSuperadmin, user.canUseChat);
-  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat };
+  const canViewFeedback = resolveFeedbackAccess(
+    role,
+    isSuperadmin,
+    normalizeFilesAccess(user.canViewFeedback, false)
+  );
+  return { username, isSuperadmin, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback };
 }
 
 function getNextPort() {
@@ -1595,6 +1609,7 @@ app.get('/api/auth/me', (req, res) => {
       canGenerateLinks: user.canGenerateLinks,
       canDeleteFiles: user.canDeleteFiles,
       canUseChat: user.canUseChat,
+      canViewFeedback: user.canViewFeedback,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -2242,6 +2257,7 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         canGenerateLinks: normalizeFilesAccess(u.canGenerateLinks, false),
         canDeleteFiles: normalizeFilesAccess(u.canDeleteFiles, false),
         canUseChat: u.canUseChat !== false,
+        canViewFeedback: normalizeFilesAccess(u.canViewFeedback, false),
         // Read-only status so the admin UI / app can show a 2FA badge and offer a reset
         // only where there is something to reset. The secret itself is never exposed.
         twoFactorEnabled: !!(u.twoFactor && u.twoFactor.enabled),
@@ -2295,6 +2311,7 @@ app.get('/admin/me', requireSuperadmin, (req, res) => {
       canGenerateLinks: user.canGenerateLinks,
       canDeleteFiles: user.canDeleteFiles,
       canUseChat: user.canUseChat,
+      canViewFeedback: user.canViewFeedback,
       allowedServices: user.allowedServices || [],
     },
   });
@@ -2312,6 +2329,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
   const canGenerateLinks = resolveFilesAccess(role, false, normalizeFilesAccess(body.canGenerateLinks, false));
   const canDeleteFiles = resolveFilesAccess(role, false, normalizeFilesAccess(body.canDeleteFiles, false));
   const canUseChat = resolveChatAccess(role, false, body.canUseChat);
+  const canViewFeedback = resolveFeedbackAccess(role, false, normalizeFilesAccess(body.canViewFeedback, false));
   if (!username || username.toLowerCase() === DEFAULT_ADMIN_USERNAME.toLowerCase()) {
     return res.status(400).json({ ok: false, error: 'invalid_username' });
   }
@@ -2325,7 +2343,7 @@ app.post('/admin/users', requireSuperadmin, requireSameOrigin, async (req, res) 
     return res.status(400).json({ ok: false, error: 'exists' });
   }
   const passwordHash = await bcrypt.hash(password, 10);
-  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat };
+  const newUser = { username, passwordHash, allowedServices, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback };
   // appReviewProtected accounts are exempt from the account-deletion sweeper (Apple review account).
   if (body.appReviewProtected === true) newUser.appReviewProtected = true;
   adminCredentials.users.push(newUser);
@@ -2370,10 +2388,18 @@ app.patch('/admin/users/:username', requireSuperadmin, requireSameOrigin, async 
   if (Object.prototype.hasOwnProperty.call(body, 'canUseChat')) {
     user.canUseChat = body.canUseChat !== false;
   }
+  if (Object.prototype.hasOwnProperty.call(body, 'canViewFeedback')) {
+    user.canViewFeedback = normalizeFilesAccess(body.canViewFeedback, false);
+  }
   user.canUseChat = resolveChatAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
     false,
     user.canUseChat
+  );
+  user.canViewFeedback = resolveFeedbackAccess(
+    normalizeUserRole(user.role, USER_ROLE_MANAGER),
+    false,
+    normalizeFilesAccess(user.canViewFeedback, false)
   );
   user.canViewFiles = resolveFilesAccess(
     normalizeUserRole(user.role, USER_ROLE_MANAGER),
@@ -2641,6 +2667,21 @@ function adminUsernames() {
     for (const u of adminCredentials.users) {
       if (u && typeof u.username === 'string'
         && normalizeUserRole(u.role, USER_ROLE_MANAGER) === USER_ROLE_ADMIN) {
+        names.add(u.username.trim());
+      }
+    }
+  }
+  return names;
+}
+
+// Usernames allowed into the Feedback & reports feed specifically: every admin, plus any
+// account opted into canViewFeedback — an outside collaborator who should read bug reports
+// without getting full admin rights (file deletion, user management, Reported chats, ...).
+function feedbackViewerUsernames() {
+  const names = adminUsernames();
+  if (adminCredentials && Array.isArray(adminCredentials.users)) {
+    for (const u of adminCredentials.users) {
+      if (u && typeof u.username === 'string' && normalizeFilesAccess(u.canViewFeedback, false)) {
         names.add(u.username.trim());
       }
     }
@@ -3108,8 +3149,9 @@ function isAdminUsername(name) {
 }
 function canSeeConversation(conv, username) {
   if (!conv) return false;
-  // Admin-only rooms (e.g. the Feedback & reports feed) are visible to every admin,
-  // regardless of explicit membership, and to no one else.
+  // The Feedback & reports feed alone also accepts accounts opted into canViewFeedback,
+  // not just admins — every OTHER admin-only room (e.g. Reported chats) stays admin-exclusive.
+  if (conv.id === FEEDBACK_CONV_ID) return feedbackViewerUsernames().has(username);
   if (conv.adminOnly) return isAdminUsername(username);
   if (conv.kind === 'project') return true;
   return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(username);
@@ -3167,7 +3209,7 @@ function postFeedbackToChat(record) {
     const conv = index.find((c) => c.id === FEEDBACK_CONV_ID);
     if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
     for (const c of sseClients) {
-      if (isAdminUsername(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
+      if (feedbackViewerUsernames().has(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
     }
     return true;
   } catch (err) {
@@ -3227,7 +3269,7 @@ async function relayFeedbackAttachmentsToChat(record) {
         const conv = index.find((c) => c.id === FEEDBACK_CONV_ID);
         if (conv) { conv.lastMessageAt = message.createdAt; saveChatIndex(index); }
         for (const c of sseClients) {
-          if (isAdminUsername(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
+          if (feedbackViewerUsernames().has(c.user)) ssePush(c, 'chat', { conversationId: FEEDBACK_CONV_ID, message });
         }
       } catch (e) { console.warn('[hub] feedback attach relay error', a && a.file, e && e.message); }
     }
