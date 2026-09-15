@@ -1,0 +1,671 @@
+<!doctype html>
+<html lang="en-GB">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Projects calendar</title>
+  <link rel="stylesheet" href="./theme.css" />
+  <style>
+    /* ----------------------------------------------------------- month grid -- */
+    .cal {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--r-lg);
+      overflow: hidden;
+    }
+
+    .cal__dow {
+      background: var(--surface-header);
+      padding: 8px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .cal__day {
+      background: var(--surface);
+      min-height: 108px;
+      padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .cal__day.is-outside { background: var(--bg-sunken); }
+    .cal__day.is-outside .cal__daynum { color: var(--text-disabled); }
+    .cal__day.is-today { box-shadow: inset 0 0 0 2px var(--accent); }
+
+    .cal__daynum {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cal__chip {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: none;
+      background: var(--accent-subtle);
+      color: var(--text-primary);
+      border-radius: var(--r-sm);
+      padding: 3px 6px;
+      font-size: 11px;
+      font-weight: 500;
+      line-height: 1.3;
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cal__chip:hover { background: var(--accent-subtle-border); }
+    .cal__chip.is-mine { background: var(--accent); color: var(--text-on-accent); }
+    .cal__chip.is-mine:hover { background: var(--accent-hover); }
+
+    @media (max-width: 860px) {
+      .cal__dow span { display: none; }
+      .cal__day { min-height: 72px; }
+    }
+
+    /* --------------------------------------------------------------- locked -- */
+    .locked {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 64px 24px;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .locked .ic { width: 32px; height: 32px; color: var(--text-disabled); }
+    .locked h2 { margin: 0; font-size: 16px; color: var(--text-primary); }
+    .locked p { margin: 0; max-width: 420px; font-size: 13px; line-height: 1.5; }
+
+    .kv-row { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: 13px; }
+    .kv-row .ic { color: var(--text-muted); }
+    .kv-row + .kv-row { border-top: 1px solid var(--border-subtle); }
+    .kv-empty { font-size: 12.5px; color: var(--text-muted); }
+
+    .list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .list-row:last-child { border-bottom: none; }
+    .list-row__main { font-size: 13px; }
+    .list-row__meta { font-size: 11.5px; color: var(--text-muted); }
+
+    .asset-thumb {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--r-sm);
+      object-fit: cover;
+      border: 1px solid var(--border);
+      background: var(--bg-sunken);
+    }
+
+    .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; }
+    .inline-form .field { flex: 1 1 120px; min-width: 0; }
+  </style>
+</head>
+
+<body>
+  <div class="chrome">
+    <div class="chrome__brand"><span class="chrome__mark">SHARP</span> LED Solution Center</div>
+    <nav class="chrome__nav">
+      <a href="./files.html"><svg class="ic"><use href="./icons.svg#i-folder"></use></svg> <span>Archive</span></a>
+      <a href="./"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span>New report</span></a>
+      <a href="./calendar.html" class="is-active"><svg class="ic"><use href="./icons.svg#i-calendar"></use></svg> <span>Calendar</span></a>
+      <a href="./trash.html"><svg class="ic"><use href="./icons.svg#i-trash"></use></svg> <span>Trash</span></a>
+    </nav>
+    <div class="chrome__spacer"></div>
+    <div class="chrome__meta" id="user-meta"></div>
+    <div class="chrome__meta" id="version-meta"></div>
+  </div>
+
+  <div class="container">
+    <div class="page-head">
+      <div>
+        <h1 id="month-label">Calendar</h1>
+        <p>Who is scheduled where, and when.</p>
+      </div>
+      <div class="toolbar__group" id="cal-toolbar" hidden>
+        <button type="button" class="button secondary" id="prev-month"><svg class="ic"><use href="./icons.svg#i-chevron-left"></use></svg> Prev</button>
+        <button type="button" class="button secondary" id="today-btn">Today</button>
+        <button type="button" class="button secondary" id="next-month">Next <svg class="ic"><use href="./icons.svg#i-chevron-right"></use></svg></button>
+        <button type="button" class="button" id="new-project-btn" hidden><svg class="ic"><use href="./icons.svg#i-plus"></use></svg> New project</button>
+      </div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div id="locked-view" class="card" hidden>
+      <div class="locked">
+        <svg class="ic"><use href="./icons.svg#i-lock"></use></svg>
+        <h2>Calendar access is off for your account</h2>
+        <p>Planning tools (projects, assignments, logistics) need the "Plan projects" permission. Ask an admin to enable it for you in the hub's Users panel.</p>
+      </div>
+    </div>
+
+    <div id="cal-view" hidden>
+      <div class="cal" id="cal-grid"></div>
+    </div>
+  </div>
+
+  <!-- New project -->
+  <div class="modal-backdrop" id="new-project-backdrop" hidden>
+    <div class="modal">
+      <div class="modal__head">
+        <h3>New project</h3>
+        <button type="button" class="button icon" data-close><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+      </div>
+      <div class="modal__body">
+        <div class="field">
+          <span>Project number (YY-NNNN)</span>
+          <input type="text" id="np-number" placeholder="25-1234" maxlength="7" />
+        </div>
+        <div class="field">
+          <span>Title</span>
+          <input type="text" id="np-title" placeholder="Siemens Erlangen" />
+        </div>
+        <div class="field">
+          <span>Address</span>
+          <input type="text" id="np-address" placeholder="Werner-von-Siemens-Str. 1, Erlangen" />
+        </div>
+        <div class="field">
+          <span>Status</span>
+          <select id="np-status">
+            <option value="planned">Planned</option>
+            <option value="in_progress">In progress</option>
+            <option value="done">Done</option>
+          </select>
+        </div>
+        <div class="status" id="np-status-line"></div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="button secondary" data-close>Cancel</button>
+        <button type="button" class="button" id="np-save">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project detail -->
+  <div class="modal-backdrop" id="detail-backdrop" hidden>
+    <div class="modal">
+      <div class="modal__head">
+        <h3 id="d-title">Project</h3>
+        <button type="button" class="button icon" data-close><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+      </div>
+      <div class="modal__body">
+        <div class="modal__section">
+          <h4>Project</h4>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span id="d-number" class="mono"></span></div>
+          <div class="kv-row" id="d-address-row"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> <span id="d-address"></span></div>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-flag"></use></svg> <span id="d-status" class="chip"></span></div>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-link"></use></svg> <a id="d-chat" href="#" target="_blank">Open project chat</a></div>
+          <div class="inline-form" id="d-edit-form" hidden>
+            <div class="field"><span>Title</span><input type="text" id="d-edit-title" /></div>
+            <div class="field"><span>Address</span><input type="text" id="d-edit-address" /></div>
+            <div class="field">
+              <span>Status</span>
+              <select id="d-edit-status">
+                <option value="planned">Planned</option>
+                <option value="in_progress">In progress</option>
+                <option value="done">Done</option>
+              </select>
+            </div>
+            <button type="button" class="button secondary small" id="d-edit-save">Save</button>
+          </div>
+        </div>
+
+        <div class="modal__section">
+          <h4>Assignments</h4>
+          <div id="d-assignments"></div>
+          <div class="inline-form" id="d-assign-form" hidden>
+            <div class="field"><span>Engineer (hub username)</span><input type="text" id="d-a-engineer" placeholder="uli" /></div>
+            <div class="field"><span>From</span><input type="date" id="d-a-from" /></div>
+            <div class="field"><span>To</span><input type="date" id="d-a-to" /></div>
+            <button type="button" class="button secondary small" id="d-a-save">Add</button>
+          </div>
+        </div>
+
+        <div class="modal__section">
+          <h4>Logistics</h4>
+          <div id="d-logistics"></div>
+          <div class="inline-form" id="d-pin-form" hidden>
+            <div class="field" style="flex:0 0 100px;"><span>Kind</span>
+              <select id="d-p-kind">
+                <option value="hotel">Hotel</option>
+                <option value="parking">Parking</option>
+                <option value="site">Site</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div class="field"><span>Label</span><input type="text" id="d-p-label" placeholder="Hotel am Ring" /></div>
+            <div class="field" style="flex:0 0 90px;"><span>Lat</span><input type="number" step="any" id="d-p-lat" /></div>
+            <div class="field" style="flex:0 0 90px;"><span>Lng</span><input type="number" step="any" id="d-p-lng" /></div>
+            <button type="button" class="button secondary small" id="d-p-save">Add pin</button>
+          </div>
+        </div>
+
+        <div class="modal__section">
+          <h4>Files</h4>
+          <div id="d-assets"></div>
+          <div class="inline-form" id="d-asset-form" hidden>
+            <input type="file" id="d-f-file" />
+            <div class="field"><span>Caption</span><input type="text" id="d-f-caption" placeholder="Site overview" /></div>
+            <button type="button" class="button secondary small" id="d-f-save">Upload</button>
+          </div>
+        </div>
+
+        <div class="status" id="d-status-line"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const apiBase = '/service2';
+    const api = (path, options) => fetch(apiBase + path, { credentials: 'same-origin', ...options });
+
+    const statusEl = document.getElementById('status');
+    const userMetaEl = document.getElementById('user-meta');
+    const versionMetaEl = document.getElementById('version-meta');
+    const monthLabelEl = document.getElementById('month-label');
+    const calGrid = document.getElementById('cal-grid');
+    const calView = document.getElementById('cal-view');
+    const lockedView = document.getElementById('locked-view');
+    const newProjectBtn = document.getElementById('new-project-btn');
+
+    let canPlan = false;
+    let currentUsername = '';
+    let cursor = new Date();
+    cursor.setDate(1);
+
+    if (versionMetaEl) {
+      fetch('/service2/health', { credentials: 'same-origin' })
+        .then((r) => r.json())
+        .then((info) => { versionMetaEl.textContent = 'Version ' + (info && info.version ? info.version : '?'); })
+        .catch(() => { versionMetaEl.textContent = ''; });
+    }
+
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+    function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+    async function loadUser() {
+      try {
+        const resp = await fetch('/api/status', { credentials: 'same-origin' });
+        if (!resp.ok) return null;
+        const payload = await resp.json();
+        return (payload && payload.hub && payload.hub.user) || null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function renderDowHeader() {
+      const names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      return names.map((n) => `<div class="cal__dow"><span>${n}</span></div>`).join('');
+    }
+
+    function buildMonthCells(monthStart) {
+      const year = monthStart.getFullYear();
+      const month = monthStart.getMonth();
+      const firstOfMonth = new Date(year, month, 1);
+      // Monday-first grid: JS getDay() is 0=Sun..6=Sat.
+      const leadDays = (firstOfMonth.getDay() + 6) % 7;
+      const gridStart = new Date(year, month, 1 - leadDays);
+      const cells = [];
+      for (let i = 0; i < 42; i++) {
+        const d = new Date(gridStart);
+        d.setDate(gridStart.getDate() + i);
+        cells.push(d);
+      }
+      return cells;
+    }
+
+    function assignmentCoversDay(a, day) {
+      if (!a.plannedFrom || !a.plannedTo) return false;
+      const iso = isoDate(day);
+      return a.plannedFrom <= iso && iso >= a.plannedFrom && iso <= a.plannedTo;
+    }
+
+    async function loadMonth() {
+      statusEl.textContent = 'Loading…';
+      const cells = buildMonthCells(cursor);
+      const from = isoDate(cells[0]);
+      const to = isoDate(cells[cells.length - 1]);
+      monthLabelEl.textContent = cursor.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+      let projects = [];
+      try {
+        const resp = await api(`/api/projects?from=${from}&to=${to}`);
+        const payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
+        projects = payload.projects || [];
+        statusEl.textContent = '';
+      } catch (err) {
+        statusEl.textContent = 'Failed to load calendar: ' + err.message;
+      }
+
+      calGrid.innerHTML = renderDowHeader();
+      const today = new Date();
+      cells.forEach((day) => {
+        const dayEl = document.createElement('div');
+        dayEl.className = 'cal__day';
+        if (day.getMonth() !== cursor.getMonth()) dayEl.classList.add('is-outside');
+        if (sameDay(day, today)) dayEl.classList.add('is-today');
+
+        const num = document.createElement('div');
+        num.className = 'cal__daynum';
+        num.textContent = String(day.getDate());
+        dayEl.appendChild(num);
+
+        projects.forEach((p) => {
+          const hits = (p.assignments || []).filter((a) => assignmentCoversDay(a, day));
+          if (!hits.length) return;
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'cal__chip' + (hits.some((a) => a.mine) ? ' is-mine' : '');
+          chip.textContent = (p.title || p.lsc_project_number) + (hits.length > 1 ? ` (${hits.length})` : '');
+          chip.title = hits.map((a) => a.engineerId).join(', ');
+          chip.addEventListener('click', () => openDetail(p.lsc_project_number));
+          dayEl.appendChild(chip);
+        });
+
+        calGrid.appendChild(dayEl);
+      });
+    }
+
+    document.getElementById('prev-month').addEventListener('click', () => {
+      cursor.setMonth(cursor.getMonth() - 1);
+      loadMonth();
+    });
+    document.getElementById('next-month').addEventListener('click', () => {
+      cursor.setMonth(cursor.getMonth() + 1);
+      loadMonth();
+    });
+    document.getElementById('today-btn').addEventListener('click', () => {
+      cursor = new Date();
+      cursor.setDate(1);
+      loadMonth();
+    });
+
+    // ---------------------------------------------------------- new project --
+    const npBackdrop = document.getElementById('new-project-backdrop');
+    newProjectBtn.addEventListener('click', () => {
+      document.getElementById('np-number').value = '';
+      document.getElementById('np-title').value = '';
+      document.getElementById('np-address').value = '';
+      document.getElementById('np-status').value = 'planned';
+      document.getElementById('np-status-line').textContent = '';
+      npBackdrop.hidden = false;
+    });
+    document.getElementById('np-save').addEventListener('click', async () => {
+      const line = document.getElementById('np-status-line');
+      const number = document.getElementById('np-number').value.trim();
+      try {
+        const resp = await api('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lsc_project_number: number,
+            title: document.getElementById('np-title').value.trim(),
+            address: document.getElementById('np-address').value.trim(),
+            status: document.getElementById('np-status').value,
+          }),
+        });
+        const payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
+        npBackdrop.hidden = true;
+        await loadMonth();
+        openDetail(payload.project.lsc_project_number);
+      } catch (err) {
+        line.textContent = 'Error: ' + err.message;
+        line.classList.add('error');
+      }
+    });
+
+    // -------------------------------------------------------- project detail --
+    const detailBackdrop = document.getElementById('detail-backdrop');
+    let currentProjectKey = null;
+
+    async function openDetail(projectKey) {
+      currentProjectKey = projectKey;
+      detailBackdrop.hidden = false;
+      document.getElementById('d-status-line').textContent = 'Loading…';
+      try {
+        const resp = await api(`/api/projects/${encodeURIComponent(projectKey)}`);
+        const payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
+        renderDetail(payload.project);
+        document.getElementById('d-status-line').textContent = '';
+      } catch (err) {
+        document.getElementById('d-status-line').textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function renderDetail(p) {
+      document.getElementById('d-title').textContent = p.title || p.lsc_project_number;
+      document.getElementById('d-number').textContent = p.lsc_project_number;
+      document.getElementById('d-address').textContent = p.address || '—';
+      const statusEl2 = document.getElementById('d-status');
+      statusEl2.textContent = p.status || 'no status';
+      document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId);
+
+      const editForm = document.getElementById('d-edit-form');
+      editForm.hidden = !canPlan;
+      document.getElementById('d-edit-title').value = p.title || '';
+      document.getElementById('d-edit-address').value = p.address || '';
+      document.getElementById('d-edit-status').value = p.status || 'planned';
+
+      const assignEl = document.getElementById('d-assignments');
+      assignEl.innerHTML = '';
+      if (!p.assignments || !p.assignments.length) {
+        assignEl.innerHTML = '<div class="kv-empty">No one scheduled yet.</div>';
+      } else {
+        p.assignments.forEach((a) => {
+          const row = document.createElement('div');
+          row.className = 'list-row';
+          row.innerHTML = `<div><div class="list-row__main">${a.engineerId}</div><div class="list-row__meta">${a.plannedFrom} → ${a.plannedTo}</div></div>`;
+          if (canPlan) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'button icon is-danger';
+            del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-close"></use></svg>';
+            del.addEventListener('click', async () => {
+              await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/assignments/${encodeURIComponent(a.id)}`, { method: 'DELETE' });
+              openDetail(p.lsc_project_number);
+              loadMonth();
+            });
+            row.appendChild(del);
+          }
+          assignEl.appendChild(row);
+        });
+      }
+      document.getElementById('d-assign-form').hidden = !canPlan;
+
+      const logEl = document.getElementById('d-logistics');
+      logEl.innerHTML = '';
+      const pins = p.pins || [];
+      if (!pins.length) {
+        logEl.innerHTML = '<div class="kv-empty">No hotel, parking or other pins yet.</div>';
+      } else {
+        pins.forEach((pin) => {
+          const row = document.createElement('div');
+          row.className = 'list-row';
+          const mapsUrl = 'https://www.google.com/maps?q=' + pin.lat + ',' + pin.lng;
+          row.innerHTML = `<div><div class="list-row__main">${pin.kind}: ${pin.label || mapsUrl}</div><div class="list-row__meta"><a href="${mapsUrl}" target="_blank">${pin.lat}, ${pin.lng}</a>${pin.note ? ' — ' + pin.note : ''}</div></div>`;
+          if (canPlan) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'button icon is-danger';
+            del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-close"></use></svg>';
+            del.addEventListener('click', async () => {
+              await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/pins/${encodeURIComponent(pin.id)}`, { method: 'DELETE' });
+              openDetail(p.lsc_project_number);
+            });
+            row.appendChild(del);
+          }
+          logEl.appendChild(row);
+        });
+      }
+      document.getElementById('d-pin-form').hidden = !canPlan;
+
+      const assetsEl = document.getElementById('d-assets');
+      assetsEl.innerHTML = '';
+      const assets = p.assets || [];
+      if (!assets.length) {
+        assetsEl.innerHTML = '<div class="kv-empty">No files yet.</div>';
+      } else {
+        assets.forEach((asset) => {
+          const row = document.createElement('div');
+          row.className = 'list-row';
+          const isImage = (asset.mime || '').startsWith('image/');
+          const thumb = isImage
+            ? `<img class="asset-thumb" src="${apiBase}${asset.url}" alt="">`
+            : `<svg class="ic ic-20"><use href="./icons.svg#i-document"></use></svg>`;
+          row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">${thumb}<div><div class="list-row__main">${asset.name}</div><div class="list-row__meta">${asset.caption || asset.kind}</div></div></div>`;
+          const actions = document.createElement('div');
+          const dl = document.createElement('a');
+          dl.href = apiBase + asset.url;
+          dl.target = '_blank';
+          dl.className = 'button icon';
+          dl.innerHTML = '<svg class="ic"><use href="./icons.svg#i-download"></use></svg>';
+          actions.appendChild(dl);
+          if (canPlan) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'button icon is-danger';
+            del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-trash"></use></svg>';
+            del.addEventListener('click', async () => {
+              await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/assets/${encodeURIComponent(asset.id)}`, { method: 'DELETE' });
+              openDetail(p.lsc_project_number);
+            });
+            actions.appendChild(del);
+          }
+          row.appendChild(actions);
+          assetsEl.appendChild(row);
+        });
+      }
+      document.getElementById('d-asset-form').hidden = !canPlan;
+    }
+
+    document.getElementById('d-edit-save').addEventListener('click', async () => {
+      if (!currentProjectKey) return;
+      await api(`/api/projects/${encodeURIComponent(currentProjectKey)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: document.getElementById('d-edit-title').value.trim(),
+          address: document.getElementById('d-edit-address').value.trim(),
+          status: document.getElementById('d-edit-status').value,
+        }),
+      });
+      openDetail(currentProjectKey);
+      loadMonth();
+    });
+
+    document.getElementById('d-a-save').addEventListener('click', async () => {
+      if (!currentProjectKey) return;
+      const engineerId = document.getElementById('d-a-engineer').value.trim();
+      const plannedFrom = document.getElementById('d-a-from').value;
+      const plannedTo = document.getElementById('d-a-to').value;
+      if (!engineerId || !plannedFrom || !plannedTo) return;
+      await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ engineerId, plannedFrom, plannedTo }),
+      });
+      document.getElementById('d-a-engineer').value = '';
+      openDetail(currentProjectKey);
+      loadMonth();
+    });
+
+    document.getElementById('d-p-save').addEventListener('click', async () => {
+      if (!currentProjectKey) return;
+      const lat = Number(document.getElementById('d-p-lat').value);
+      const lng = Number(document.getElementById('d-p-lng').value);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/pins`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind: document.getElementById('d-p-kind').value,
+          label: document.getElementById('d-p-label').value.trim(),
+          lat, lng,
+        }),
+      });
+      document.getElementById('d-p-label').value = '';
+      document.getElementById('d-p-lat').value = '';
+      document.getElementById('d-p-lng').value = '';
+      openDetail(currentProjectKey);
+    });
+
+    document.getElementById('d-f-save').addEventListener('click', async () => {
+      if (!currentProjectKey) return;
+      const fileInput = document.getElementById('d-f-file');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) return;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('caption', document.getElementById('d-f-caption').value.trim());
+      await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/assets`, { method: 'POST', body: fd });
+      fileInput.value = '';
+      document.getElementById('d-f-caption').value = '';
+      openDetail(currentProjectKey);
+    });
+
+    document.querySelectorAll('[data-close]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        npBackdrop.hidden = true;
+        detailBackdrop.hidden = true;
+      });
+    });
+    [npBackdrop, detailBackdrop].forEach((el) => {
+      el.addEventListener('click', (e) => { if (e.target === el) el.hidden = true; });
+    });
+
+    (async () => {
+      const user = await loadUser();
+      canPlan = Boolean(user && user.canPlanProjects);
+      currentUsername = (user && user.username) || '';
+      if (userMetaEl) {
+        userMetaEl.textContent = user ? `Logged in as ${user.username}` : '';
+      }
+      if (!user) {
+        lockedView.hidden = false;
+        lockedView.querySelector('h2').textContent = 'Sign in to see the calendar';
+        lockedView.querySelector('p').textContent = 'This page needs a hub session.';
+        return;
+      }
+      // Calendar access is gated on canPlanProjects entirely for now, same as the
+      // nav icon on the other pages (see nav-lock there) — not just its write tools.
+      // An engineer-facing read-only view (their own assignments) is a natural
+      // follow-up once this first version is in use.
+      if (!canPlan) {
+        lockedView.hidden = false;
+        return;
+      }
+      newProjectBtn.hidden = false;
+      document.getElementById('cal-toolbar').hidden = false;
+      calView.hidden = false;
+      await loadMonth();
+    })();
+  </script>
+</body>
+
+</html>

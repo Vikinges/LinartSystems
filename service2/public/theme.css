@@ -499,6 +499,7 @@ th:last-child, td:last-child { padding-right: 20px; }
 
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .toolbar__group { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar__group[hidden] { display: none; }
 
 /* --------------------------------------------------------------- narrow -- */
 
@@ -682,3 +683,58 @@ td.file-cell { max-width: 320px; word-break: break-all; }
    table even when it has nothing to say. It appears only when it speaks. */
 .status-bar { padding: 14px 20px 0; }
 .status-bar[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- modal -- */
+/* Shared across pages (files, trash, calendar) rather than each one carrying
+   its own copy — first duplicated between the calendar's project dialogs and
+   the "calendar access is off" notice on the archive/trash pages. */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(11, 11, 12, .45);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  overflow-y: auto;
+  z-index: 80;
+}
+
+.modal-backdrop[hidden] { display: none; }
+
+.modal {
+  width: 100%;
+  max-width: 640px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-pop);
+  overflow: hidden;
+}
+
+.modal__head {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal__head h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.modal__body { padding: 20px; display: flex; flex-direction: column; gap: 20px; max-height: 72vh; overflow-y: auto; }
+
+.modal__section h4 {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.modal__foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Nav icon, greyed and inert-looking until clicked (a real click still opens
+   the explanatory modal — pointer-events must stay on). */
+.nav-lock { opacity: .45; }

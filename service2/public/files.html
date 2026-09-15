@@ -85,11 +85,30 @@
     <nav class="chrome__nav">
       <a href="./files.html" class="is-active"><svg class="ic"><use href="./icons.svg#i-folder"></use></svg> <span>Archive</span></a>
       <a href="./"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span>New report</span></a>
+      <a href="./calendar.html" id="nav-calendar"><svg class="ic"><use href="./icons.svg#i-calendar"></use></svg> <span>Calendar</span></a>
       <a href="./trash.html"><svg class="ic"><use href="./icons.svg#i-trash"></use></svg> <span>Trash</span></a>
     </nav>
     <div class="chrome__spacer"></div>
     <div class="chrome__meta" id="user-meta"></div>
     <div class="chrome__meta" id="version-meta"></div>
+  </div>
+
+  <div class="modal-backdrop" id="calendar-lock-backdrop" hidden>
+    <div class="modal">
+      <div class="modal__head">
+        <h3>Calendar access is off</h3>
+        <button type="button" class="button icon" data-close-cal-lock><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+      </div>
+      <div class="modal__body">
+        <p style="margin:0;font-size:13px;line-height:1.5;color:var(--text-secondary);">
+          Planning tools (projects, assignments, logistics) need the "Plan projects" permission.
+          Ask an admin to enable it for your account in the hub's Users panel.
+        </p>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="button secondary" data-close-cal-lock>Close</button>
+      </div>
+    </div>
   </div>
 
   <div class="container">
@@ -817,6 +836,9 @@
         typeSelect.value = currentValue;
       };
 
+      const navCalendarEl = document.getElementById('nav-calendar');
+      const calendarLockBackdrop = document.getElementById('calendar-lock-backdrop');
+
       const updateAdminState = (user) => {
         const role = user ? (user.role || (user.isSuperadmin ? 'admin' : 'manager')) : '';
         isAdmin = Boolean(user && (user.isSuperadmin || role === 'admin'));
@@ -832,7 +854,29 @@
         if (!canDeleteFiles) {
           selectedKeys = new Set();
         }
+
+        // Calendar nav icon: greyed + click opens the "access is off" notice
+        // instead of navigating, unless the account has canPlanProjects.
+        if (navCalendarEl) {
+          const canPlanProjects = Boolean(user && user.canPlanProjects);
+          navCalendarEl.classList.toggle('nav-lock', !canPlanProjects);
+        }
       };
+
+      if (navCalendarEl && calendarLockBackdrop) {
+        navCalendarEl.addEventListener('click', (e) => {
+          if (navCalendarEl.classList.contains('nav-lock')) {
+            e.preventDefault();
+            calendarLockBackdrop.hidden = false;
+          }
+        });
+        calendarLockBackdrop.querySelectorAll('[data-close-cal-lock]').forEach((btn) => {
+          btn.addEventListener('click', () => { calendarLockBackdrop.hidden = true; });
+        });
+        calendarLockBackdrop.addEventListener('click', (e) => {
+          if (e.target === calendarLockBackdrop) calendarLockBackdrop.hidden = true;
+        });
+      }
 
       const loadUser = async () => {
         let hubUser = null;
