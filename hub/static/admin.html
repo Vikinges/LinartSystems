@@ -391,6 +391,10 @@
               <input type="checkbox" id="newUserCanUseChat" checked>
               <span><span>Use chat (LSC LED Chat)</span><span class="perm-hint">Can open the team chat, send messages and attachments.</span></span>
             </label>
+            <label class="perm-label">
+              <input type="checkbox" id="newUserCanViewFeedback">
+              <span><span>Read user feedback</span><span class="perm-hint">Sees the admin-only "Feedback & reports" chat feed, nothing else admin-only.</span></span>
+            </label>
           </div>
         </div>
         <div id="newUserServicesSection" class="services-section" style="grid-column: 1 / -1;">
@@ -769,6 +773,7 @@
     const newUserCanGenerateLinks = document.getElementById('newUserCanGenerateLinks');
     const newUserCanDeleteFiles = document.getElementById('newUserCanDeleteFiles');
     const newUserCanUseChat = document.getElementById('newUserCanUseChat');
+    const newUserCanViewFeedback = document.getElementById('newUserCanViewFeedback');
     const newUserAllowAll = document.getElementById('newUserAllowAll');
     const newUserServices = document.getElementById('newUserServices');
     const newUserSummary = document.getElementById('newUserSummary');
@@ -808,12 +813,13 @@
           canGenerateLinks: newUserCanGenerateLinks && newUserCanGenerateLinks.checked,
           canDeleteFiles: newUserCanDeleteFiles && newUserCanDeleteFiles.checked,
           canUseChat: newUserCanUseChat ? newUserCanUseChat.checked : true,
+          canViewFeedback: newUserCanViewFeedback && newUserCanViewFeedback.checked,
         });
       }
       if (newUserPermSection) newUserPermSection.classList.toggle('is-hidden', current !== 'manager');
       if (newUserServicesSection) newUserServicesSection.classList.toggle('is-hidden', current !== 'manager' && current !== 'planner');
     }
-    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat].forEach((cb) => {
+    [newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat, newUserCanViewFeedback].forEach((cb) => {
       if (cb) cb.addEventListener('change', () => refreshNewUserSummary());
     });
     if (newUserRoles) {
@@ -2133,6 +2139,8 @@
         const canGenerateLinks = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanGenerateLinks && newUserCanGenerateLinks.checked);
         const canDeleteFiles = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanDeleteFiles && newUserCanDeleteFiles.checked);
         const canUseChat = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanUseChat ? newUserCanUseChat.checked : true);
+        // Never auto-granted (not even to planner) — deliberately opt-in only, see resolveFeedbackAccess.
+        const canViewFeedback = role === 'admin' ? true : role === 'blocked' ? false : (newUserCanViewFeedback && newUserCanViewFeedback.checked);
         const selectedServices = allowAll || !newUserServices
           ? []
           : Array.from(
@@ -2146,7 +2154,7 @@
           await fetchJson('/admin/users', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, allowedServices: selectedServices })
+            body: JSON.stringify({ username, password, role, canViewFiles, canGenerateLinks, canDeleteFiles, canUseChat, canViewFeedback, allowedServices: selectedServices })
           });
           showHandoff(username, password);
           newUserPasswordInput.value = '';
@@ -2158,6 +2166,7 @@
           if (newUserCanGenerateLinks) newUserCanGenerateLinks.checked = false;
           if (newUserCanDeleteFiles) newUserCanDeleteFiles.checked = false;
           if (newUserCanUseChat) newUserCanUseChat.checked = true;
+          if (newUserCanViewFeedback) newUserCanViewFeedback.checked = false;
           if (newUserRoles) {
             getNewUserRole = renderRoleOptions(newUserRoles, 'manager', (nextRole) => {
               syncServiceControls(newUserAllowAll, newUserServices, nextRole, newUserFilesAccess, newUserCanGenerateLinks, newUserCanDeleteFiles, newUserCanUseChat);
