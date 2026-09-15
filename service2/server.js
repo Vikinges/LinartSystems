@@ -24968,8 +24968,12 @@ app.get(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], asy
     // Planning fields (assignments/logistics/pins/assets/chat) are additive to this
     // pre-existing autofill endpoint, which stays open to any submitting engineer —
     // but the planning data itself is calendar-view-gated, not just tacked on for anyone.
-    const planning = hasProjectsView(req) ? projectPublicShape(projectKey, card || {}) : {};
-    return res.json({ ok: true, project: { ...summary, lastFields, ...planning } });
+    const canSeePlanning = hasProjectsView(req);
+    const planning = canSeePlanning ? projectPublicShape(projectKey, card || {}) : {};
+    // "Who was there last, who knows this site, what's still missing" — the two-click
+    // answer when a customer calls. Calendar-gated like the rest of the planning data.
+    const planningSummary = canSeePlanning ? { summary: await projectSummary(projectKey, card || {}) } : {};
+    return res.json({ ok: true, project: { ...summary, lastFields, ...planning, ...planningSummary } });
   } catch (err) {
     console.error('[server] Failed to load project', err);
     return res.status(500).json({ ok: false, error: 'project_failed' });
@@ -25091,6 +25095,189 @@ function projectChatConversationId(projectKey) {
   return `prj_${String(projectKey || '').replace(/[^a-zA-Z0-9_.-]/g, '_').slice(0, 120)}`;
 }
 
+// --- Working time on assignments ---
+// A manager sets a planned day template per assignment (`schedule`); an engineer records
+// only the days that differed (`days[date]`, a sparse override — "if the rest of the week
+// went as planned, nothing changes"). resolveProjectTime() folds the two into the exact
+// `employees[]` shape the report form already accepts, so a report pre-fills the whole
+// team's hours and the person filling it just corrects what's wrong.
+const DEFAULT_WORK_SCHEDULE = { start: '08:00', end: '17:00', breakMinutes: 30 };
+
+function normalizeTimeHHMM(value) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(value == null ? '' : value).trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mm = Number(m[2]);
+  if (h > 23 || mm > 59) return null;
+  return `${String(h).padStart(2, '0')}:${m[2]}`;
+}
+
+function normalizeSchedule(raw, fallback) {
+  const base = fallback && typeof fallback === 'object' ? fallback : DEFAULT_WORK_SCHEDULE;
+  if (!raw || typeof raw !== 'object') return { start: base.start, end: base.end, breakMinutes: base.breakMinutes };
+  const parsedBreak = parseInt(raw.breakMinutes, 10);
+  return {
+    start: normalizeTimeHHMM(raw.start) || base.start,
+    end: normalizeTimeHHMM(raw.end) || base.end,
+    breakMinutes: Number.isFinite(parsedBreak) && parsedBreak >= 0 ? Math.min(parsedBreak, 600) : base.breakMinutes,
+  };
+}
+
+function isIsoDay(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ''));
+}
+
+function localIsoDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// One place that decides what an assignment looks like, for POST (no `existing`), for PUT
+// replace (existing matched by id → keeps its day overrides and its assignedBy) and for
+// PATCH-style updates. Returns null when the row is unusable.
+function normalizeAssignmentInput(body, existing, actor) {
+  const src = body && typeof body === 'object' ? body : {};
+  const engineerId = String(toSingleValue(src.engineerId) || (existing && existing.engineerId) || '').trim();
+  const plannedFrom = String(toSingleValue(src.plannedFrom) || (existing && existing.plannedFrom) || '').trim();
+  const plannedTo = String(toSingleValue(src.plannedTo) || (existing && existing.plannedTo) || '').trim();
+  if (!engineerId || !isIsoDay(plannedFrom) || !isIsoDay(plannedTo) || plannedTo < plannedFrom) return null;
+  const nameRaw = toSingleValue(src.engineerName);
+  const engineerName = nameRaw != null && String(nameRaw).trim()
+    ? String(nameRaw).trim().slice(0, 120)
+    : ((existing && existing.engineerName) || null);
+  return {
+    id: (existing && existing.id) || newProjectSubId('asg'),
+    engineerId,
+    engineerName,
+    plannedFrom,
+    plannedTo,
+    schedule: normalizeSchedule(src.schedule, existing && existing.schedule),
+    days: existing && existing.days && typeof existing.days === 'object' ? existing.days : {},
+    assignedBy: (existing && existing.assignedBy) || actor || null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function resolveProjectTime(card, from, to) {
+  const employees = [];
+  for (const a of card.assignments || []) {
+    if (!isIsoDay(a.plannedFrom) || !isIsoDay(a.plannedTo)) continue;
+    const start = from && from > a.plannedFrom ? from : a.plannedFrom;
+    const end = to && to < a.plannedTo ? to : a.plannedTo;
+    if (start > end) continue;
+    const days = [];
+    const cursor = new Date(`${start}T00:00:00`);
+    let guard = 0;
+    while (guard++ < 400) {
+      const iso = localIsoDay(cursor);
+      if (iso > end) break;
+      const override = a.days && a.days[iso];
+      const sched = override || a.schedule || DEFAULT_WORK_SCHEDULE;
+      days.push({
+        date: iso,
+        arrival: sched.start,
+        departure: sched.end,
+        breakMinutes: sched.breakMinutes,
+        source: override ? 'actual' : 'planned',
+      });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (days.length) {
+      employees.push({ assignmentId: a.id, engineerId: a.engineerId, name: a.engineerName || a.engineerId, role: '', days });
+    }
+  }
+  return employees;
+}
+
+// Who should be in the project's closed chat: every assigned engineer, every manager who
+// scheduled one, and whoever created the project.
+function projectChatMembers(card) {
+  const members = new Set();
+  for (const a of card.assignments || []) {
+    if (a.engineerId) members.add(a.engineerId);
+    if (a.assignedBy) members.add(a.assignedBy);
+  }
+  if (card.createdBy) members.add(card.createdBy);
+  return [...members];
+}
+
+// Fire-and-forget hub call: keep the project's chat room in step with who's on the job
+// (hub /internal/projects/chat-sync). Also the one place we learn hub display names, so an
+// assignment saved without an engineerName gets one on the next pass. No-op without
+// HUB_INTERNAL_TOKEN (local stands); never throws into the request that triggered it.
+async function syncProjectChat(projectKey) {
+  if (!HUB_INTERNAL_TOKEN) return;
+  try {
+    const store = loadProjectsStore() || {};
+    const card = store[projectKey];
+    if (!card) return;
+    ensureProjectCardShape(card);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    const resp = await fetch(`${HUB_URL.replace(/\/$/, '')}/internal/projects/chat-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-token': HUB_INTERNAL_TOKEN },
+      body: JSON.stringify({
+        projectKey,
+        title: card.title ? `${projectKey} · ${card.title}` : `Project ${projectKey}`,
+        memberUsernames: projectChatMembers(card),
+      }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+    if (!resp.ok) return;
+    const payload = await resp.json();
+    const names = payload && payload.displayNames && typeof payload.displayNames === 'object' ? payload.displayNames : null;
+    if (!names) return;
+    let changed = false;
+    for (const a of card.assignments) {
+      if (!a.engineerName && names[a.engineerId] && names[a.engineerId] !== a.engineerId) {
+        a.engineerName = names[a.engineerId];
+        changed = true;
+      }
+    }
+    if (changed) saveProjectsStore(store);
+  } catch (err) {
+    console.warn('[server] project chat sync failed:', err && err.message);
+  }
+}
+
+// What a manager wants to know in two clicks when the customer calls: who was there last
+// and what they did, who knows this site best, and which mandatory links are still missing.
+async function projectSummary(projectKey, card) {
+  const visits = await collectProjectVisits(projectKey);
+  const byType = {};
+  const perEngineer = new Map();
+  for (const v of visits) {
+    byType[v.type] = (byType[v.type] || 0) + 1;
+    if (v.submitterName) perEngineer.set(v.submitterName, (perEngineer.get(v.submitterName) || 0) + 1);
+  }
+  const topEngineers = [...perEngineer.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => ({ name, count }));
+  const last = visits[0] || null;
+  const c = card && typeof card === 'object' ? card : {};
+  const hasParking = (Array.isArray(c.pins) && c.pins.some((p) => p && p.kind === 'parking'))
+    || Boolean(c.logistics && c.logistics.parking);
+  const completeness = {
+    address: Boolean(c.site_location),
+    representative: Boolean(c.customer_representative),
+    parking: hasParking,
+    model: Boolean(c.led_display_model),
+  };
+  const missing = Object.keys(completeness).filter((k) => !completeness[k]);
+  return {
+    visitCount: visits.length,
+    byType,
+    lastVisit: last
+      ? { submittedAt: last.submittedAt, submitterName: last.submitterName, type: last.type, filename: last.filename, url: last.url }
+      : null,
+    topEngineers,
+    completeness,
+    missing,
+    recentVisits: visits.slice(0, 20),
+  };
+}
+
 function projectPublicShape(projectKey, card) {
   const c = ensureProjectCardShape(card && typeof card === 'object' ? card : {});
   return {
@@ -25134,6 +25321,7 @@ app.post(['/api/projects', '/service2/api/projects'], requireProjectsWrite, (req
   card.updated_at = new Date().toISOString();
   store[projectKey] = card;
   saveProjectsStore(store);
+  syncProjectChat(projectKey); // the room exists from day one, with its creator in it
   return res.status(existed ? 200 : 201).json({ ok: true, created: !existed, project: projectPublicShape(projectKey, card) });
 });
 
@@ -25160,6 +25348,7 @@ app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], r
   card.updated_at = new Date().toISOString();
   store[projectKey] = card;
   saveProjectsStore(store);
+  syncProjectChat(projectKey); // title changes show up on the room
   return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
 });
 
@@ -25170,18 +25359,51 @@ app.post(['/api/projects/:projectKey/assignments', '/service2/api/projects/:proj
   const store = loadProjectsStore() || {};
   if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
   const card = ensureProjectCardShape(store[projectKey]);
-  const body = req.body || {};
-  const engineerId = String(toSingleValue(body.engineerId) || '').trim();
-  const plannedFrom = String(toSingleValue(body.plannedFrom) || '').trim();
-  const plannedTo = String(toSingleValue(body.plannedTo) || '').trim();
-  if (!engineerId || !plannedFrom || !plannedTo) {
+  const assignment = normalizeAssignmentInput(req.body, null, req.headers['x-hub-user'] || null);
+  if (!assignment) {
     return res.status(400).json({ ok: false, error: 'engineerId_plannedFrom_plannedTo_required' });
   }
-  const assignment = { id: newProjectSubId('asg'), engineerId, plannedFrom, plannedTo };
   card.assignments.push(assignment);
   card.updated_at = new Date().toISOString();
   saveProjectsStore(store);
+  syncProjectChat(projectKey);
   return res.status(201).json({ ok: true, assignment, project: projectPublicShape(projectKey, card) });
+});
+
+// Atomic replacement for snapshot-style editors (the iOS project editor saves the whole
+// project at once; per-row DELETE+POST churned ids, raced between two planners and synced
+// the chat N times). Rows keep their id — and with it their day overrides — when they come
+// back with the same `id`, or with the same engineer + dates if the client lost the id.
+// Chat membership syncs exactly once at the end.
+app.put(['/api/projects/:projectKey/assignments', '/service2/api/projects/:projectKey/assignments'], requireProjectsWrite, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  if (!store[projectKey]) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const card = ensureProjectCardShape(store[projectKey]);
+  const body = req.body || {};
+  const wanted = Array.isArray(body.assignments) ? body.assignments : null;
+  if (!wanted) return res.status(400).json({ ok: false, error: 'assignments_array_required' });
+  const actor = req.headers['x-hub-user'] || null;
+  const byId = new Map(card.assignments.map((a) => [a.id, a]));
+  const byShape = new Map(card.assignments.map((a) => [`${a.engineerId}|${a.plannedFrom}|${a.plannedTo}`, a]));
+  const next = [];
+  for (const item of wanted) {
+    const src = item && typeof item === 'object' ? item : {};
+    let existing = src.id ? byId.get(String(src.id)) : null;
+    if (!existing) {
+      const key = `${String(toSingleValue(src.engineerId) || '').trim()}|${String(toSingleValue(src.plannedFrom) || '').trim()}|${String(toSingleValue(src.plannedTo) || '').trim()}`;
+      existing = byShape.get(key) || null;
+    }
+    const normalized = normalizeAssignmentInput(src, existing, actor);
+    if (!normalized) return res.status(400).json({ ok: false, error: 'invalid_assignment', item: src });
+    next.push(normalized);
+  }
+  card.assignments = next;
+  card.updated_at = new Date().toISOString();
+  saveProjectsStore(store);
+  syncProjectChat(projectKey);
+  return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
 });
 
 app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/api/projects/:projectKey/assignments/:assignmentId'], requireProjectsWrite, (req, res) => {
@@ -25195,7 +25417,91 @@ app.delete(['/api/projects/:projectKey/assignments/:assignmentId', '/service2/ap
   if (card.assignments.length === before) return res.status(404).json({ ok: false, error: 'assignment_not_found' });
   card.updated_at = new Date().toISOString();
   saveProjectsStore(store);
+  syncProjectChat(projectKey);
   return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Actual hours per day: the engineer's slider ---
+// The one write an engineer may do without the planning role: their OWN assignment's day.
+// Idempotent by (assignment, date), so a retry from the app's outbox after a kill is safe;
+// last write wins and the response carries updatedAt/updatedBy so the client can tell.
+function requireOwnAssignmentOrWrite(req, res, next) {
+  const role = String(req.headers['x-hub-role'] || '').trim().toLowerCase();
+  if (role === 'admin' || role === 'planner') return next();
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  const store = projectKey ? (loadProjectsStore() || {}) : {};
+  const card = projectKey && store[projectKey] ? ensureProjectCardShape(store[projectKey]) : null;
+  const assignment = card && card.assignments.find((a) => a.id === req.params.assignmentId);
+  const caller = String(req.headers['x-hub-user'] || '').trim();
+  if (assignment && caller && assignment.engineerId === caller) return next();
+  return res.status(403).json({ ok: false, error: 'Forbidden: only the assigned engineer or a manager can edit this day.' });
+}
+
+app.put(['/api/projects/:projectKey/assignments/:assignmentId/days/:date', '/service2/api/projects/:projectKey/assignments/:assignmentId/days/:date'], requireOwnAssignmentOrWrite, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const date = String(req.params.date || '').trim();
+  if (!isIsoDay(date)) return res.status(400).json({ ok: false, error: 'invalid_date' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const assignment = card.assignments.find((a) => a.id === req.params.assignmentId);
+  if (!assignment) return res.status(404).json({ ok: false, error: 'assignment_not_found' });
+  if (date < assignment.plannedFrom || date > assignment.plannedTo) {
+    return res.status(400).json({ ok: false, error: 'date_outside_assignment' });
+  }
+  const body = req.body || {};
+  const start = normalizeTimeHHMM(body.start);
+  const end = normalizeTimeHHMM(body.end);
+  if (!start || !end) return res.status(400).json({ ok: false, error: 'start_end_required_HH:mm' });
+  const parsedBreak = parseInt(body.breakMinutes, 10);
+  const entry = {
+    start,
+    end,
+    breakMinutes: Number.isFinite(parsedBreak) && parsedBreak >= 0 ? Math.min(parsedBreak, 600) : 0,
+    updatedBy: req.headers['x-hub-user'] || null,
+    updatedAt: new Date().toISOString(),
+  };
+  if (!assignment.days || typeof assignment.days !== 'object') assignment.days = {};
+  assignment.days[date] = entry;
+  card.updated_at = entry.updatedAt;
+  saveProjectsStore(store);
+  return res.json({ ok: true, assignmentId: assignment.id, date, day: entry });
+});
+
+app.delete(['/api/projects/:projectKey/assignments/:assignmentId/days/:date', '/service2/api/projects/:projectKey/assignments/:assignmentId/days/:date'], requireOwnAssignmentOrWrite, (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const assignment = card.assignments.find((a) => a.id === req.params.assignmentId);
+  if (!assignment) return res.status(404).json({ ok: false, error: 'assignment_not_found' });
+  if (assignment.days && assignment.days[req.params.date]) {
+    delete assignment.days[req.params.date];
+    card.updated_at = new Date().toISOString();
+    saveProjectsStore(store);
+  }
+  return res.json({ ok: true, assignmentId: assignment.id, date: req.params.date, day: null });
+});
+
+// The team's hours for a report, ready to paste into the form. Deliberately open to any
+// hub-authenticated caller, like the autofill GET above: the engineer filling in a report
+// may not hold the calendar permission, and this is the same information they'd otherwise
+// type in by hand.
+app.get(['/api/projects/:projectKey/time', '/service2/api/projects/:projectKey/time'], (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey] && ensureProjectCardShape(store[projectKey]);
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const from = String(req.query.from || '').trim();
+  const to = String(req.query.to || '').trim();
+  if ((from && !isIsoDay(from)) || (to && !isIsoDay(to))) {
+    return res.status(400).json({ ok: false, error: 'from_to_must_be_YYYY-MM-DD' });
+  }
+  const employees = resolveProjectTime(card, from || null, to || null);
+  return res.json({ ok: true, lsc_project_number: projectKey, from: from || null, to: to || null, employees });
 });
 
 // --- Pins: hotel / parking / site / custom geo points ---

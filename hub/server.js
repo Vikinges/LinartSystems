@@ -2765,6 +2765,41 @@ async function sendPushToAdmins(payload, pushType) {
 // admin-only chat feed; for submit_failure also push admins via APNs. Token-gated (not a
 // user session); reached over the internal network, never a browser. Not under /service2,
 // so the open proxy catch-all doesn't shadow it.
+// service2 → hub: keep a project's closed chat room in step with its assignments. Creates
+// `prj_<key>` on the first call, then SETS its membership on every later one (the assigned
+// engineers + the managers who scheduled them + the project's creator; admins see it anyway
+// via canSeeConversation). Returns hub display names so service2 can label assignments
+// without a second cross-service lookup.
+app.post('/internal/projects/chat-sync', (req, res) => {
+  const token = String(req.headers['x-internal-token'] || '');
+  if (!HUB_INTERNAL_TOKEN || token !== HUB_INTERNAL_TOKEN) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  const b = req.body || {};
+  const projectKey = typeof b.projectKey === 'string' ? b.projectKey.trim() : '';
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey_required' });
+  const requested = (Array.isArray(b.memberUsernames) ? b.memberUsernames : [])
+    .map((m) => String(m || '').trim())
+    .filter(Boolean);
+  const wanted = [...new Set(requested.filter((m) => knownHubUsername(m)))];
+  const unknownUsernames = [...new Set(requested.filter((m) => !knownHubUsername(m)))];
+  const title = typeof b.title === 'string' && b.title.trim() ? b.title.trim().slice(0, 120) : `Project ${projectKey}`;
+  const index = loadChatIndex();
+  const id = `prj_${chatSanitizeId(projectKey)}`;
+  let conv = index.find((c) => c.id === id);
+  if (!conv) {
+    conv = { id, kind: 'project', projectKey, title, memberUsernames: wanted, createdAt: new Date().toISOString(), reads: {} };
+    index.push(conv);
+  } else {
+    conv.title = title;
+    conv.memberUsernames = wanted;
+  }
+  saveChatIndex(index);
+  const displayNames = {};
+  for (const m of wanted) displayNames[m] = getChatDisplayName(m) || m;
+  return res.json({ ok: true, conversationId: id, memberUsernames: wanted, displayNames, unknownUsernames });
+});
+
 app.post('/internal/notify/feedback', async (req, res) => {
   const token = String(req.headers['x-internal-token'] || '');
   if (!HUB_INTERNAL_TOKEN || token !== HUB_INTERNAL_TOKEN) {
@@ -3211,7 +3246,15 @@ function canSeeConversation(conv, username) {
   // not just admins — every OTHER admin-only room (e.g. Reported chats) stays admin-exclusive.
   if (conv.id === FEEDBACK_CONV_ID) return feedbackViewerUsernames().has(username);
   if (conv.adminOnly) return isAdminUsername(username);
-  if (conv.kind === 'project') return true;
+  // Project rooms are closed: the engineers assigned to that installation plus the managers
+  // who scheduled them (membership is set by service2 on every assignment change, see
+  // /internal/projects/chat-sync), and admins for oversight. They used to be open to every
+  // account — Vladimir: only the people on the job, so the feed isn't flooded and nobody
+  // uninstalls the app over notifications for projects they're not on.
+  if (conv.kind === 'project') {
+    return isAdminUsername(username)
+      || (Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(username));
+  }
   return Array.isArray(conv.memberUsernames) && conv.memberUsernames.includes(username);
 }
 
@@ -3639,7 +3682,14 @@ app.post('/api/chat/conversations', (req, res) => {
     if (!projectKey) return res.status(400).json({ ok: false, error: 'projectKey_required' });
     const id = `prj_${chatSanitizeId(projectKey)}`;
     conv = index.find((c) => c.id === id);
-    if (!conv) {
+    if (conv) {
+      // Closed room: opening it by key doesn't make you a member any more.
+      if (!canSeeConversation(conv, user.username)) return res.status(403).json({ ok: false, error: 'not_member' });
+    } else {
+      // Normally service2 creates the room (POST /internal/projects/chat-sync) the moment the
+      // first engineer is assigned; opening one by hand is a manager/admin action.
+      const isPlanner = user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_PLANNER;
+      if (!isPlanner) return res.status(403).json({ ok: false, error: 'forbidden' });
       conv = { id, kind, projectKey, title: `Project ${projectKey}`, memberUsernames: [user.username], createdAt: new Date().toISOString(), reads: {} };
       index.push(conv);
       saveChatIndex(index);
