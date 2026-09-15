@@ -25346,6 +25346,19 @@ async function projectSummary(projectKey, card) {
   };
 }
 
+// Site-card fields a manager can set on the project itself — the mandatory links Vladimir
+// listed (customer, signatory, screen model, batch). Same keys the report submit path merges
+// into the card, so a later report simply confirms or overwrites them.
+const PROJECT_SITE_FIELDS = ['end_customer_name', 'customer_representative', 'led_display_model', 'led_batch'];
+function applyProjectSiteFields(card, body) {
+  const src = body && typeof body === 'object' ? body : {};
+  for (const key of PROJECT_SITE_FIELDS) {
+    if (!Object.prototype.hasOwnProperty.call(src, key)) continue;
+    const value = toSingleValue(src[key]);
+    card[key] = value != null && String(value).trim() ? String(value).trim().slice(0, 200) : null;
+  }
+}
+
 function projectPublicShape(projectKey, card) {
   const c = ensureProjectCardShape(card && typeof card === 'object' ? card : {});
   return {
@@ -25359,6 +25372,12 @@ function projectPublicShape(projectKey, card) {
     pins: c.pins,
     assignments: c.assignments,
     assets: c.assets,
+    site: {
+      endCustomerName: c.end_customer_name || null,
+      customerRepresentative: c.customer_representative || null,
+      ledDisplayModel: c.led_display_model || null,
+      ledBatch: c.led_batch || null,
+    },
     chatConversationId: projectChatConversationId(projectKey),
   };
 }
@@ -25386,6 +25405,7 @@ app.post(['/api/projects', '/service2/api/projects'], requireProjectsWrite, (req
   if (address != null && String(address).trim() !== '') card.site_location = String(address).trim();
   const status = toSingleValue(body.status);
   if (status != null && String(status).trim() !== '') card.status = String(status).trim().slice(0, 40);
+  applyProjectSiteFields(card, body);
   card.updated_at = new Date().toISOString();
   store[projectKey] = card;
   saveProjectsStore(store);
@@ -25413,6 +25433,7 @@ app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], r
     if (Object.prototype.hasOwnProperty.call(body.logistics, 'hotel')) card.logistics.hotel = body.logistics.hotel || null;
     if (Object.prototype.hasOwnProperty.call(body.logistics, 'parking')) card.logistics.parking = body.logistics.parking || null;
   }
+  applyProjectSiteFields(card, body);
   card.updated_at = new Date().toISOString();
   store[projectKey] = card;
   saveProjectsStore(store);

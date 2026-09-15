@@ -264,6 +264,14 @@
           <span>Address</span>
           <input type="text" id="np-address" placeholder="Werner-von-Siemens-Str. 1, Erlangen" />
         </div>
+        <div class="inline-form" style="margin-top:0;">
+          <div class="field"><span>Customer</span><input type="text" id="np-customer" placeholder="Siemens AG" /></div>
+          <div class="field"><span>Signatory (customer representative)</span><input type="text" id="np-representative" placeholder="Who signs the report" /></div>
+        </div>
+        <div class="inline-form" style="margin-top:0;">
+          <div class="field"><span>Screen model</span><input type="text" id="np-model" placeholder="LD-FE092" /></div>
+          <div class="field" style="flex:0 0 160px;"><span>Batch</span><input type="text" id="np-batch" placeholder="B-2609-04" /></div>
+        </div>
         <div class="field">
           <span>Status</span>
           <select id="np-status">
@@ -293,11 +301,18 @@
           <h4>Project</h4>
           <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span id="d-number" class="mono"></span></div>
           <div class="kv-row" id="d-address-row"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> <span id="d-address"></span></div>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-folder"></use></svg> <span id="d-customer"></span></div>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-signature"></use></svg> <span id="d-representative"></span></div>
+          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-check"></use></svg> <span id="d-model"></span></div>
           <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-flag"></use></svg> <span id="d-status" class="chip"></span></div>
           <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-link"></use></svg> <a id="d-chat" href="#" target="_blank">Open project chat</a></div>
           <div class="inline-form" id="d-edit-form" hidden>
             <div class="field"><span>Title</span><input type="text" id="d-edit-title" /></div>
             <div class="field"><span>Address</span><input type="text" id="d-edit-address" /></div>
+            <div class="field"><span>Customer</span><input type="text" id="d-edit-customer" /></div>
+            <div class="field"><span>Signatory</span><input type="text" id="d-edit-representative" /></div>
+            <div class="field"><span>Screen model</span><input type="text" id="d-edit-model" /></div>
+            <div class="field" style="flex:0 0 120px;"><span>Batch</span><input type="text" id="d-edit-batch" /></div>
             <div class="field">
               <span>Status</span>
               <select id="d-edit-status">
@@ -552,6 +567,10 @@
             title: document.getElementById('np-title').value.trim(),
             address: document.getElementById('np-address').value.trim(),
             status: document.getElementById('np-status').value,
+            end_customer_name: document.getElementById('np-customer').value.trim(),
+            customer_representative: document.getElementById('np-representative').value.trim(),
+            led_display_model: document.getElementById('np-model').value.trim(),
+            led_batch: document.getElementById('np-batch').value.trim(),
           }),
         });
         const payload = await resp.json();
@@ -588,6 +607,14 @@
       document.getElementById('d-title').textContent = p.title || p.lsc_project_number;
       document.getElementById('d-number').textContent = p.lsc_project_number;
       document.getElementById('d-address').textContent = p.address || '—';
+      const site = p.site || {};
+      document.getElementById('d-customer').textContent = site.endCustomerName || 'Customer: not set';
+      document.getElementById('d-representative').textContent = site.customerRepresentative ? `Signs: ${site.customerRepresentative}` : 'Signatory: not set';
+      document.getElementById('d-model').textContent = site.ledDisplayModel ? `${site.ledDisplayModel}${site.ledBatch ? ' / ' + site.ledBatch : ''}` : 'Screen model: not set';
+      document.getElementById('d-edit-customer').value = site.endCustomerName || '';
+      document.getElementById('d-edit-representative').value = site.customerRepresentative || '';
+      document.getElementById('d-edit-model').value = site.ledDisplayModel || '';
+      document.getElementById('d-edit-batch').value = site.ledBatch || '';
       const statusEl2 = document.getElementById('d-status');
       statusEl2.textContent = (p.status || 'no status').replace(/_/g, ' ');
       document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId);
@@ -883,6 +910,10 @@
           title: document.getElementById('d-edit-title').value.trim(),
           address: document.getElementById('d-edit-address').value.trim(),
           status: document.getElementById('d-edit-status').value,
+          end_customer_name: document.getElementById('d-edit-customer').value.trim(),
+          customer_representative: document.getElementById('d-edit-representative').value.trim(),
+          led_display_model: document.getElementById('d-edit-model').value.trim(),
+          led_batch: document.getElementById('d-edit-batch').value.trim(),
         }),
       });
       openDetail(currentProjectKey);
