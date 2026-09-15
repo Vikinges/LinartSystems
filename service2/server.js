@@ -3047,6 +3047,15 @@ const SIGN_OFF_REQUEST_FIELDS = new Set([
 
   'signoff_notes_2',
 
+  // `general_notes` is a real AcroForm field on the base template, but every report type
+  // redraws it as a fresh canvas box via drawNotesBlock('Additional notes', ...) instead.
+  // Left off this list, the generic fill loop below still fills the ORIGINAL widget at its
+  // template position and calls updateAppearances() on it — the widget then renders on top
+  // of whatever the canvas drew in that area, reading as a second, unrelated block of text
+  // glued onto the real one. Same class of bug as the sign-off fields above; belongs here.
+
+  'general_notes',
+
   'engineer_company',
 
   'engineer_datetime',
