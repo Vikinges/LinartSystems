@@ -2828,12 +2828,25 @@ app.post('/internal/projects/chat-sync', (req, res) => {
   const index = loadChatIndex();
   const id = `prj_${chatSanitizeId(projectKey)}`;
   let conv = index.find((c) => c.id === id);
+  // Project deleted in service2 (2026-09-16): the room is not destroyed — what was said
+  // on the job stays readable to admins — but nobody is a member any more and the title
+  // says so, so it drops out of every engineer's and manager's list.
+  if (b.deleted === true) {
+    if (conv) {
+      conv.memberUsernames = [];
+      conv.archivedAt = new Date().toISOString();
+      if (!/\(deleted\)$/.test(conv.title || '')) conv.title = `${conv.title || title} (deleted)`;
+      saveChatIndex(index);
+    }
+    return res.json({ ok: true, conversationId: id, memberUsernames: [], displayNames: {}, unknownUsernames: [], archived: Boolean(conv) });
+  }
   if (!conv) {
     conv = { id, kind: 'project', projectKey, title, memberUsernames: wanted, createdAt: new Date().toISOString(), reads: {} };
     index.push(conv);
   } else {
     conv.title = title;
     conv.memberUsernames = wanted;
+    if (conv.archivedAt) delete conv.archivedAt; // the number came back to life
   }
   saveChatIndex(index);
   const displayNames = {};

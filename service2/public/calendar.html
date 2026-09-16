@@ -254,6 +254,10 @@
     .edit-box[hidden] { display: none; }
     .edit-box__title { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
     .edit-box__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .edit-box__foot .push-left { margin-right: auto; }
+    /* The one destructive action in the dialog: quiet until hovered, never a filled red. */
+    .button.is-danger-text { color: var(--danger-text); border-color: transparent; }
+    .button.is-danger-text:hover { background: var(--danger-subtle); color: var(--danger-text); }
     .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
     .form-grid .span-2 { grid-column: span 2; }
     .input-row { display: flex; gap: 8px; align-items: center; }
@@ -474,6 +478,7 @@
                 </div>
               </div>
               <div class="edit-box__foot">
+                <button type="button" class="button ghost small is-danger-text push-left" id="d-delete"><svg class="ic"><use href="./icons.svg#i-trash"></use></svg> Delete project…</button>
                 <button type="button" class="button ghost small" id="d-edit-cancel">Cancel</button>
                 <button type="button" class="button small" id="d-edit-save">Save changes</button>
               </div>
@@ -906,7 +911,10 @@
       return String(name || '').split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('') || '?';
     }
 
+    let currentProject = null;
+
     function renderDetail(p) {
+      currentProject = p;
       const site = p.site || {};
       const pins = p.pins || [];
       const sitePin = pins.find((x) => x.kind === 'site');
@@ -1491,6 +1499,36 @@
       editBox.hidden = true;
       document.getElementById('d-kv').hidden = false;
       editToggle.textContent = 'Edit';
+    });
+    // Delete: admin/planner only (the server enforces it). The confirm spells out what goes
+    // and what stays — reports in the archive are never touched by this.
+    document.getElementById('d-delete').addEventListener('click', async () => {
+      if (!currentProjectKey || !canWrite) return;
+      const p = currentProject || {};
+      const reports = p.summary ? Number(p.summary.visitCount || 0) : 0;
+      const lines = [
+        `Delete project ${currentProjectKey}${p.title ? ` — ${p.title}` : ''}?`,
+        '',
+        `This removes the planning card: ${(p.assignments || []).length} assignment(s), ${(p.pins || []).length} pin(s), ${(p.assets || []).length} file(s), and closes the project chat.`,
+        reports ? `The ${reports} report(s) filed under this number stay in the archive.` : 'No reports are filed under this number.',
+        '',
+        'This cannot be undone.',
+      ];
+      if (!window.confirm(lines.join('\n'))) return;
+      const line = document.getElementById('d-status-line');
+      line.textContent = 'Deleting…';
+      try {
+        const resp = await api(`/api/projects/${encodeURIComponent(currentProjectKey)}`, { method: 'DELETE' });
+        const payload = await resp.json();
+        if (!resp.ok || !payload.ok) throw new Error(payload.error || 'failed');
+        detailBackdrop.hidden = true;
+        currentProjectKey = null;
+        currentProject = null;
+        await loadMonth();
+        statusEl.textContent = `Project ${payload.deleted} deleted.`;
+      } catch (err) {
+        line.textContent = 'Error: ' + err.message;
+      }
     });
     // "Set the address on the map": the site pin fills the address, so send them there.
     document.getElementById('d-edit-address-map').addEventListener('click', () => {

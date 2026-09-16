@@ -25432,6 +25432,29 @@ function projectChatMembers(card) {
   return [...members];
 }
 
+// Project deleted: tell the hub to empty the room's membership (it keeps the transcript for
+// admins). Fire-and-forget like syncProjectChat; no-op on local stands without the token.
+async function retireProjectChat(projectKey, card) {
+  if (!HUB_INTERNAL_TOKEN) return;
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 4000);
+    await fetch(`${HUB_URL.replace(/\/$/, '')}/internal/projects/chat-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-token': HUB_INTERNAL_TOKEN },
+      body: JSON.stringify({
+        projectKey,
+        deleted: true,
+        title: card && card.title ? `${projectKey} · ${card.title}` : `Project ${projectKey}`,
+        memberUsernames: [],
+      }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+  } catch (err) {
+    console.warn('[projects] chat retire failed', err && err.message);
+  }
+}
+
 // Fire-and-forget hub call: keep the project's chat room in step with who's on the job
 // (hub /internal/projects/chat-sync). Also the one place we learn hub display names, so an
 // assignment saved without an engineerName gets one on the next pass. No-op without
@@ -25575,6 +25598,30 @@ app.post(['/api/projects', '/service2/api/projects'], requireProjectsWrite, (req
   saveProjectsStore(store);
   syncProjectChat(projectKey); // the room exists from day one, with its creator in it
   return res.status(existed ? 200 : 201).json({ ok: true, created: !existed, project: projectPublicShape(projectKey, card) });
+});
+
+// Delete a project card — admin/planner only (Vladimir, 2026-09-16). Planning data only:
+// the card with its assignments, pins and uploaded files goes, and the closed chat loses its
+// members. Reports filed under this number stay in the archive untouched: history is
+// derived from them, not from the card, and the next report under the number recreates
+// the autofill card on its own.
+app.delete(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], requireProjectsWrite, async (req, res) => {
+  const projectKey = strictProjectNumber(req.params.projectKey);
+  if (!projectKey) return res.status(400).json({ ok: false, error: 'invalid_project_number' });
+  const store = loadProjectsStore() || {};
+  const card = store[projectKey];
+  if (!card) return res.status(404).json({ ok: false, error: 'project_not_found' });
+  const assetCount = Array.isArray(card.assets) ? card.assets.length : 0;
+  delete store[projectKey];
+  if (!saveProjectsStore(store)) return res.status(500).json({ ok: false, error: 'store_write_failed' });
+  try {
+    await fs.promises.rm(path.join(PROJECT_ASSETS_DIR, sanitizeFilename(projectKey)), { recursive: true, force: true });
+  } catch (err) {
+    console.warn('[projects] asset dir cleanup failed', err && err.message);
+  }
+  retireProjectChat(projectKey, card).catch(() => {});
+  console.log(`[projects] ${projectKey} deleted by ${req.headers['x-hub-user'] || 'unknown'} (${assetCount} file(s) removed)`);
+  return res.json({ ok: true, deleted: projectKey, assetsRemoved: assetCount });
 });
 
 app.patch(['/api/projects/:projectKey', '/service2/api/projects/:projectKey'], requireProjectsWrite, (req, res) => {
