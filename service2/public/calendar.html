@@ -130,15 +130,6 @@
     .list-row__main { font-size: 13px; }
     .list-row__meta { font-size: 11.5px; color: var(--text-muted); }
 
-    .asset-thumb {
-      width: 40px;
-      height: 40px;
-      border-radius: var(--r-sm);
-      object-fit: cover;
-      border: 1px solid var(--border);
-      background: var(--bg-sunken);
-    }
-
     .inline-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 10px; }
     .inline-form .field { flex: 1 1 120px; min-width: 0; }
     /* Same [hidden]-losing-to-display fix as .button/.toolbar__group in theme.css — these
@@ -199,7 +190,9 @@
 
     /* ----------------------------------------------------------------- map -- */
     /* Pins live on a map, not in a lat/lng form: site red, parking blue, hotel green. */
-    .pinmap { height: 260px; margin: 8px 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--bg-sunken); }
+    /* position + z-index: 0 makes the map its own stacking context, so Leaflet's panes
+       (z-index 400–1000) stay inside it instead of painting over the project dialog. */
+    .pinmap { position: relative; z-index: 0; height: 260px; margin: 8px 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--bg-sunken); }
     .pinmap.is-picking, .pinmap.is-picking .leaflet-container, .pinmap.is-picking .leaflet-interactive { cursor: crosshair; }
     .pinmap--hero { height: 200px; margin: 0; }
     .leaflet-container { font: inherit; }
@@ -226,6 +219,93 @@
     .pin-pick__results small { display: block; color: var(--text-muted); font-size: 11px; }
     .pin-pick__hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
     .pin-pick__coords { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); padding: 8px 0; }
+
+    /* ------------------------------------------------------- project dialog -- */
+    /* Masthead + tabs: identity on top, one concern per tab, no scrolling past what
+       you did not come for. Same tokens as the rest of the product — nothing new. */
+    .modal--wide { max-width: 860px; }
+    .pj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+    .pj-head__main { min-width: 0; }
+    .pj-eyebrow { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--text-muted); }
+    .pj-eyebrow .mono { font-weight: 600; color: var(--text-secondary); letter-spacing: .02em; }
+    .pj-title { margin: 4px 0 2px; font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pj-sub { font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pj-actions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+    .tabs { display: flex; gap: 2px; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface-header); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { position: relative; border: 0; background: none; padding: 11px 10px; font: inherit; font-size: 13px; font-weight: 500; color: var(--text-muted); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+    .tab:hover { color: var(--text-primary); }
+    .tab.is-active { color: var(--text-primary); }
+    .tab.is-active::after { content: ''; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; background: var(--accent); border-radius: 2px 2px 0 0; }
+    .tab[hidden] { display: none; }
+    .tab__count { font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--bg-sunken); border-radius: var(--r-pill); padding: 1px 6px; font-variant-numeric: tabular-nums; }
+    .tab__count:empty { display: none; }
+    .pj-body { max-height: 70vh; }
+    .tabpanel { display: flex; flex-direction: column; gap: 20px; }
+    .tabpanel[hidden] { display: none; }
+    .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .section-head h4 { margin: 0; }
+    .kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+    .kv__item { min-width: 0; }
+    .kv__key { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 3px; }
+    .kv__val { font-size: 14px; color: var(--text-primary); line-height: 1.4; overflow-wrap: anywhere; }
+    .kv__val.is-empty { color: var(--text-disabled); font-style: italic; }
+    .edit-box { margin-top: 12px; padding: 14px; border: 1px dashed var(--border-strong); border-radius: var(--r-lg); background: var(--bg-sunken); }
+    .edit-box[hidden] { display: none; }
+    .edit-box__title { margin: 0 0 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+    .edit-box__foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 14px; }
+    .form-grid .span-2 { grid-column: span 2; }
+    .input-row { display: flex; gap: 8px; align-items: center; }
+    .input-row input { flex: 1 1 auto; min-width: 0; }
+    .model-picker { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; gap: 8px; }
+    .team-card { padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+    .team-card:last-child { border-bottom: 0; }
+    .team-card__head { display: flex; align-items: center; gap: 12px; }
+    .team-card__who { flex: 1 1 auto; min-width: 0; }
+    .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--text-on-accent); display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 12px; font-weight: 600; flex: 0 0 auto; }
+    .avatar.is-me { background: var(--brand-red); }
+    .files-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .files-grid .kv-empty { grid-column: 1 / -1; }
+    .file-tile { position: relative; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--surface); cursor: pointer; transition: box-shadow .12s, transform .12s; }
+    .file-tile:hover { box-shadow: var(--shadow-pop); transform: translateY(-1px); }
+    .file-tile__thumb { aspect-ratio: 4 / 3; background: var(--bg-sunken); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .file-tile__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .file-tile__icon { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text-muted); }
+    .file-tile__icon .ic { width: 28px; height: 28px; }
+    .file-tile__icon span { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .06em; }
+    .file-tile__body { padding: 8px 10px 10px; }
+    .file-tile__name { font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-tile__meta { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 14px; }
+    .file-tile__actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; background: rgba(255, 255, 255, .92); border-radius: var(--r-md); padding: 2px; }
+    .file-tile:hover .file-tile__actions, .file-tile:focus-within .file-tile__actions { opacity: 1; }
+    @media (hover: none) { .file-tile__actions { opacity: 1; } }
+    .dropzone { border: 1px dashed var(--border-strong); border-radius: var(--r-lg); padding: 14px; background: var(--bg-sunken); }
+    .dropzone[hidden] { display: none; }
+    .dropzone.is-over { border-color: var(--accent); background: var(--accent-subtle); }
+    .dropzone__main { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--text-secondary); }
+    .dropzone__main .ic { width: 22px; height: 22px; color: var(--text-muted); flex: 0 0 auto; }
+    .dropzone__meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .dropzone__row { display: flex; gap: 8px; margin-top: 10px; }
+    .dropzone__row input { flex: 1 1 auto; min-width: 0; }
+    .linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--text-primary); text-decoration: underline; cursor: pointer; }
+    .preview-backdrop { position: fixed; inset: 0; z-index: 90; background: rgba(11, 11, 12, .82); display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .preview-backdrop[hidden] { display: none; }
+    .preview { width: min(1100px, 100%); height: min(88vh, 100%); background: var(--surface); border-radius: var(--r-lg); overflow: hidden; display: flex; flex-direction: column; box-shadow: var(--shadow-pop); }
+    .preview__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); }
+    .preview__name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .preview__actions { display: flex; gap: 6px; flex: 0 0 auto; }
+    .preview__body { flex: 1 1 auto; min-height: 0; background: var(--bg-sunken); display: flex; align-items: center; justify-content: center; overflow: auto; }
+    .preview__body img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .preview__body iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+    .preview__body pre { align-self: stretch; margin: 0; padding: 16px 20px; width: 100%; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface); box-sizing: border-box; }
+    @media (max-width: 720px) {
+      .kv, .form-grid { grid-template-columns: 1fr; }
+      .form-grid .span-2 { grid-column: auto; }
+      .model-picker { grid-template-columns: 1fr 1fr; }
+      .pj-title, .pj-sub { white-space: normal; }
+      .pj-head { flex-direction: column; }
+    }
   </style>
 </head>
 
@@ -304,9 +384,16 @@
           <div class="field"><span>Customer</span><input type="text" id="np-customer" placeholder="Siemens AG" /></div>
           <div class="field"><span>Signatory (customer representative)</span><input type="text" id="np-representative" placeholder="Who signs the report" /></div>
         </div>
-        <div class="inline-form" style="margin-top:0;">
-          <div class="field"><span>Screen model</span><input type="text" id="np-model" placeholder="LD-FE092" /></div>
-          <div class="field" style="flex:0 0 160px;"><span>Batch</span><input type="text" id="np-batch" placeholder="B-2609-04" /></div>
+        <div class="field">
+          <span>Screen model / batch</span>
+          <!-- The same Type → Model No. catalogue the report form uses, so a project and its
+               reports never disagree on what the display is called. -->
+          <div class="model-picker" data-model-picker>
+            <select data-model-code><option value="">Type…</option></select>
+            <select data-model-number disabled><option value="">Model No.…</option></select>
+            <input type="text" data-model-batch id="np-batch" placeholder="Batch" autocomplete="off" />
+            <input type="hidden" id="np-model" />
+          </div>
         </div>
         <div class="field">
           <span>Status</span>
@@ -325,52 +412,82 @@
     </div>
   </div>
 
-  <!-- Project detail -->
+  <!-- Project detail. One dialog, five tabs, strictly per role: an engineer sees what they
+       need on site (details, their hours, the map, the files); a manager gets the same plus
+       edit, scheduling, statistics and history. Nothing is shown to someone it isn't for. -->
   <div class="modal-backdrop" id="detail-backdrop" hidden>
-    <div class="modal">
-      <div class="modal__head">
-        <h3 id="d-title">Project</h3>
-        <button type="button" class="button icon" data-close><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+    <div class="modal modal--wide">
+      <div class="pj-head">
+        <div class="pj-head__main">
+          <div class="pj-eyebrow"><span id="d-number" class="mono"></span><span id="d-status" class="chip"></span></div>
+          <h3 id="d-title" class="pj-title">Project</h3>
+          <div class="pj-sub" id="d-sub"></div>
+        </div>
+        <div class="pj-actions">
+          <a class="button ghost small" id="d-route" href="#" target="_blank" hidden><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> Route</a>
+          <a class="button ghost small" id="d-chat" href="#" target="_blank"><svg class="ic"><use href="./icons.svg#i-link"></use></svg> Chat</a>
+          <button type="button" class="button icon" data-close title="Close"><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+        </div>
       </div>
-      <div class="modal__body">
-        <div class="modal__section">
-          <h4>Project</h4>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-document"></use></svg> <span id="d-number" class="mono"></span></div>
-          <div class="kv-row" id="d-address-row"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> <span id="d-address"></span></div>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-folder"></use></svg> <span id="d-customer"></span></div>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-signature"></use></svg> <span id="d-representative"></span></div>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-check"></use></svg> <span id="d-model"></span></div>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-flag"></use></svg> <span id="d-status" class="chip"></span></div>
-          <div class="kv-row"><svg class="ic"><use href="./icons.svg#i-link"></use></svg> <a id="d-chat" href="#" target="_blank">Open project chat</a></div>
-          <div class="inline-form" id="d-edit-form" hidden>
-            <div class="field"><span>Title</span><input type="text" id="d-edit-title" /></div>
-            <div class="field"><span>Address</span><input type="text" id="d-edit-address" /></div>
-            <div class="field"><span>Customer</span><input type="text" id="d-edit-customer" /></div>
-            <div class="field"><span>Signatory</span><input type="text" id="d-edit-representative" /></div>
-            <div class="field"><span>Screen model</span><input type="text" id="d-edit-model" /></div>
-            <div class="field" style="flex:0 0 120px;"><span>Batch</span><input type="text" id="d-edit-batch" /></div>
-            <div class="field">
-              <span>Status</span>
-              <select id="d-edit-status">
-                <option value="planned">Planned</option>
-                <option value="in_progress">In progress</option>
-                <option value="done">Done</option>
-              </select>
+      <div class="tabs" id="d-tabs">
+        <button type="button" class="tab is-active" data-tab="overview">Overview</button>
+        <button type="button" class="tab" data-tab="team">Team <span class="tab__count" id="d-count-team"></span></button>
+        <button type="button" class="tab" data-tab="logistics">Logistics <span class="tab__count" id="d-count-pins"></span></button>
+        <button type="button" class="tab" data-tab="files">Files <span class="tab__count" id="d-count-files"></span></button>
+        <button type="button" class="tab" data-tab="history" id="d-tab-history" hidden>History <span class="tab__count" id="d-count-history"></span></button>
+      </div>
+      <div class="modal__body pj-body">
+
+        <div class="tabpanel" data-panel="overview">
+          <div class="modal__section" id="d-summary-section" hidden>
+            <div class="summary-strip stat-rail" id="d-summary-strip"></div>
+            <div class="completeness" id="d-completeness"></div>
+          </div>
+          <div class="modal__section">
+            <div class="section-head"><h4>Details</h4><button type="button" class="button ghost small" id="d-edit-toggle" hidden>Edit</button></div>
+            <div class="kv" id="d-kv"></div>
+            <div class="edit-box" id="d-edit-form" hidden>
+              <div class="form-grid">
+                <div class="field span-2"><span>Title</span><input type="text" id="d-edit-title" placeholder="Siemens Erlangen — foyer wall" /></div>
+                <div class="field span-2"><span>Address</span>
+                  <div class="input-row">
+                    <input type="text" id="d-edit-address" placeholder="Street, postcode town" />
+                    <button type="button" class="button secondary small" id="d-edit-address-map" title="Set the site on the map"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> On map</button>
+                  </div>
+                </div>
+                <div class="field"><span>Customer</span><input type="text" id="d-edit-customer" placeholder="Siemens AG" /></div>
+                <div class="field"><span>Signatory</span><input type="text" id="d-edit-representative" placeholder="Who signs the report" /></div>
+                <div class="field span-2"><span>Screen model / batch</span>
+                  <div class="model-picker" data-model-picker>
+                    <select data-model-code><option value="">Type…</option></select>
+                    <select data-model-number disabled><option value="">Model No.…</option></select>
+                    <input type="text" data-model-batch id="d-edit-batch" placeholder="Batch" autocomplete="off" />
+                    <input type="hidden" id="d-edit-model" />
+                  </div>
+                </div>
+                <div class="field"><span>Status</span>
+                  <select id="d-edit-status">
+                    <option value="planned">Planned</option>
+                    <option value="in_progress">In progress</option>
+                    <option value="done">Done</option>
+                  </select>
+                </div>
+              </div>
+              <div class="edit-box__foot">
+                <button type="button" class="button ghost small" id="d-edit-cancel">Cancel</button>
+                <button type="button" class="button small" id="d-edit-save">Save changes</button>
+              </div>
             </div>
-            <button type="button" class="button secondary small" id="d-edit-save">Save</button>
           </div>
         </div>
 
-        <div class="modal__section" id="d-summary-section" hidden>
-          <h4>At a glance</h4>
-          <div class="summary-strip stat-rail" id="d-summary-strip"></div>
-          <div class="completeness" id="d-completeness"></div>
-        </div>
+        <div class="tabpanel" data-panel="team" hidden>
 
         <div class="modal__section">
-          <h4>Assignments</h4>
           <div id="d-assignments"></div>
-          <div class="inline-form" id="d-assign-form" hidden>
+          <div class="edit-box" id="d-assign-form" hidden>
+            <p class="edit-box__title">Schedule an engineer</p>
+            <div class="inline-form" style="margin-top:0;">
             <div class="field"><span>Engineer (hub username)</span><input type="text" id="d-a-engineer" placeholder="uli" /></div>
             <div class="field"><span>Display name (optional)</span><input type="text" id="d-a-name" placeholder="Ulrich Maurer" /></div>
             <div class="field" style="flex:0 0 140px;"><span>From</span><input type="date" id="d-a-from" /></div>
@@ -378,10 +495,13 @@
             <div class="field" style="flex:0 0 100px;"><span>Day starts</span><input type="time" id="d-a-start" value="08:00" /></div>
             <div class="field" style="flex:0 0 100px;"><span>Day ends</span><input type="time" id="d-a-end" value="17:00" /></div>
             <div class="field" style="flex:0 0 90px;"><span>Break (min)</span><input type="number" id="d-a-break" value="30" min="0" step="5" /></div>
-            <button type="button" class="button secondary small" id="d-a-save">Add</button>
+            <button type="button" class="button small" id="d-a-save">Add</button>
+            </div>
           </div>
         </div>
+        </div>
 
+        <div class="tabpanel" data-panel="logistics" hidden>
         <div class="modal__section">
           <h4>Logistics</h4>
           <div class="pin-legend">
@@ -418,23 +538,52 @@
           </div>
         </div>
 
-        <div class="modal__section">
-          <h4>Files</h4>
-          <div id="d-assets"></div>
-          <div class="inline-form" id="d-asset-form" hidden>
-            <input type="file" id="d-f-file" />
-            <div class="field"><span>Caption</span><input type="text" id="d-f-caption" placeholder="Site overview" /></div>
-            <button type="button" class="button secondary small" id="d-f-save">Upload</button>
-          </div>
         </div>
 
-        <div class="modal__section" id="d-history-section" hidden>
-          <h4>Service history</h4>
+        <div class="tabpanel" data-panel="files" hidden>
+        <div class="modal__section">
+          <div class="files-grid" id="d-assets"></div>
+          <div class="dropzone" id="d-asset-form" hidden>
+            <input type="file" id="d-f-file" hidden />
+            <div class="dropzone__main">
+              <svg class="ic"><use href="./icons.svg#i-plus"></use></svg>
+              <div>
+                <b>Drop a file here</b> or <button type="button" class="linklike" id="d-f-choose">choose one</button>
+                <div class="dropzone__meta" id="d-f-name">Photos, PDFs, schemes, text notes</div>
+              </div>
+            </div>
+            <div class="dropzone__row">
+              <input type="text" id="d-f-caption" placeholder="Caption (optional) — e.g. Site overview" />
+              <button type="button" class="button small" id="d-f-save" disabled>Upload</button>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        <div class="tabpanel" data-panel="history" hidden>
+        <div class="modal__section" id="d-history-section">
           <div id="d-history"></div>
+        </div>
         </div>
 
         <div class="status" id="d-status-line"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- File preview: images, PDFs and text open here; anything else is handed over as a
+       download straight away rather than shown as a broken box. -->
+  <div class="preview-backdrop" id="preview-backdrop" hidden>
+    <div class="preview">
+      <div class="preview__bar">
+        <div class="preview__name" id="pv-name"></div>
+        <div class="preview__actions">
+          <a class="button ghost small" id="pv-open" href="#" target="_blank"><svg class="ic"><use href="./icons.svg#i-external"></use></svg> Open</a>
+          <a class="button ghost small" id="pv-download" href="#" download><svg class="ic"><use href="./icons.svg#i-download"></use></svg> Download</a>
+          <button type="button" class="button icon" id="pv-close" title="Close"><svg class="ic"><use href="./icons.svg#i-close"></use></svg></button>
+        </div>
+      </div>
+      <div class="preview__body" id="pv-body"></div>
     </div>
   </div>
 
@@ -531,10 +680,13 @@
         }
         markers.set(pin.id, m);
       });
-      if (list.length === 1) map.setView([Number(list[0].lat), Number(list[0].lng)], 15);
-      else if (list.length > 1) map.fitBounds(list.map((p) => [Number(p.lat), Number(p.lng)]), { padding: [28, 28], maxZoom: 16 });
-      else map.setView(DEFAULT_CENTER, 6);
-      const handle = { map, markers };
+      const fit = () => {
+        if (list.length === 1) map.setView([Number(list[0].lat), Number(list[0].lng)], 15);
+        else if (list.length > 1) map.fitBounds(list.map((p) => [Number(p.lat), Number(p.lng)]), { padding: [28, 28], maxZoom: 16 });
+        else map.setView(DEFAULT_CENTER, 6);
+      };
+      fit();
+      const handle = { map, markers, fit };
       el._pinmap = handle;
       // The modal becomes visible in the same tick the map is created: let layout settle.
       setTimeout(() => map.invalidateSize(), 60);
@@ -689,6 +841,9 @@
       document.getElementById('np-address').value = '';
       document.getElementById('np-status').value = 'planned';
       document.getElementById('np-status-line').textContent = '';
+      const npPicker = document.querySelector('#new-project-backdrop [data-model-picker]');
+      if (npPicker && npPicker._setModel) npPicker._setModel('');
+      document.getElementById('np-batch').value = '';
       npBackdrop.hidden = false;
     });
     document.getElementById('np-save').addEventListener('click', async () => {
@@ -725,6 +880,9 @@
     let currentProjectKey = null;
 
     async function openDetail(projectKey) {
+      // A different project starts on Overview; re-rendering the same one after an action
+      // (pin saved, file uploaded) stays on the tab the user is working in.
+      if (projectKey !== currentProjectKey) showTab('overview');
       currentProjectKey = projectKey;
       detailBackdrop.hidden = false;
       document.getElementById('d-status-line').textContent = 'Loading…';
@@ -739,49 +897,91 @@
       }
     }
 
+    function statusChip(status) {
+      const s = status || 'planned';
+      return { cls: s === 'done' ? 'is-ok' : s === 'in_progress' ? 'is-active' : '', text: s.replace(/_/g, ' ') };
+    }
+    function setCount(id, n) { document.getElementById(id).textContent = n ? String(n) : ''; }
+    function initials(name) {
+      return String(name || '').split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((s) => s[0].toUpperCase()).join('') || '?';
+    }
+
     function renderDetail(p) {
+      const site = p.site || {};
+      const pins = p.pins || [];
+      const sitePin = pins.find((x) => x.kind === 'site');
+
+      // Masthead: who/where at a glance, and the two things anyone opens this for.
       document.getElementById('d-title').textContent = p.title || p.lsc_project_number;
       document.getElementById('d-number').textContent = p.lsc_project_number;
-      document.getElementById('d-address').textContent = p.address || '—';
-      const site = p.site || {};
-      document.getElementById('d-customer').textContent = site.endCustomerName || 'Customer: not set';
-      document.getElementById('d-representative').textContent = site.customerRepresentative ? `Signs: ${site.customerRepresentative}` : 'Signatory: not set';
-      document.getElementById('d-model').textContent = site.ledDisplayModel ? `${site.ledDisplayModel}${site.ledBatch ? ' / ' + site.ledBatch : ''}` : 'Screen model: not set';
-      document.getElementById('d-edit-customer').value = site.endCustomerName || '';
-      document.getElementById('d-edit-representative').value = site.customerRepresentative || '';
-      document.getElementById('d-edit-model').value = site.ledDisplayModel || '';
-      document.getElementById('d-edit-batch').value = site.ledBatch || '';
+      const st = statusChip(p.status);
       const statusEl2 = document.getElementById('d-status');
-      statusEl2.textContent = (p.status || 'no status').replace(/_/g, ' ');
-      document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId);
+      statusEl2.className = 'chip ' + st.cls;
+      statusEl2.textContent = st.text;
+      document.getElementById('d-sub').textContent = [site.endCustomerName, p.address].filter(Boolean).join(' · ') || 'Customer and address not set yet';
+      const dest = p.address || (sitePin ? `${sitePin.lat},${sitePin.lng}` : '');
+      const routeEl = document.getElementById('d-route');
+      routeEl.hidden = !dest;
+      if (dest) routeEl.href = mapsDirectionsUrl(dest);
+      document.getElementById('d-chat').href = '/chat?c=' + encodeURIComponent(p.chatConversationId || ('prj_' + p.lsc_project_number));
+
+      setCount('d-count-team', (p.assignments || []).length);
+      setCount('d-count-pins', pins.length);
+      setCount('d-count-files', (p.assets || []).length);
+      document.getElementById('d-tab-history').hidden = !(canWrite && p.summary);
+      setCount('d-count-history', p.summary ? p.summary.visitCount : 0);
+      if (document.getElementById('d-tab-history').hidden && detailTab === 'history') showTab('overview');
       renderSummary(p);
       renderHistory(p);
 
-      const editForm = document.getElementById('d-edit-form');
-      editForm.hidden = !canWrite;
+      // Details: read view for everyone, the form only when a manager asks for it.
+      const model = site.ledDisplayModel ? `${site.ledDisplayModel}${site.ledBatch ? ' · ' + site.ledBatch : ''}` : '';
+      const kv = [
+        ['Customer', site.endCustomerName],
+        ['Signatory', site.customerRepresentative],
+        ['Screen model', model],
+        ['Address', p.address],
+        ['Created', p.createdBy ? `${p.createdBy} · ${fmtDMY(p.createdAt)}` : ''],
+        ['Project chat', p.chatConversationId ? 'closed room — assigned team + managers' : ''],
+      ];
+      document.getElementById('d-kv').innerHTML = kv.map(([k, v]) =>
+        `<div class="kv__item"><div class="kv__key">${k}</div><div class="kv__val${v ? '' : ' is-empty'}">${v ? escapeHtml(v) : 'not set'}</div></div>`).join('');
+      document.getElementById('d-edit-toggle').hidden = !canWrite;
+      document.getElementById('d-edit-toggle').textContent = 'Edit';
+      document.getElementById('d-edit-form').hidden = true;
+      document.getElementById('d-kv').hidden = false;
       document.getElementById('d-edit-title').value = p.title || '';
       document.getElementById('d-edit-address').value = p.address || '';
       document.getElementById('d-edit-status').value = p.status || 'planned';
+      document.getElementById('d-edit-customer').value = site.endCustomerName || '';
+      document.getElementById('d-edit-representative').value = site.customerRepresentative || '';
+      document.getElementById('d-edit-batch').value = site.ledBatch || '';
+      const editPicker = document.querySelector('#d-edit-form [data-model-picker]');
+      initModelPicker(editPicker).then(() => editPicker._setModel(site.ledDisplayModel || ''));
 
+      // Team: one card per assignment, hours inside. Managers see everyone's hours; an
+      // engineer sees (and edits) only their own row.
       const assignEl = document.getElementById('d-assignments');
       assignEl.innerHTML = '';
       if (!p.assignments || !p.assignments.length) {
-        assignEl.innerHTML = '<div class="kv-empty">No one scheduled yet.</div>';
+        assignEl.innerHTML = `<div class="kv-empty">${canWrite ? 'No one scheduled yet — add the first engineer below.' : 'No one scheduled yet.'}</div>`;
       } else {
         p.assignments.forEach((a) => {
-          const block = document.createElement('div');
-          block.className = 'list-row';
-          block.style.alignItems = 'flex-start';
-          block.style.flexDirection = 'column';
-          const head = document.createElement('div');
-          head.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;';
+          const card = document.createElement('div');
+          card.className = 'team-card';
           const sched = a.schedule || {};
           const isMe = a.engineerId === currentUsername;
-          head.innerHTML = `<div><div class="list-row__main">${escapeHtml(a.engineerName || a.engineerId)}${isMe ? ' <span class="chip is-active">you</span>' : ''}</div><div class="list-row__meta">${fmtRange(a.plannedFrom, a.plannedTo)}${sched.start ? ` · plan ${escapeHtml(sched.start)}–${escapeHtml(sched.end)}, break ${sched.breakMinutes} min` : ''}</div></div>`;
+          const name = a.engineerName || a.engineerId;
+          const head = document.createElement('div');
+          head.className = 'team-card__head';
+          head.innerHTML = `<div class="avatar${isMe ? ' is-me' : ''}">${escapeHtml(initials(name))}</div>`
+            + `<div class="team-card__who"><div class="list-row__main">${escapeHtml(name)}${isMe ? ' <span class="chip is-active">you</span>' : ''}</div>`
+            + `<div class="list-row__meta">${fmtRange(a.plannedFrom, a.plannedTo)}${sched.start ? ` · plan ${escapeHtml(sched.start)}–${escapeHtml(sched.end)}, break ${sched.breakMinutes} min` : ''}</div></div>`;
           if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
+            del.title = 'Remove from this project';
             del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-close"></use></svg>';
             del.addEventListener('click', async () => {
               await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/assignments/${encodeURIComponent(a.id)}`, { method: 'DELETE' });
@@ -790,22 +990,19 @@
             });
             head.appendChild(del);
           }
-          block.appendChild(head);
-          // Managers see everyone's hours; an engineer sees (and edits) only their own row.
+          card.appendChild(head);
           if (canWrite || isMe) {
             const hours = document.createElement('div');
-            hours.style.width = '100%';
             renderHoursEditor(hours, p.lsc_project_number, a, { editable: canWrite || isMe });
-            block.appendChild(hours);
+            card.appendChild(hours);
           }
-          assignEl.appendChild(block);
+          assignEl.appendChild(card);
         });
       }
       document.getElementById('d-assign-form').hidden = !canWrite;
 
       const logEl = document.getElementById('d-logistics');
       logEl.innerHTML = '';
-      const pins = p.pins || [];
       closePick();
       detailMap = mountPinMap(document.getElementById('d-map'), pins, {
         draggable: canWrite,
@@ -860,40 +1057,51 @@
       }
       document.getElementById('d-pin-form').hidden = !canWrite;
 
+      // Files: tiles, a tap opens the preview (or downloads what cannot be shown).
       const assetsEl = document.getElementById('d-assets');
       assetsEl.innerHTML = '';
       const assets = p.assets || [];
       if (!assets.length) {
-        assetsEl.innerHTML = '<div class="kv-empty">No files yet.</div>';
+        assetsEl.innerHTML = `<div class="kv-empty">${canWrite ? 'No files yet — drop a site photo, a scheme or the briefing below.' : 'No files yet.'}</div>`;
       } else {
         assets.forEach((asset) => {
-          const row = document.createElement('div');
-          row.className = 'list-row';
+          const tile = document.createElement('div');
+          tile.className = 'file-tile';
+          tile.tabIndex = 0;
+          const url = apiBase + asset.url;
           const isImage = (asset.mime || '').startsWith('image/');
-          const thumb = isImage
-            ? `<img class="asset-thumb" src="${apiBase}${asset.url}" alt="">`
-            : `<svg class="ic ic-20"><use href="./icons.svg#i-document"></use></svg>`;
-          row.innerHTML = `<div style="display:flex;align-items:center;gap:10px;">${thumb}<div><div class="list-row__main">${asset.name}</div><div class="list-row__meta">${asset.caption || asset.kind}</div></div></div>`;
+          const ext = String(asset.name || '').split('.').pop().toUpperCase().slice(0, 5);
+          tile.innerHTML = `<div class="file-tile__thumb">${isImage
+            ? `<img src="${url}" alt="" loading="lazy">`
+            : `<div class="file-tile__icon"><svg class="ic"><use href="./icons.svg#i-document"></use></svg><span>${escapeHtml(ext)}</span></div>`}</div>`
+            + `<div class="file-tile__body"><div class="file-tile__name" title="${escapeHtml(asset.name)}">${escapeHtml(asset.name)}</div>`
+            + `<div class="file-tile__meta">${escapeHtml(asset.caption || '')}${asset.caption && asset.kind ? ' · ' : ''}${escapeHtml(asset.kind || '')}</div></div>`;
           const actions = document.createElement('div');
+          actions.className = 'file-tile__actions';
           const dl = document.createElement('a');
-          dl.href = apiBase + asset.url;
-          dl.target = '_blank';
+          dl.href = url;
+          dl.setAttribute('download', asset.name || 'file');
           dl.className = 'button icon';
+          dl.title = 'Download';
           dl.innerHTML = '<svg class="ic"><use href="./icons.svg#i-download"></use></svg>';
           actions.appendChild(dl);
           if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
+            del.title = 'Delete file';
             del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-trash"></use></svg>';
             del.addEventListener('click', async () => {
+              if (!confirm(`Delete ${asset.name}?`)) return;
               await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/assets/${encodeURIComponent(asset.id)}`, { method: 'DELETE' });
               openDetail(p.lsc_project_number);
             });
             actions.appendChild(del);
           }
-          row.appendChild(actions);
-          assetsEl.appendChild(row);
+          tile.appendChild(actions);
+          tile.addEventListener('click', (e) => { if (e.target.closest('.file-tile__actions')) return; openPreview(asset); });
+          tile.addEventListener('keydown', (e) => { if (e.key === 'Enter') openPreview(asset); });
+          assetsEl.appendChild(tile);
         });
       }
       document.getElementById('d-asset-form').hidden = !canWrite;
@@ -922,11 +1130,9 @@
     }
 
     function renderHistory(p) {
-      const section = document.getElementById('d-history-section');
       const s = p.summary;
-      if (!canWrite || !s) { section.hidden = true; return; }
-      section.hidden = false;
       const el = document.getElementById('d-history');
+      if (!canWrite || !s) { el.innerHTML = ''; return; }
       const visits = s.recentVisits || [];
       if (!visits.length) { el.innerHTML = '<div class="kv-empty">No reports on this project yet.</div>'; return; }
       el.innerHTML = visits.map((v) => `<div class="history__row"><div><span class="history__who">${escapeHtml(v.submitterName || '—')}</span> <span class="history__meta">· ${fmtDMY(v.submittedAt)} · ${escapeHtml(String(v.type || '').replace(/_report$/, '').replace(/_/g, ' '))}</span></div><a class="button icon" href="${apiBase}/${escapeHtml(v.url)}" target="_blank" title="Open PDF"><svg class="ic"><use href="./icons.svg#i-document"></use></svg></a></div>`).join('');
@@ -1061,11 +1267,14 @@
             <div class="hero__block"><h5>Hotel</h5>${pinLink(hotel, 'Hotel')}</div>
             <div class="hero__block"><h5>Parking</h5>${pinLink(parking, 'Parking')}</div>
             <div class="hero__block"><h5>Team on this job</h5>${mates.length ? mates.map((m) => `<div>${escapeHtml(m.engineerName || m.engineerId)} <span class="kv-empty">${fmtRange(m.plannedFrom, m.plannedTo)}</span></div>`).join('') : '<span class="kv-empty">Just you</span>'}</div>
-            <div class="hero__block"><h5>Files</h5>${files.length ? files.map((f) => `<div><a href="${apiBase}${escapeHtml(f.url)}" target="_blank">${escapeHtml(f.name)}</a>${f.caption ? ` <span class="kv-empty">${escapeHtml(f.caption)}</span>` : ''}</div>`).join('') : '<span class="kv-empty">No files yet</span>'}</div>
+            <div class="hero__block"><h5>Files</h5>${files.length ? files.map((f, i) => `<div><a href="${apiBase}${escapeHtml(f.url)}" data-asset="${i}">${escapeHtml(f.name)}</a>${f.caption ? ` <span class="kv-empty">${escapeHtml(f.caption)}</span>` : ''}</div>`).join('') : '<span class="kv-empty">No files yet</span>'}</div>
           </div>
         </div>`;
       renderHoursEditor(card.querySelector('#hero-hours'), p.lsc_project_number, a, { editable: true });
       card.querySelector('#hero-details').addEventListener('click', () => openDetail(p.lsc_project_number));
+      card.querySelectorAll('a[data-asset]').forEach((a) => {
+        a.addEventListener('click', (e) => { e.preventDefault(); openPreview(files[Number(a.dataset.asset)]); });
+      });
       if (validPins(pins).length) mountPinMap(card.querySelector('#hero-map'), pins, {});
     }
 
@@ -1253,17 +1462,201 @@
       openDetail(currentProjectKey);
     });
 
-    document.getElementById('d-f-save').addEventListener('click', async () => {
+    // ------------------------------------------------------------------ tabs --
+    const detailTabs = document.getElementById('d-tabs');
+    let detailTab = 'overview';
+    function showTab(name) {
+      detailTab = name;
+      detailTabs.querySelectorAll('.tab').forEach((t) => t.classList.toggle('is-active', t.dataset.tab === name));
+      document.querySelectorAll('#detail-backdrop .tabpanel').forEach((panel) => { panel.hidden = panel.dataset.panel !== name; });
+      // Leaflet measured a hidden panel: re-measure and re-frame once it is on screen.
+      if (name === 'logistics' && detailMap) setTimeout(() => { detailMap.map.invalidateSize(); detailMap.fit(); }, 40);
+    }
+    detailTabs.addEventListener('click', (e) => {
+      const t = e.target.closest('.tab');
+      if (t && !t.hidden) showTab(t.dataset.tab);
+    });
+
+    // ------------------------------------------------------- details: edit --
+    const editToggle = document.getElementById('d-edit-toggle');
+    const editBox = document.getElementById('d-edit-form');
+    editToggle.addEventListener('click', () => {
+      const open = editBox.hidden;
+      editBox.hidden = !open;
+      document.getElementById('d-kv').hidden = open;
+      editToggle.textContent = open ? 'Close' : 'Edit';
+      if (open) document.getElementById('d-edit-title').focus();
+    });
+    document.getElementById('d-edit-cancel').addEventListener('click', () => {
+      editBox.hidden = true;
+      document.getElementById('d-kv').hidden = false;
+      editToggle.textContent = 'Edit';
+    });
+    // "Set the address on the map": the site pin fills the address, so send them there.
+    document.getElementById('d-edit-address-map').addEventListener('click', () => {
+      showTab('logistics');
+      setTimeout(() => { openPick(); pickKind.value = 'site'; }, 60);
+    });
+
+    // ---------------------------------------------- screen model picker --
+    // The same Type → Model No. catalogue the report form uses (GET /api/led-models), so
+    // a project and its reports never disagree on what the display is called. A value
+    // that is not in the catalogue (typed on an older build) stays selectable as "Other".
+    let ledCodes = null;
+    async function loadLedCodes() {
+      if (ledCodes) return ledCodes;
+      try {
+        const resp = await api('/api/led-models');
+        const payload = await resp.json();
+        ledCodes = (payload.ok && Array.isArray(payload.codes)) ? payload.codes : [];
+      } catch (err) { ledCodes = []; }
+      return ledCodes;
+    }
+    async function initModelPicker(root) {
+      const codes = await loadLedCodes();
+      const cs = root.querySelector('[data-model-code]');
+      const ns = root.querySelector('[data-model-number]');
+      const hidden = root.querySelector('input[type="hidden"]');
+      const fillNumbers = (code, selected) => {
+        ns.innerHTML = '<option value="">Model No.…</option>';
+        const g = codes.find((x) => x.code === code);
+        if (!g) { ns.disabled = true; return; }
+        g.numbers.forEach((n) => {
+          const o = document.createElement('option');
+          o.value = n.model;
+          o.textContent = n.label || n.number;
+          ns.appendChild(o);
+        });
+        ns.disabled = false;
+        if (selected) ns.value = selected;
+      };
+      if (!cs.dataset.ready) {
+        cs.dataset.ready = '1';
+        codes.forEach((g) => {
+          const o = document.createElement('option');
+          o.value = g.code;
+          o.textContent = g.code;
+          cs.appendChild(o);
+        });
+        cs.addEventListener('change', () => { fillNumbers(cs.value); hidden.value = ''; });
+        ns.addEventListener('change', () => { hidden.value = ns.value; });
+      }
+      root._setModel = (model) => {
+        hidden.value = model || '';
+        const custom = cs.querySelector('option[data-custom]');
+        if (custom) custom.remove();
+        if (!model) { cs.value = ''; fillNumbers(''); return; }
+        const g = codes.find((x) => x.numbers.some((n) => n.model === model));
+        if (g) { cs.value = g.code; fillNumbers(g.code, model); return; }
+        const o = document.createElement('option');
+        o.value = '__custom__';
+        o.dataset.custom = '1';
+        o.textContent = 'Other';
+        cs.appendChild(o);
+        cs.value = '__custom__';
+        ns.innerHTML = '';
+        const n = document.createElement('option');
+        n.value = model;
+        n.textContent = model;
+        ns.appendChild(n);
+        ns.disabled = false;
+        ns.value = model;
+      };
+      return root;
+    }
+    document.querySelectorAll('[data-model-picker]').forEach((root) => { initModelPicker(root); });
+
+    // ----------------------------------------------------------- preview --
+    const pvBackdrop = document.getElementById('preview-backdrop');
+    const pvBody = document.getElementById('pv-body');
+    function previewKind(asset) {
+      const mime = String(asset.mime || '');
+      const name = String(asset.name || '');
+      if (mime.startsWith('image/')) return 'image';
+      if (mime === 'application/pdf' || /\.pdf$/i.test(name)) return 'pdf';
+      if (mime.startsWith('text/') || mime === 'application/json' || /\.(txt|md|csv|log|json)$/i.test(name)) return 'text';
+      return null;
+    }
+    function openPreview(asset) {
+      const url = apiBase + asset.url;
+      const name = asset.name || 'file';
+      const kind = previewKind(asset);
+      if (!kind) {
+        // Nothing sensible to show inline: hand the file over instead of a broken box.
+        const a = document.createElement('a');
+        a.href = url;
+        a.setAttribute('download', name);
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      }
+      document.getElementById('pv-name').textContent = name;
+      document.getElementById('pv-open').href = url;
+      const dl = document.getElementById('pv-download');
+      dl.href = url;
+      dl.setAttribute('download', name);
+      pvBody.innerHTML = '';
+      if (kind === 'image') {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = name;
+        pvBody.appendChild(img);
+      } else if (kind === 'pdf') {
+        const frame = document.createElement('iframe');
+        frame.src = url;
+        frame.title = name;
+        pvBody.appendChild(frame);
+      } else {
+        const pre = document.createElement('pre');
+        pre.textContent = 'Loading…';
+        pvBody.appendChild(pre);
+        fetch(url, { credentials: 'same-origin' })
+          .then((r) => r.text())
+          .then((text) => { pre.textContent = text.length > 200000 ? text.slice(0, 200000) + '\n…' : text; })
+          .catch(() => { pre.textContent = 'Could not load the file — use Download.'; });
+      }
+      pvBackdrop.hidden = false;
+    }
+    function closePreview() { pvBackdrop.hidden = true; pvBody.innerHTML = ''; }
+    document.getElementById('pv-close').addEventListener('click', closePreview);
+    pvBackdrop.addEventListener('click', (e) => { if (e.target === pvBackdrop) closePreview(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pvBackdrop.hidden) closePreview(); });
+
+    // ------------------------------------------------------------ upload --
+    const dropzone = document.getElementById('d-asset-form');
+    const fileInput = document.getElementById('d-f-file');
+    const fileNameEl = document.getElementById('d-f-name');
+    const uploadBtn = document.getElementById('d-f-save');
+    const FILE_HINT = 'Photos, PDFs, schemes, text notes';
+    function reflectFile() {
+      const f = fileInput.files && fileInput.files[0];
+      fileNameEl.textContent = f ? `${f.name} · ${Math.max(1, Math.round(f.size / 1024))} KB` : FILE_HINT;
+      uploadBtn.disabled = !f;
+    }
+    document.getElementById('d-f-choose').addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', reflectFile);
+    ['dragenter', 'dragover'].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add('is-over'); }));
+    ['dragleave', 'drop'].forEach((ev) => dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.remove('is-over'); }));
+    dropzone.addEventListener('drop', (e) => {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        reflectFile();
+      }
+    });
+    uploadBtn.addEventListener('click', async () => {
       if (!currentProjectKey) return;
-      const fileInput = document.getElementById('d-f-file');
       const file = fileInput.files && fileInput.files[0];
       if (!file) return;
+      uploadBtn.disabled = true;
+      fileNameEl.textContent = `Uploading ${file.name}…`;
       const fd = new FormData();
       fd.append('file', file);
       fd.append('caption', document.getElementById('d-f-caption').value.trim());
       await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/assets`, { method: 'POST', body: fd });
       fileInput.value = '';
       document.getElementById('d-f-caption').value = '';
+      reflectFile();
       openDetail(currentProjectKey);
     });
 
