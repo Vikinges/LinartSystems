@@ -9744,6 +9744,56 @@ ${rows.join('\n')}
         font-size: 0.9rem;
       }
 
+      /* Submit found gaps: one strip pinned to the top of the viewport names every missing
+         field as a chip. Tap a chip (or Next) and the form scrolls to that field and
+         focuses it; the strip thins out as fields get filled and leaves with the last one.
+         Nobody scrolls around looking for what turned red. */
+      .missing-strip {
+        position: fixed;
+        top: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 60;
+        width: min(960px, calc(100% - 24px));
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid #fecaca;
+        background: #fff5f5;
+        color: #991b1b;
+        box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18);
+        font-size: 0.9rem;
+      }
+      .missing-strip[hidden] { display: none; }
+      .missing-strip__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+      .missing-strip__next {
+        border: 0;
+        border-radius: 999px;
+        padding: 6px 14px;
+        background: #dc2626;
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .missing-strip__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+      .missing-strip__chip {
+        border: 1px solid #fca5a5;
+        border-radius: 999px;
+        padding: 4px 10px;
+        background: #fff;
+        color: #b91c1c;
+        font: inherit;
+        font-size: 0.85rem;
+        cursor: pointer;
+      }
+      .missing-strip__chip:hover { background: #fee2e2; }
+      .is-flash { animation: missing-flash 1.2s ease-out 1; }
+      @keyframes missing-flash {
+        0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.55); }
+        100% { box-shadow: 0 0 0 14px rgba(220, 38, 38, 0); }
+      }
+
       input[type="checkbox"] {
 
         width: 26px;
@@ -12970,7 +13020,7 @@ ${rows.join('\n')}
 
       </header>
 
-      <form id="pm-form" enctype="multipart/form-data">
+      <form id="pm-form" enctype="multipart/form-data" novalidate>
 
         <!-- Provenance: which client made this report and which build of it. Hidden because
              it is about the software, not about the visit - nobody should have to fill it in. -->
@@ -17447,6 +17497,108 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           const container = findRequiredContainer(name, input);
           if (container) container.classList.remove('is-missing');
           if (input) input.classList.remove('is-invalid');
+          missingNav.resolve(name);
+        };
+
+        // Where the engineer is taken when Submit finds gaps (Vladimir, 2026-09-16: "don't
+        // make people hunt for the missing piece"). A strip pinned to the top lists every
+        // missing field as a chip in page order; the first one is scrolled to and focused
+        // right away, a chip or "Next" takes you to the others, and chips drop off as the
+        // fields get filled. Items: { name, label, input, target? , anyOf? }.
+        const missingNav = (() => {
+          let items = [];
+          let strip = null;
+
+          const ensureStrip = () => {
+            if (strip) return strip;
+            strip = document.createElement('div');
+            strip.className = 'missing-strip';
+            strip.hidden = true;
+            strip.setAttribute('role', 'status');
+            strip.innerHTML = '<div class="missing-strip__head"><strong data-missing-count></strong>'
+              + '<button type="button" class="missing-strip__next" data-missing-next>Next &rarr;</button></div>'
+              + '<div class="missing-strip__chips" data-missing-chips></div>';
+            document.body.appendChild(strip);
+            strip.querySelector('[data-missing-next]').addEventListener('click', () => {
+              if (!items.length) return;
+              // "Next" is relative to where the engineer is, not to a counter: chips drop
+              // off as fields get filled, so an index would skip one after every fix.
+              const here = document.activeElement;
+              const at = items.findIndex((item) => {
+                const t = targetOf(item);
+                return t && here && (t === here || t.contains(here));
+              });
+              jumpTo(items[(at + 1) % items.length]);
+            });
+            return strip;
+          };
+
+          const targetOf = (item) => {
+            if (item.target) return item.target;
+            if (item.name === 'led_display_model') return document.getElementById('led-code-select');
+            return item.input || null;
+          };
+
+          const jumpTo = (item) => {
+            const target = targetOf(item);
+            if (!target) return;
+            const box = target.closest('.field') || target.closest('.signature-pad') || target.closest('section.card') || target;
+            box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            box.classList.remove('is-flash');
+            void box.offsetWidth;
+            box.classList.add('is-flash');
+            if (typeof target.focus === 'function') {
+              try { target.focus({ preventScroll: true }); } catch (err) { /* not focusable */ }
+            }
+          };
+
+          const render = () => {
+            const el = ensureStrip();
+            if (!items.length) { el.hidden = true; return; }
+            el.hidden = false;
+            el.querySelector('[data-missing-count]').textContent = items.length === 1
+              ? '1 field still needed'
+              : items.length + ' fields still needed';
+            const chips = el.querySelector('[data-missing-chips]');
+            chips.innerHTML = '';
+            items.forEach((item) => {
+              const chip = document.createElement('button');
+              chip.type = 'button';
+              chip.className = 'missing-strip__chip';
+              chip.textContent = item.label;
+              chip.addEventListener('click', () => jumpTo(item));
+              chips.appendChild(chip);
+            });
+          };
+
+          return {
+            show(list) {
+              items = list.slice();
+              render();
+              if (items.length) jumpTo(items[0]);
+            },
+            resolve(name) {
+              const before = items.length;
+              items = items.filter((item) => item.name !== name && !(item.anyOf && item.anyOf.indexOf(name) !== -1));
+              if (items.length !== before) render();
+            },
+            clear() {
+              items = [];
+              render();
+            },
+          };
+        })();
+
+        // Page order, so "first missing" is the topmost one — the rule list is grouped by
+        // meaning, not by where the boxes sit on the form.
+        const byPagePosition = (a, b) => {
+          const ea = a.target || a.input || (a.name === 'led_display_model' ? document.getElementById('led-code-select') : null);
+          const eb = b.target || b.input || (b.name === 'led_display_model' ? document.getElementById('led-code-select') : null);
+          if (!ea || !eb || ea === eb) return 0;
+          const pos = ea.compareDocumentPosition(eb);
+          if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+          if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+          return 0;
         };
 
         // Clear the red as soon as the engineer starts fixing it, rather than making them
@@ -22901,6 +23053,25 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             if (input && input.offsetParent !== null) input.classList.add('is-invalid');
           });
 
+          // Controls that carry a native required attribute (the daily report's three) join the
+          // same list: the form is novalidate, so the browser bubble - which cannot point at a
+          // hidden control and used to block Submit silently - never runs. (No backticks in
+          // comments here: this script is emitted through a template literal.)
+          Array.from(formEl.querySelectorAll('[required]')).forEach((el) => {
+            if (!el.name || el.disabled || el.offsetParent === null) return;
+            if (String(el.value || '').trim()) { clearRequiredMark(el.name); return; }
+            if (missingFields.some((f) => f.name === el.name)) return;
+            const box = el.closest('.field');
+            const labelEl = box ? box.querySelector('span, label') : null;
+            let label = labelEl ? String(labelEl.textContent || '').trim() : el.name;
+            while (label.endsWith('*')) label = label.slice(0, -1).trim();
+            missingFields.push({ name: el.name, label: label || el.name, input: el, reason: 'is empty' });
+            if (box) box.classList.add('is-missing');
+            el.classList.add('is-invalid');
+          });
+
+          missingFields.sort(byPagePosition);
+
           const existingSummary = formEl.querySelector('.required-summary');
           if (existingSummary) existingSummary.remove();
 
@@ -22911,14 +23082,8 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
               + missingFields.map((f) => f.label + ' (' + f.reason + ')').join(', ');
             submitButton.parentNode.insertBefore(summary, submitButton);
 
-            const first = missingFields[0];
-            const focusTarget = first.name === 'led_display_model'
-              ? document.getElementById('led-code-select')
-              : first.input;
-            if (focusTarget) {
-              focusTarget.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              try { focusTarget.focus({ preventScroll: true }); } catch (err) { focusTarget.focus(); }
-            }
+            // Scrolls to the topmost gap and focuses it; the strip carries the rest.
+            missingNav.show(missingFields);
             if (statusEl) {
               statusEl.textContent = missingFields.length === 1
                 ? '1 required field is missing.'
@@ -22927,6 +23092,7 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             resetSubmitState();
             return;
           }
+          missingNav.clear();
 
           const dateTimeSnapshots = Array.from(formEl.querySelectorAll(DATETIME_TEXT_SELECTOR)).map((input) => ({
 
@@ -22966,6 +23132,16 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             }
 
+            // Same treatment as a missing field: go there, don't just say so at the bottom.
+            missingNav.show(dateTimeSnapshots
+              .filter(({ input }) => input.classList.contains('is-invalid'))
+              .map(({ input }) => {
+                const box = input.closest('.field');
+                const labelEl = box ? box.querySelector('span, label') : null;
+                const label = labelEl ? String(labelEl.textContent || '').trim() : 'Date/time';
+                return { name: input.name, label: label + ' (use DD.MM.YYYY HH:MM)', input };
+              }));
+
             resetSubmitState();
 
             return;
@@ -22997,16 +23173,18 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             // No regex here on purpose: this block is emitted through a template literal,
             // so backslash escapes get eaten and a mangled pattern kills the whole page script.
             while (name.endsWith('*')) name = name.slice(0, -1).trim();
-            unsignedPads.push(name);
+            unsignedPads.push({ name: hidden.name, label: name, input: hidden, target: pad });
           });
           if (unsignedPads.length) {
-            const list = unsignedPads.join(' and ');
+            const list = unsignedPads.map((pad) => pad.label).join(' and ');
             const proceed = window.confirm(
               'No signature was drawn for: ' + list + '.\\n\\n'
               + 'The document will be submitted without it. Continue anyway?'
             );
             if (!proceed) {
               if (statusEl) statusEl.textContent = 'Submission cancelled — signature missing.';
+              // They chose to sign: take them to the pad instead of leaving them at the button.
+              missingNav.show(unsignedPads.map((pad) => ({ name: pad.name, label: pad.label + ' signature', input: pad.input, target: pad.target })));
               resetSubmitState();
               return;
             }
@@ -23769,7 +23947,8 @@ app.use(
 
         styleSrc: ["'self'", "'unsafe-inline'"],
 
-        imgSrc: ["'self'", "data:", "blob:"],
+        // OpenStreetMap tiles for the planning map (calendar.html); everything else stays home.
+        imgSrc: ["'self'", "data:", "blob:", 'https://tile.openstreetmap.org', 'https://*.tile.openstreetmap.org'],
 
         mediaSrc: ["'self'", "data:", "blob:"],
 
@@ -25599,8 +25778,14 @@ app.post(['/api/projects/:projectKey/pins', '/service2/api/projects/:projectKey/
     lng,
     label: String(toSingleValue(body.label) || '').trim().slice(0, 120) || null,
     note: String(toSingleValue(body.note) || '').trim().slice(0, 500) || null,
+    // Postal address as the geocoder returned it (2026-09-16, map picker) — what the
+    // engineer reads under the pin; lat/lng is what the navigation link uses.
+    address: String(toSingleValue(body.address) || '').trim().slice(0, 240) || null,
   };
   card.pins.push(pin);
+  // The site pin IS the project's address when none was typed: "open the map, set the
+  // pin" is how Vladimir wants an address added, not a text box.
+  if (kind === 'site' && pin.address && !String(card.site_location || '').trim()) card.site_location = pin.address;
   card.updated_at = new Date().toISOString();
   saveProjectsStore(store);
   return res.status(201).json({ ok: true, pin, project: projectPublicShape(projectKey, card) });
@@ -25619,6 +25804,7 @@ app.patch(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:pro
   if (body.lng != null && Number.isFinite(Number(body.lng))) pin.lng = Number(body.lng);
   if (Object.prototype.hasOwnProperty.call(body, 'label')) pin.label = String(toSingleValue(body.label) || '').trim().slice(0, 120) || null;
   if (Object.prototype.hasOwnProperty.call(body, 'note')) pin.note = String(toSingleValue(body.note) || '').trim().slice(0, 500) || null;
+  if (Object.prototype.hasOwnProperty.call(body, 'address')) pin.address = String(toSingleValue(body.address) || '').trim().slice(0, 240) || null;
   if (['site', 'parking', 'hotel', 'custom'].includes(body.kind)) pin.kind = body.kind;
   card.updated_at = new Date().toISOString();
   saveProjectsStore(store);
@@ -25637,6 +25823,89 @@ app.delete(['/api/projects/:projectKey/pins/:pinId', '/service2/api/projects/:pr
   card.updated_at = new Date().toISOString();
   saveProjectsStore(store);
   return res.json({ ok: true, project: projectPublicShape(projectKey, card) });
+});
+
+// --- Geocoding for the planning map (2026-09-16, Vladimir: "show the pins on a map, and
+// set a pin on the map instead of typing coordinates"). The browser never talks to
+// Nominatim itself: the CSP keeps connect-src 'self', and OSM's usage policy wants an
+// identifying User-Agent and at most one request per second — a shared server-side queue
+// plus a cache can honour that, a dozen iPads cannot. ---
+const GEO_USER_AGENT = 'LSC-LED-Portal/1.0 (+https://lsc-led.de)';
+const GEO_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const GEO_MIN_GAP_MS = 1100;
+const geoCache = new Map();
+let geoQueue = Promise.resolve();
+let geoLastAt = 0;
+
+function geoFetch(url) {
+  const cached = geoCache.get(url);
+  if (cached && Date.now() - cached.at < GEO_CACHE_TTL_MS) return Promise.resolve(cached.value);
+  const run = async () => {
+    const wait = Math.max(0, GEO_MIN_GAP_MS - (Date.now() - geoLastAt));
+    if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
+    geoLastAt = Date.now();
+    const resp = await fetch(url, {
+      headers: { 'User-Agent': GEO_USER_AGENT, 'Accept-Language': 'de,en' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!resp.ok) throw new Error(`geo_upstream_${resp.status}`);
+    const value = await resp.json();
+    geoCache.set(url, { at: Date.now(), value });
+    if (geoCache.size > 2000) geoCache.delete(geoCache.keys().next().value);
+    return value;
+  };
+  const next = geoQueue.then(run, run);
+  geoQueue = next.catch(() => {});
+  return next;
+}
+
+// One shape for both directions: a short label for the pin ("Alting 4, 90596
+// Schwanstetten") and the full postal line for the row under it.
+function geoShape(item) {
+  const a = (item && item.address) || {};
+  const street = [a.road || a.pedestrian || a.footway || '', a.house_number || ''].filter(Boolean).join(' ');
+  const town = a.city || a.town || a.village || a.municipality || a.hamlet || '';
+  const short = [street, [a.postcode || '', town].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const display = String((item && item.display_name) || '');
+  const fallback = display.split(',').slice(0, 2).map((s) => s.trim()).join(', ');
+  // A named place ("Autotechnik Marzo") becomes the label, the postal line the address;
+  // the full Nominatim display_name (district, Landkreis, Bundesland, country) is noise on
+  // a pin row and on the project card, so it is not stored anywhere.
+  const name = String((item && item.name) || '').trim();
+  return {
+    lat: Number(item.lat),
+    lng: Number(item.lon),
+    label: name || short || fallback,
+    address: short || fallback,
+    type: (item && item.type) || null,
+  };
+}
+
+app.get(['/api/geo/search', '/service2/api/geo/search'], requireProjectsView, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 200);
+  if (q.length < 3) return res.json({ ok: true, results: [] });
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&q=${encodeURIComponent(q)}`;
+    const items = await geoFetch(url);
+    return res.json({ ok: true, results: (Array.isArray(items) ? items : []).map(geoShape).filter((r) => Number.isFinite(r.lat) && Number.isFinite(r.lng)) });
+  } catch (err) {
+    console.warn('[geo] search failed', err && err.message);
+    return res.status(502).json({ ok: false, error: 'geocoder_unavailable' });
+  }
+});
+
+app.get(['/api/geo/reverse', '/service2/api/geo/reverse'], requireProjectsView, async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return res.status(400).json({ ok: false, error: 'lat_lng_required' });
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&lat=${lat.toFixed(5)}&lon=${lng.toFixed(5)}`;
+    const item = await geoFetch(url);
+    return res.json({ ok: true, result: item && item.lat ? geoShape(item) : null });
+  } catch (err) {
+    console.warn('[geo] reverse failed', err && err.message);
+    return res.status(502).json({ ok: false, error: 'geocoder_unavailable' });
+  }
 });
 
 // --- Assets: pre-report photos/schemes/files, freely add/removable (unlike report photos,

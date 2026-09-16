@@ -4,8 +4,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- helmet sends Referrer-Policy: no-referrer for every service2 page; OpenStreetMap's tile
+       servers answer a referer-less browser request with 403 "not following the tile usage
+       policy". This page sends its origin only, to the tile host only (see the tile layer). -->
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>Projects calendar</title>
   <link rel="stylesheet" href="./theme.css" />
+  <link rel="stylesheet" href="./vendor/leaflet/leaflet.css" />
+  <script src="./vendor/leaflet/leaflet.js"></script>
   <style>
     /* ----------------------------------------------------------- month grid -- */
     .cal {
@@ -190,6 +196,36 @@
     /* Keep the reset arrow in the grid flow when it's not applicable — display:none would
        pull the cell out and shift every following row one column to the left. */
     .hours .button.icon.is-off { visibility: hidden; pointer-events: none; }
+
+    /* ----------------------------------------------------------------- map -- */
+    /* Pins live on a map, not in a lat/lng form: site red, parking blue, hotel green. */
+    .pinmap { height: 260px; margin: 8px 0 10px; border: 1px solid var(--border); border-radius: var(--r-lg); overflow: hidden; background: var(--bg-sunken); }
+    .pinmap.is-picking, .pinmap.is-picking .leaflet-container, .pinmap.is-picking .leaflet-interactive { cursor: crosshair; }
+    .pinmap--hero { height: 200px; margin: 0; }
+    .leaflet-container { font: inherit; }
+    .pin-marker { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: 700; background: #6b7280; }
+    .pin-marker.is-site { background: #dc2626; }
+    .pin-marker.is-parking { background: #2563eb; }
+    .pin-marker.is-hotel { background: #16a34a; }
+    .pin-marker.is-draft { background: #111; }
+    .pin-popup { font-size: 12.5px; min-width: 160px; }
+    .pin-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 11.5px; color: var(--text-muted); }
+    .pin-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+    .pin-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #6b7280; flex: 0 0 auto; }
+    .pin-dot.is-site { background: #dc2626; }
+    .pin-dot.is-parking { background: #2563eb; }
+    .pin-dot.is-hotel { background: #16a34a; }
+    .pin-row__main { display: flex; align-items: center; gap: 10px; cursor: pointer; min-width: 0; }
+    .pin-pick { display: none; margin-top: 10px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--r-lg); background: var(--bg-sunken); }
+    .pin-pick.is-open { display: block; }
+    .pin-pick__search { position: relative; }
+    .pin-pick__results { position: absolute; left: 0; right: 0; top: 100%; z-index: 30; background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-sm); box-shadow: 0 10px 30px rgba(0, 0, 0, .15); max-height: 220px; overflow: auto; }
+    .pin-pick__results[hidden] { display: none; }
+    .pin-pick__results button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; font: inherit; font-size: 12.5px; color: var(--text-primary); cursor: pointer; }
+    .pin-pick__results button:hover { background: var(--surface-hover); }
+    .pin-pick__results small { display: block; color: var(--text-muted); font-size: 11px; }
+    .pin-pick__hint { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+    .pin-pick__coords { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-secondary); padding: 8px 0; }
   </style>
 </head>
 
@@ -348,20 +384,37 @@
 
         <div class="modal__section">
           <h4>Logistics</h4>
+          <div class="pin-legend">
+            <span><span class="pin-dot is-site"></span>Site</span>
+            <span><span class="pin-dot is-parking"></span>Parking</span>
+            <span><span class="pin-dot is-hotel"></span>Hotel</span>
+            <span><span class="pin-dot"></span>Other</span>
+          </div>
+          <div class="pinmap" id="d-map"></div>
           <div id="d-logistics"></div>
           <div class="inline-form" id="d-pin-form" hidden>
-            <div class="field" style="flex:0 0 100px;"><span>Kind</span>
-              <select id="d-p-kind">
-                <option value="hotel">Hotel</option>
-                <option value="parking">Parking</option>
-                <option value="site">Site</option>
-                <option value="custom">Custom</option>
-              </select>
+            <button type="button" class="button secondary small" id="d-p-open"><svg class="ic"><use href="./icons.svg#i-pin"></use></svg> Add pin on the map</button>
+          </div>
+          <div class="pin-pick" id="d-pin-pick">
+            <div class="pin-pick__search">
+              <div class="field"><span>Search address</span><input type="search" id="d-p-search" placeholder="In d. Alting 4, 90596 Schwanstetten" autocomplete="off" /></div>
+              <div class="pin-pick__results" id="d-p-results" hidden></div>
             </div>
-            <div class="field"><span>Label</span><input type="text" id="d-p-label" placeholder="Hotel am Ring" /></div>
-            <div class="field" style="flex:0 0 90px;"><span>Lat</span><input type="number" step="any" id="d-p-lat" /></div>
-            <div class="field" style="flex:0 0 90px;"><span>Lng</span><input type="number" step="any" id="d-p-lng" /></div>
-            <button type="button" class="button secondary small" id="d-p-save">Add pin</button>
+            <p class="pin-pick__hint">Pick a result or click the spot on the map; drag the black marker to fine-tune.</p>
+            <div class="inline-form">
+              <div class="field" style="flex:0 0 110px;"><span>Kind</span>
+                <select id="d-p-kind">
+                  <option value="site">Site</option>
+                  <option value="parking">Parking</option>
+                  <option value="hotel">Hotel</option>
+                  <option value="custom">Other</option>
+                </select>
+              </div>
+              <div class="field"><span>Label</span><input type="text" id="d-p-label" placeholder="Parkplatz hinter dem Gebäude" /></div>
+              <div class="field" style="flex:0 0 160px;"><span>Position</span><div class="pin-pick__coords" id="d-p-coords">not set</div></div>
+              <button type="button" class="button small" id="d-p-save" disabled>Save pin</button>
+              <button type="button" class="button ghost small" id="d-p-cancel">Cancel</button>
+            </div>
           </div>
         </div>
 
@@ -426,6 +479,89 @@
     function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function mapsDirectionsUrl(dest) { return 'https://www.google.com/maps/dir/?api=1&destination=' + encodeURIComponent(dest); }
     function mapsPointUrl(pin) { return 'https://www.google.com/maps?q=' + pin.lat + ',' + pin.lng; }
+
+    // ------------------------------------------------------------------ map --
+    // Pins live on a map, not in a lat/lng form (Vladimir, 16.09.2026): site, parking and
+    // hotel are coloured markers; an engineer taps one for the label and a Navigate link;
+    // a manager adds one by searching an address or clicking the map and drags to
+    // fine-tune. Nobody types coordinates. Tiles come from OpenStreetMap, geocoding goes
+    // through service2 (/api/geo/*) so the browser only ever talks to our own origin.
+    const PIN_LETTERS = { site: 'S', parking: 'P', hotel: 'H', custom: '•', draft: '+' };
+    const PIN_NAMES = { site: 'Site', parking: 'Parking', hotel: 'Hotel', custom: 'Other' };
+    const DEFAULT_CENTER = [49.45, 11.08]; // Nuremberg
+
+    function pinIcon(kind) {
+      const k = PIN_LETTERS[kind] ? kind : 'custom';
+      return L.divIcon({
+        className: '',
+        html: `<div class="pin-marker is-${k}"><span>${PIN_LETTERS[k]}</span></div>`,
+        iconSize: [26, 26],
+        iconAnchor: [13, 13],
+        popupAnchor: [0, -14],
+      });
+    }
+
+    function pinPopup(pin) {
+      return `<div class="pin-popup"><b>${escapeHtml(pin.label || PIN_NAMES[pin.kind] || 'Pin')}</b>`
+        + (pin.address && pin.address !== pin.label ? `<div class="kv-empty">${escapeHtml(pin.address)}</div>` : '')
+        + `<div style="margin-top:6px;"><a href="${mapsPointUrl(pin)}" target="_blank">Navigate</a></div></div>`;
+    }
+
+    function validPins(pins) {
+      return (pins || []).filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)));
+    }
+
+    function mountPinMap(el, pins, options = {}) {
+      if (!el || !window.L) return null;
+      if (el._pinmap) { el._pinmap.map.remove(); el._pinmap = null; }
+      const map = L.map(el, { scrollWheelZoom: false });
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        // OSM's usage policy wants a Referer on tile requests; the origin is enough.
+        referrerPolicy: 'strict-origin-when-cross-origin',
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>',
+      }).addTo(map);
+      const markers = new Map();
+      const list = validPins(pins);
+      list.forEach((pin) => {
+        const m = L.marker([Number(pin.lat), Number(pin.lng)], { icon: pinIcon(pin.kind), draggable: Boolean(options.draggable) }).addTo(map);
+        m.bindPopup(pinPopup(pin));
+        if (options.draggable && options.onMove) {
+          m.on('dragend', () => { const ll = m.getLatLng(); options.onMove(pin, ll.lat, ll.lng); });
+        }
+        markers.set(pin.id, m);
+      });
+      if (list.length === 1) map.setView([Number(list[0].lat), Number(list[0].lng)], 15);
+      else if (list.length > 1) map.fitBounds(list.map((p) => [Number(p.lat), Number(p.lng)]), { padding: [28, 28], maxZoom: 16 });
+      else map.setView(DEFAULT_CENTER, 6);
+      const handle = { map, markers };
+      el._pinmap = handle;
+      // The modal becomes visible in the same tick the map is created: let layout settle.
+      setTimeout(() => map.invalidateSize(), 60);
+      // No pins yet but an address: centre on it so the first pin lands near the site.
+      if (!list.length && options.address) {
+        geocode(options.address).then((hits) => {
+          if (hits[0] && el._pinmap === handle) map.setView([hits[0].lat, hits[0].lng], 14);
+        });
+      }
+      return handle;
+    }
+
+    async function geocode(q) {
+      try {
+        const resp = await api('/api/geo/search?q=' + encodeURIComponent(q));
+        const payload = await resp.json();
+        return payload.ok && Array.isArray(payload.results) ? payload.results : [];
+      } catch (err) { return []; }
+    }
+
+    async function reverseGeocode(lat, lng) {
+      try {
+        const resp = await api('/api/geo/reverse?lat=' + lat + '&lng=' + lng);
+        const payload = await resp.json();
+        return payload.ok ? payload.result : null;
+      } catch (err) { return null; }
+    }
 
     async function loadUser() {
       try {
@@ -670,25 +806,55 @@
       const logEl = document.getElementById('d-logistics');
       logEl.innerHTML = '';
       const pins = p.pins || [];
+      closePick();
+      detailMap = mountPinMap(document.getElementById('d-map'), pins, {
+        draggable: canWrite,
+        address: p.address || '',
+        onMove: async (pin, lat, lng) => {
+          await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/pins/${encodeURIComponent(pin.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lng }),
+          });
+          openDetail(p.lsc_project_number);
+        },
+      });
       if (!pins.length) {
-        logEl.innerHTML = '<div class="kv-empty">No hotel, parking or other pins yet.</div>';
+        logEl.innerHTML = `<div class="kv-empty">${canWrite ? 'No pins yet — add the site, parking and hotel on the map.' : 'No site, parking or hotel pins yet.'}</div>`;
       } else {
         pins.forEach((pin) => {
           const row = document.createElement('div');
           row.className = 'list-row';
-          const mapsUrl = 'https://www.google.com/maps?q=' + pin.lat + ',' + pin.lng;
-          row.innerHTML = `<div><div class="list-row__main">${pin.kind}: ${pin.label || mapsUrl}</div><div class="list-row__meta"><a href="${mapsUrl}" target="_blank">${pin.lat}, ${pin.lng}</a>${pin.note ? ' — ' + pin.note : ''}</div></div>`;
+          const where = (pin.address && pin.address !== pin.label ? pin.address : '') || (Number(pin.lat).toFixed(5) + ', ' + Number(pin.lng).toFixed(5));
+          row.innerHTML = `<div class="pin-row__main"><span class="pin-dot is-${escapeHtml(pin.kind)}"></span><div style="min-width:0;">`
+            + `<div class="list-row__main">${escapeHtml(pin.label || PIN_NAMES[pin.kind] || pin.kind)} <span class="kv-empty">${PIN_NAMES[pin.kind] || ''}</span></div>`
+            + `<div class="list-row__meta">${escapeHtml(where)}${pin.note ? ' — ' + escapeHtml(pin.note) : ''}</div></div></div>`;
+          const actions = document.createElement('div');
+          actions.style.cssText = 'display:flex;gap:6px;flex:0 0 auto;';
+          const nav = document.createElement('a');
+          nav.className = 'button ghost small';
+          nav.href = mapsPointUrl(pin);
+          nav.target = '_blank';
+          nav.textContent = 'Navigate';
+          actions.appendChild(nav);
           if (canWrite) {
             const del = document.createElement('button');
             del.type = 'button';
             del.className = 'button icon is-danger';
+            del.title = 'Remove pin';
             del.innerHTML = '<svg class="ic"><use href="./icons.svg#i-close"></use></svg>';
             del.addEventListener('click', async () => {
               await api(`/api/projects/${encodeURIComponent(p.lsc_project_number)}/pins/${encodeURIComponent(pin.id)}`, { method: 'DELETE' });
               openDetail(p.lsc_project_number);
             });
-            row.appendChild(del);
+            actions.appendChild(del);
           }
+          row.appendChild(actions);
+          // The row and the marker are the same thing: tap the row, the map shows it.
+          row.querySelector('.pin-row__main').addEventListener('click', () => {
+            const m = detailMap && detailMap.markers.get(pin.id);
+            if (m) { detailMap.map.setView(m.getLatLng(), Math.max(detailMap.map.getZoom(), 15)); m.openPopup(); }
+          });
           logEl.appendChild(row);
         });
       }
@@ -891,6 +1057,7 @@
             <div class="hero__block" style="margin-top:20px;"><h5>My hours</h5><div id="hero-hours"></div></div>
           </div>
           <div class="hero__side">
+            <div class="pinmap pinmap--hero" id="hero-map"${validPins(pins).length ? '' : ' hidden'}></div>
             <div class="hero__block"><h5>Hotel</h5>${pinLink(hotel, 'Hotel')}</div>
             <div class="hero__block"><h5>Parking</h5>${pinLink(parking, 'Parking')}</div>
             <div class="hero__block"><h5>Team on this job</h5>${mates.length ? mates.map((m) => `<div>${escapeHtml(m.engineerName || m.engineerId)} <span class="kv-empty">${fmtRange(m.plannedFrom, m.plannedTo)}</span></div>`).join('') : '<span class="kv-empty">Just you</span>'}</div>
@@ -899,6 +1066,7 @@
         </div>`;
       renderHoursEditor(card.querySelector('#hero-hours'), p.lsc_project_number, a, { editable: true });
       card.querySelector('#hero-details').addEventListener('click', () => openDetail(p.lsc_project_number));
+      if (validPins(pins).length) mountPinMap(card.querySelector('#hero-map'), pins, {});
     }
 
     document.getElementById('d-edit-save').addEventListener('click', async () => {
@@ -943,23 +1111,145 @@
       loadMonth();
     });
 
-    document.getElementById('d-p-save').addEventListener('click', async () => {
-      if (!currentProjectKey) return;
-      const lat = Number(document.getElementById('d-p-lat').value);
-      const lng = Number(document.getElementById('d-p-lng').value);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+    // ---------------------------------------------- add a pin on the map --
+    // Search an address or click the spot; a black draft marker appears, drag it to
+    // fine-tune; the label pre-fills from the geocoder until the manager types their own.
+    let detailMap = null;
+    let pickState = null;
+    const pickBox = document.getElementById('d-pin-pick');
+    const pickSearch = document.getElementById('d-p-search');
+    const pickResults = document.getElementById('d-p-results');
+    const pickCoords = document.getElementById('d-p-coords');
+    const pickSave = document.getElementById('d-p-save');
+    const pickLabel = document.getElementById('d-p-label');
+    const pickKind = document.getElementById('d-p-kind');
+
+    function autoLabel(text) {
+      if (!pickLabel.value.trim() || pickLabel.dataset.auto === '1') {
+        pickLabel.value = text || '';
+        pickLabel.dataset.auto = '1';
+      }
+    }
+    pickLabel.addEventListener('input', () => { pickLabel.dataset.auto = '0'; });
+
+    function setPick(lat, lng, meta) {
+      if (!detailMap) return;
+      if (!pickState) pickState = { marker: null, lat, lng, address: null };
+      pickState.lat = lat;
+      pickState.lng = lng;
+      if (meta && Object.prototype.hasOwnProperty.call(meta, 'address')) pickState.address = meta.address;
+      if (!pickState.marker) {
+        pickState.marker = L.marker([lat, lng], { icon: pinIcon('draft'), draggable: true, zIndexOffset: 1000 }).addTo(detailMap.map);
+        pickState.marker.on('dragend', () => {
+          const ll = pickState.marker.getLatLng();
+          setPick(ll.lat, ll.lng, { address: null });
+          fillFromReverse(ll.lat, ll.lng);
+        });
+      } else {
+        pickState.marker.setLatLng([lat, lng]);
+      }
+      pickCoords.textContent = lat.toFixed(5) + ', ' + lng.toFixed(5);
+      pickSave.disabled = false;
+      if (meta && meta.label) autoLabel(meta.label);
+    }
+
+    async function fillFromReverse(lat, lng) {
+      const hit = await reverseGeocode(lat, lng);
+      if (hit && pickState && pickState.lat === lat && pickState.lng === lng) {
+        pickState.address = hit.address;
+        autoLabel(hit.label);
+      }
+    }
+
+    function onMapPick(e) {
+      setPick(e.latlng.lat, e.latlng.lng, { address: null });
+      fillFromReverse(e.latlng.lat, e.latlng.lng);
+    }
+
+    function openPick() {
+      if (!detailMap) return;
+      closePick();
+      pickBox.classList.add('is-open');
+      document.getElementById('d-map').classList.add('is-picking');
+      pickLabel.value = '';
+      pickLabel.dataset.auto = '1';
+      pickCoords.textContent = 'not set';
+      pickSave.disabled = true;
+      pickSearch.value = '';
+      pickResults.hidden = true;
+      detailMap.map.on('click', onMapPick);
+      setTimeout(() => detailMap.map.invalidateSize(), 60);
+      pickSearch.focus();
+    }
+
+    function closePick() {
+      pickBox.classList.remove('is-open');
+      const mapEl = document.getElementById('d-map');
+      if (mapEl) mapEl.classList.remove('is-picking');
+      if (detailMap) detailMap.map.off('click', onMapPick);
+      if (pickState && pickState.marker) pickState.marker.remove();
+      pickState = null;
+      pickResults.hidden = true;
+    }
+
+    document.getElementById('d-p-open').addEventListener('click', openPick);
+    document.getElementById('d-p-cancel').addEventListener('click', closePick);
+
+    let searchTimer = null;
+    let searchSeq = 0;
+    pickSearch.addEventListener('input', () => {
+      clearTimeout(searchTimer);
+      const q = pickSearch.value.trim();
+      if (q.length < 3) { pickResults.hidden = true; return; }
+      searchTimer = setTimeout(async () => {
+        const seq = ++searchSeq;
+        const hits = await geocode(q);
+        if (seq !== searchSeq) return;
+        pickResults.innerHTML = '';
+        if (!hits.length) {
+          pickResults.innerHTML = '<div class="kv-empty" style="padding:8px 10px;">Nothing found — click the spot on the map instead.</div>';
+          pickResults.hidden = false;
+          return;
+        }
+        hits.forEach((hit) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.innerHTML = `${escapeHtml(hit.label)}<small>${escapeHtml(hit.address)}</small>`;
+          b.addEventListener('click', () => {
+            pickResults.hidden = true;
+            pickSearch.value = hit.label;
+            setPick(hit.lat, hit.lng, { address: hit.address, label: hit.label });
+            detailMap.map.setView([hit.lat, hit.lng], 16);
+          });
+          pickResults.appendChild(b);
+        });
+        pickResults.hidden = false;
+      }, 350);
+    });
+    pickSearch.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const first = pickResults.querySelector('button');
+        if (first && !pickResults.hidden) first.click();
+      }
+      if (e.key === 'Escape') pickResults.hidden = true;
+    });
+
+    pickSave.addEventListener('click', async () => {
+      if (!currentProjectKey || !pickState) return;
+      pickSave.disabled = true;
       await api(`/api/projects/${encodeURIComponent(currentProjectKey)}/pins`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          kind: document.getElementById('d-p-kind').value,
-          label: document.getElementById('d-p-label').value.trim(),
-          lat, lng,
+          kind: pickKind.value,
+          label: pickLabel.value.trim(),
+          lat: pickState.lat,
+          lng: pickState.lng,
+          address: pickState.address || '',
         }),
       });
-      document.getElementById('d-p-label').value = '';
-      document.getElementById('d-p-lat').value = '';
-      document.getElementById('d-p-lng').value = '';
+      closePick();
       openDetail(currentProjectKey);
     });
 

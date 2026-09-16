@@ -1195,6 +1195,14 @@ app.use('/service2/api/projects', requireServiceAccess('service2', '/service2'),
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
 }));
+// Geocoding for the planning map (address search / reverse lookup for a clicked spot).
+// service2 proxies Nominatim server-side; the same view gate as the projects routes.
+app.use('/service2/api/geo', requireServiceAccess('service2', '/service2'), attachHubProxyHeaders, createProxyMiddleware({
+  target: 'http://service2:3001',
+  changeOrigin: true,
+  pathRewrite: { '^/service2': '' },
+  logLevel: 'warn'
+}));
 
 // Sign endpoints (service2 gates them on x-hub-can-generate-links). Registered
 // BEFORE registerProxies' open /service2 catch-all so the authoritative header is
