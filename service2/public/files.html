@@ -76,6 +76,33 @@
     }
 
     .row-meta { font-size: 11px; color: var(--text-muted); }
+
+    /* Legend entries act as type filters; the active one wears the accent. */
+    .compo__legend li.is-filter {
+      cursor: pointer;
+      padding: 2px 8px;
+      margin: -2px -8px;
+      border-radius: 999px;
+      transition: background .12s, color .12s;
+    }
+    .compo__legend li.is-filter:hover { background: var(--surface-hover); color: var(--text-primary); }
+    .compo__legend li.is-active, .compo__legend li.is-active:hover { background: var(--accent); color: var(--text-on-accent); }
+    .compo__legend li.is-active span { color: inherit; }
+
+    /* A project number in a row is also the fastest way to narrow to that project. */
+    .cell-filter {
+      all: unset;
+      cursor: pointer;
+      font: inherit;
+      border-bottom: 1px dashed transparent;
+    }
+    .cell-filter:hover, .cell-filter:focus-visible { border-bottom-color: currentColor; }
+
+    .active-filters { display: flex; flex-wrap: wrap; gap: 6px; }
+    .active-filters[hidden] { display: none; }
+    .active-filters .chip { cursor: pointer; font: inherit; appearance: none; }
+    .active-filters .chip b { font-weight: 400; opacity: .75; margin-right: 5px; }
+    .active-filters .chip i { font-style: normal; margin-left: 6px; opacity: .75; }
   </style>
 </head>
 
@@ -185,6 +212,7 @@
         <div class="admin-actions-group">
           <h2>Files</h2>
           <span class="badge" id="results-count">0 files</span>
+          <div class="active-filters" id="active-filters" hidden></div>
         </div>
       </div>
       <div id="admin-actions" class="admin-actions card__head" hidden>
@@ -621,39 +649,52 @@
 
           const selectCell = document.createElement('td');
           selectCell.className = 'col-select';
-          if (canDeleteFiles) {
-            const checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.checked = selectedKeys.has(key);
-            checkbox.addEventListener('change', () => {
-              if (checkbox.checked) {
-                selectedKeys.add(key);
-              } else {
-                selectedKeys.delete(key);
-              }
-              updateSelectionUI();
-            });
-            selectCell.appendChild(checkbox);
-          }
+          const checkbox = document.createElement('input');
+          checkbox.type = 'checkbox';
+          checkbox.checked = selectedKeys.has(key);
+          checkbox.addEventListener('change', () => {
+            if (checkbox.checked) {
+              selectedKeys.add(key);
+            } else {
+              selectedKeys.delete(key);
+            }
+            updateSelectionUI();
+          });
+          selectCell.appendChild(checkbox);
           row.appendChild(selectCell);
 
           // Fall back to the report's own fields: only dailies carry a dailyReport block, so
           // reading it alone left service, maintenance and installation rows showing dashes
           // for project, date and who filled them in.
           const summary = file.summary || {};
+          const projectNumber = summary.projectNumber || daily.projectNumber || '';
           const cellsBefore = [
             // "service_report" is a wire value, not a word.
             { value: TYPE_LABELS[file.templateType] || file.templateType || '-' },
-            // An identifier, so it is set as one: monospace and tabular.
-            { value: summary.projectNumber || daily.projectNumber || '-', cls: 'mono num' },
+            // An identifier, so it is set as one: monospace and tabular. Clicking it
+            // narrows the list to that project — the archive's most common question.
+            { value: projectNumber || '-', cls: 'mono num', project: projectNumber },
             { value: formatIsoDateOnly(summary.reportDate || daily.reportDate) || '-', cls: 'num' },
             { value: file.submittedBy || daily.submitterName || '-', cls: 'primary' },
           ];
 
-          cellsBefore.forEach(({ value, cls }) => {
+          cellsBefore.forEach(({ value, cls, project }) => {
             const td = document.createElement('td');
             if (cls) td.className = cls;
-            td.textContent = value || '-';
+            if (project) {
+              const btn = document.createElement('button');
+              btn.type = 'button';
+              btn.className = 'cell-filter';
+              btn.textContent = project;
+              btn.title = `Show only project ${project}`;
+              btn.addEventListener('click', () => {
+                projectInput.value = project;
+                loadFiles();
+              });
+              td.appendChild(btn);
+            } else {
+              td.textContent = value || '-';
+            }
             row.appendChild(td);
           });
 
@@ -845,14 +886,18 @@
         canDeleteFiles = isAdmin || Boolean(user && user.canDeleteFiles);
         canGenerateLinks = isAdmin || Boolean(user && user.canGenerateLinks);
 
+        // Selecting rows and downloading them as a zip is a read — everyone who can open
+        // this page gets it (until 2026-09-16 the whole bar was tied to the delete grant,
+        // and an engineer who could read every PDF got "Zip failed (403)"). Only "Move to
+        // trash" is a delete-tier action.
         if (adminActionsEl) {
-          adminActionsEl.hidden = !canDeleteFiles;
+          adminActionsEl.hidden = false;
+        }
+        if (deleteFilesBtn) {
+          deleteFilesBtn.hidden = !canDeleteFiles;
         }
         if (filesTable) {
-          filesTable.classList.toggle('is-admin', canDeleteFiles);
-        }
-        if (!canDeleteFiles) {
-          selectedKeys = new Set();
+          filesTable.classList.add('can-select');
         }
 
         // Calendar nav icon: greyed + click opens the "access is off" notice
@@ -1145,7 +1190,50 @@
           const num = document.createElement('span');
           num.textContent = String(counts[key]);
           li.append(b, label, num);
+          if (key !== 'test') {
+            // The legend doubles as a one-click type filter: "only daily reports" is the
+            // first thing people reach for, and the Filters card above was easy to miss.
+            const active = typeSelect.value === key;
+            li.classList.add('is-filter');
+            li.classList.toggle('is-active', active);
+            li.title = active ? 'Show all types' : `Show only ${TYPE_LABELS[key] || key}`;
+            li.addEventListener('click', () => {
+              typeSelect.value = active ? '' : key;
+              loadFiles();
+            });
+          }
           legend.appendChild(li);
+        });
+      };
+
+      // What the list is currently narrowed to, as removable chips next to the count —
+      // right where the eye lands when the number of files looks wrong.
+      const activeFiltersEl = document.getElementById('active-filters');
+      const FILTER_LABELS = { type: 'Type', project: 'Project', date: 'Date', submitter: 'Filled by', q: 'Search' };
+      const FILTER_INPUTS = { type: typeSelect, project: projectInput, date: dateInput, submitter: submitterInput, q: queryInput };
+      const renderActiveFilters = (filters) => {
+        if (!activeFiltersEl) return;
+        activeFiltersEl.innerHTML = '';
+        const keys = Object.keys(FILTER_LABELS).filter((k) => filters[k]);
+        activeFiltersEl.hidden = !keys.length;
+        keys.forEach((k) => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'chip is-active';
+          chip.title = 'Remove this filter';
+          const shown = k === 'type' ? (TYPE_LABELS[filters[k]] || filters[k])
+            : k === 'date' ? formatIsoDateOnly(filters[k])
+            : filters[k];
+          const b = document.createElement('b');
+          b.textContent = FILTER_LABELS[k];
+          const x = document.createElement('i');
+          x.textContent = '×';
+          chip.append(b, document.createTextNode(shown), x);
+          chip.addEventListener('click', () => {
+            if (FILTER_INPUTS[k]) FILTER_INPUTS[k].value = '';
+            loadFiles();
+          });
+          activeFiltersEl.appendChild(chip);
         });
       };
 
@@ -1153,6 +1241,7 @@
         await loadUser();
         const filters = readFilters();
         updateQuery(filters);
+        renderActiveFilters(filters);
         setStatus('Loading files...');
 
         const query = new URLSearchParams();
@@ -1190,19 +1279,16 @@
 
       if (selectAllBtn) {
         selectAllBtn.addEventListener('click', () => {
-          if (!canDeleteFiles) return;
           applySelection(currentFiles.map(fileKey));
         });
       }
       if (clearSelectionBtn) {
         clearSelectionBtn.addEventListener('click', () => {
-          if (!canDeleteFiles) return;
           applySelection([]);
         });
       }
       if (selectAllCheckbox) {
         selectAllCheckbox.addEventListener('change', () => {
-          if (!canDeleteFiles) return;
           if (selectAllCheckbox.checked) {
             applySelection(currentFiles.map(fileKey));
           } else {
@@ -1212,7 +1298,6 @@
       }
       if (downloadZipBtn) {
         downloadZipBtn.addEventListener('click', async () => {
-          if (!canDeleteFiles) return;
           const selected = getSelectedFiles();
           if (!selected.length) return;
           setStatus('Preparing zip...');
@@ -1287,6 +1372,8 @@
         event.preventDefault();
         loadFiles();
       });
+      // A type is a choice, not typing — apply it on change without the Apply button.
+      typeSelect.addEventListener('change', loadFiles);
       refreshBtn.addEventListener('click', loadFiles);
       clearBtn.addEventListener('click', () => {
         typeSelect.value = '';

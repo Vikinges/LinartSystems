@@ -2975,7 +2975,34 @@ const PARTS_FIELD_PREFIXES = [
 
   'parts_used_serial_',
 
+  // Parts schema v2 (2026-09-16, GitLab lsc_led#1 notes 595/596 — Uli's ask, approved by
+  // Vladimir): "Parts used during this visit" has the same four columns as "Spare parts
+  // left on site" on every report type that carries it, and the keys finally say what
+  // they hold. The five legacy keys above stay accepted for archived submissions only —
+  // their meaning differs per form type (see isPartsSchemaV2), which is exactly why v2
+  // got new names instead of reusing them.
+  'parts_number_',
+
+  'parts_desc_',
+
+  'parts_qty_',
+
 ];
+
+// v2 is self-describing: a submission is v2 when it carries `parts_schema=2` (both forms
+// send it) or any `parts_number_/parts_desc_/parts_qty_<n>` key, even empty. Anything else
+// renders with the legacy per-form mapping — service: used_part=number,
+// removed_desc=description, removed_part=quantity, used_serial=reason; maintenance:
+// removed_desc/removed_part/removed_serial/used_part/used_serial as six columns — so a
+// report filed before the switch (or re-rendered later by a remote sign-off) prints as it
+// always did.
+const PARTS_V2_KEY_PATTERN = /^parts_(number|desc|qty)_\d+$/;
+function isPartsSchemaV2(body) {
+  if (!body || typeof body !== 'object') return false;
+  const marker = toSingleValue(body.parts_schema);
+  if (marker !== undefined && marker !== null && String(marker).trim() === '2') return true;
+  return Object.keys(body).some((key) => PARTS_V2_KEY_PATTERN.test(key));
+}
 
 // What kind of part a row is about. Offered as a dropdown so the common ones are one tap,
 // but the control is a free-text input bound to a datalist — an engineer can still type
@@ -8040,15 +8067,26 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     const isServiceParts = isService;
 
-    const columnWidths = (isServiceParts ? [0.18, 0.28, 0.26, 0.1, 0.18] : [0.16, 0.24, 0.15, 0.15, 0.16, 0.14]).map(
+    // Parts schema v2 (2026-09-16): one four-column shape on every report type, the same
+    // as the "Spare parts left on site" block below. The legacy branches stay for archived
+    // submissions and for a remote sign-off that re-renders a report filed before the switch.
+    const partsV2 = isPartsSchemaV2(body);
+
+    const columnWidths = (partsV2
+      ? [0.2, 0.26, 0.42, 0.12]
+      : isServiceParts ? [0.18, 0.28, 0.26, 0.1, 0.18] : [0.16, 0.24, 0.15, 0.15, 0.16, 0.14]).map(
 
       (ratio) => tableWidth * ratio,
 
     );
 
-    const rowHeightBase = isServiceParts ? 28 : 30;
+    const rowHeightBase = partsV2 ? 26 : isServiceParts ? 28 : 30;
 
-    const headers = isServiceParts
+    const headers = partsV2
+
+      ? ['Type', 'Part number', 'Description', 'Quantity']
+
+      : isServiceParts
 
       ? ['Type', 'Part number', 'Description', 'Quantity', 'Reason']
 
@@ -8174,7 +8212,21 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         const partType = row.fields[`parts_type_${row.number}`] || '';
 
-        const cellValues = isServiceParts
+        const cellValues = partsV2
+
+          ? [
+
+              partType,
+
+              row.fields[`parts_number_${row.number}`] || '',
+
+              row.fields[`parts_desc_${row.number}`] || '',
+
+              row.fields[`parts_qty_${row.number}`] || '',
+
+            ]
+
+          : isServiceParts
 
           ? [
 
@@ -8878,15 +8930,13 @@ function generateIndexHtml() {
 
     ['general_notes', ''],
 
-    ['parts_removed_desc_1', ''],
+    ['parts_type_1', ''],
 
-    ['parts_removed_part_1', ''],
+    ['parts_number_1', ''],
 
-    ['parts_removed_serial_1', ''],
+    ['parts_desc_1', ''],
 
-    ['parts_used_part_1', ''],
-
-    ['parts_used_serial_1', ''],
+    ['parts_qty_1', ''],
 
     ['signoff_notes_1', ''],
 
@@ -9249,6 +9299,11 @@ ${rows.join('\n')}
 
     const renderTypeInput = (index) => `<input type="text" name="parts_type_${index}" list="${typeListId}" placeholder="Type" autocomplete="off" />`;
 
+    // v2 cells are plain inputs, like the spares-left table: renderInlineInput only knows
+    // the AcroForm template's field names, and parts_number/desc/qty are canvas-drawn, never
+    // template widgets — through it they would render as "Missing: parts_number_1".
+    const renderCell = (name, placeholder) => `<input type="text" name="${escapeHtml(name)}" placeholder="${escapeHtml(placeholder)}" autocomplete="off" />`;
+
     const typeDatalist = `          <datalist id="${typeListId}">
 ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></option>`).join('\n')}
           </datalist>`;
@@ -9259,68 +9314,37 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
       const rowClass = i === 1 ? 'parts-row' : 'parts-row is-hidden-row';
 
-      if (isService) {
-
-        rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
-
-              <td>${renderTypeInput(i)}</td>
-
-              <td>${renderInlineInput(`parts_used_part_${i}`, 'Part number printed on the part, e.g. A5s')}</td>
-
-              <td>${renderInlineInput(`parts_removed_desc_${i}`, 'What the part is')}</td>
-
-              <td>${renderInlineInput(`parts_removed_part_${i}`, 'How many')}</td>
-
-              <td>${renderInlineInput(`parts_used_serial_${i}`, 'Why it was replaced')}</td>
-
-            </tr>`);
-
-      } else {
-
-        rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
+      // Parts schema v2 (notes 595/596): the same four columns as "Spare parts left on
+      // site" on every report type — Uli found the six-column maintenance table heavy.
+      rows.push(`            <tr class="${rowClass}" data-row-index="${i}">
 
               <td>${renderTypeInput(i)}</td>
 
-              <td>${renderInlineInput(`parts_removed_desc_${i}`, 'What was taken out')}</td>
+              <td>${renderCell(`parts_number_${i}`, 'Printed on the part, e.g. A5s')}</td>
 
-              <td>${renderInlineInput(`parts_removed_part_${i}`, 'Part number printed on it, e.g. A5s')}</td>
+              <td>${renderCell(`parts_desc_${i}`, 'What it is; add the serial here if it matters')}</td>
 
-              <td>${renderInlineInput(`parts_removed_serial_${i}`, 'Serial of the part taken out')}</td>
-
-              <td>${renderInlineInput(`parts_used_part_${i}`, 'Part number of the new one')}</td>
-
-              <td>${renderInlineInput(`parts_used_serial_${i}`, 'Serial of the new one')}</td>
+              <td>${renderCell(`parts_qty_${i}`, 'How many')}</td>
 
             </tr>`);
-
-      }
 
     }
 
-    const headers = isService
-
-      ? ['Type', 'Part number', 'Description', 'Quantity', 'Reason']
-
-      : [
-          'Type',
-          'Part removed (description)',
-          'Part number',
-          'Serial number (removed)',
-          'Part used in display',
-          'Serial number (used)',
-        ];
+    const headers = ['Type', 'Part number', 'Description', 'Quantity'];
 
     return `      <section class="card" data-parts-section data-form-types="${dataAttr}">
 
         <h2>Parts used during this visit</h2>
 
         <p class="hint">${isService
-          ? 'Parts you fitted or replaced during this visit. One row per part.'
-          : 'Parts you fitted or replaced during this visit. One row per part — spares that stay with the customer go in the section below.'}</p>
+          ? 'Parts you fitted or replaced during this visit. One row per part; put a serial number in the description when it matters.'
+          : 'Parts you fitted or replaced during this visit. One row per part; put a serial number in the description when it matters. Spares that stay with the customer go in the section below.'}</p>
+
+        <input type="hidden" name="parts_schema" value="2" />
 
         <table class="parts-table" data-parts-table>
 
-          ${isService ? `<colgroup>
+          <colgroup>
 
             <col data-col="type" />
 
@@ -9330,9 +9354,7 @@ ${SPARE_PART_TYPES.map((t) => `            <option value="${escapeHtml(t)}"></op
 
             <col data-col="qty" />
 
-            <col data-col="reason" />
-
-          </colgroup>` : ''}
+          </colgroup>
 
 ${typeDatalist}
 
@@ -9908,25 +9930,19 @@ ${rows.join('\n')}
 
       .parts-table colgroup col[data-col="part"] {
 
-        width: 28%;
+        width: 26%;
 
       }
 
       .parts-table colgroup col[data-col="desc"] {
 
-        width: 26%;
+        width: 44%;
 
       }
 
       .parts-table colgroup col[data-col="qty"] {
 
-        width: 10%;
-
-      }
-
-      .parts-table colgroup col[data-col="reason"] {
-
-        width: 18%;
+        width: 12%;
 
       }
 
@@ -15152,51 +15168,20 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
           const combinedModelBatch = safeModel && safeBatch ? safeModel + '/' + safeBatch : safeModel;
 
-          if (isServiceForm) {
+          // Parts schema v2 — one shape on every form: the label's model/batch is the part
+          // number, the serial goes into the description (there is no serial column any
+          // more), and a photographed label means one part unless the engineer says otherwise.
+          const numberInput = row.querySelector('input[name^="parts_number_"]');
 
-            const partInput = row.querySelector('input[name^="parts_used_part_"]');
+          if (numberInput && combinedModelBatch) numberInput.value = combinedModelBatch;
 
-            if (partInput && combinedModelBatch) partInput.value = combinedModelBatch;
+          const descInput = row.querySelector('input[name^="parts_desc_"]');
 
-            const descInput = row.querySelector('input[name^="parts_removed_desc_"]');
+          if (descInput && safeSerial && !descInput.value.trim()) descInput.value = 'SN ' + safeSerial;
 
-            if (descInput && safeSerial && !descInput.value.trim()) descInput.value = safeSerial;
+          const qtyInput = row.querySelector('input[name^="parts_qty_"]');
 
-            const reasonInput = row.querySelector('input[name^="parts_used_serial_"]');
-
-            if (reasonInput && safeSerial && !reasonInput.value.trim() && !descInput?.value.trim()) {
-
-              reasonInput.value = safeSerial;
-
-            }
-
-          } else {
-
-            if (parsed.serial) {
-
-              const serialInput = row.querySelector('input[name^="parts_used_serial_"]');
-
-              if (serialInput) serialInput.value = safeSerial;
-
-            }
-
-            if (parsed.model) {
-
-              const partInput = row.querySelector('input[name^="parts_used_part_"]');
-
-              if (partInput) partInput.value = safeModel;
-
-            }
-
-            const batchDescInput = row.querySelector('input[name^="parts_removed_desc_"]');
-
-            if (safeBatch && batchDescInput && !batchDescInput.value.trim()) {
-
-              batchDescInput.value = safeBatch;
-
-            }
-
-          }
+          if (qtyInput && !qtyInput.value.trim() && (combinedModelBatch || safeSerial)) qtyInput.value = '1';
 
           const ledField = document.querySelector('input[name="led_display_model"]');
 
@@ -27253,7 +27238,10 @@ app.delete(['/api/feedback/admin/:id', '/service2/api/feedback/admin/:id'], requ
   }
 });
 
-app.post(['/api/files/zip', '/service2/api/files/zip'], requireDeleteFiles, async (req, res) => {
+// Bulk download of PDFs the caller can already open individually — a read, not a delete,
+// so it carries no delete guard; the hub's view gate (requireFilesAccess) fronts it, the
+// same as GET /api/files. Was requireDeleteFiles until 2026-09-16.
+app.post(['/api/files/zip', '/service2/api/files/zip'], async (req, res) => {
   const selections = collectFileSelections(req.body || {});
   if (!selections.length) {
     return res.status(400).json({ ok: false, error: 'no_files_selected' });

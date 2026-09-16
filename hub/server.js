@@ -1230,13 +1230,14 @@ app.delete('/service2/api/files/:type/:filename/purge', requireFilesDeleteAccess
 // hub headers and does not add the authoritative ones, so service2 saw no permissions and
 // answered 403 — the button reported "Failed — retry".
 app.post('/service2/api/files/:type/:filename/test', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
-// Legacy hard-delete + bulk-zip used by the web Files page. service2 gates both on
-// delete permission; register them here (before registerProxies' open /service2
-// catch-all) so an admin hub session attaches the authoritative x-hub-* headers and
-// can delete/zip without the separate service2 admin password. Admin/superadmin only,
-// matching the trash routes and the delete policy (managers get view/download only).
+// Legacy hard-delete + bulk-zip used by the web Files page. Registered here (before
+// registerProxies' open /service2 catch-all) so the hub session attaches the
+// authoritative x-hub-* headers. Delete follows the delete policy above. The zip is a
+// bulk DOWNLOAD of PDFs the caller can already open one by one, so it takes the same
+// view gate as GET /api/files — until 2026-09-16 it was admin/planner-only, which gave an
+// engineer with canViewFiles a "Zip failed (403)" on the very files they could read.
 app.post('/service2/api/files/delete', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
-app.post('/service2/api/files/zip', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/zip', requireFilesAccess, attachHubProxyHeaders, service2TrashProxy);
 
 // In-app feedback / diagnostics (issue #1). Intake is any authenticated service2 user
 // (same gate as report submit); management is admin/superadmin only. Registered before
@@ -4262,7 +4263,7 @@ app.use('/service2/api/files/delete', requireFilesDeleteAccess, attachHubProxyHe
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
 }));
-app.use('/service2/api/files/zip', requireFilesAdminAccess, attachHubProxyHeaders, createProxyMiddleware({
+app.use('/service2/api/files/zip', requireFilesAccess, attachHubProxyHeaders, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },
