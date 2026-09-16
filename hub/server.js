@@ -799,6 +799,23 @@ function requireFilesAdminAccess(req, res, next) {
   return res.status(403).send('Forbidden');
 }
 
+// The delete family (trash / restore / purge / bulk delete): admin and planner as above, OR
+// an engineer explicitly granted canDeleteFiles. Until 2026-09-16 these routes used
+// requireFilesAdminAccess, which never looked at the flag — so an engineer with
+// canDeleteFiles:true saw the delete swipe (the app trusts /api/auth/me) and got 403 from
+// the hub before service2's own requireDeleteFiles, which does honour the header, ever ran.
+function requireFilesDeleteAccess(req, res, next) {
+  const user = getSessionUser(req);
+  if (user && canUserViewFiles(user) && (user.isSuperadmin || user.role === USER_ROLE_ADMIN || user.role === USER_ROLE_PLANNER || user.canDeleteFiles)) {
+    return next();
+  }
+  const accept = req.headers.accept || '';
+  if (accept.includes('text/html')) {
+    return res.redirect('/');
+  }
+  return res.status(403).send('Forbidden');
+}
+
 function attachHubProxyHeaders(req, _res, next) {
   // Strip any client-supplied hub headers first so they can't be spoofed, then
   // set them authoritatively from the authenticated session.
@@ -1204,10 +1221,10 @@ const service2TrashProxy = createProxyMiddleware({
 app.get('/service2/api/files/trash/settings', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.put('/service2/api/files/trash/settings', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 app.post('/service2/api/files/trash/empty', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
-app.get('/service2/api/files/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
-app.post('/service2/api/files/:type/:filename/trash', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
-app.post('/service2/api/files/:type/:filename/restore', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
-app.delete('/service2/api/files/:type/:filename/purge', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.get('/service2/api/files/trash', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/:type/:filename/trash', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/:type/:filename/restore', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
+app.delete('/service2/api/files/:type/:filename/purge', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
 // Marking a report as a test is a delete-level action and needs the same treatment: without
 // being listed here it fell through to the generic /service2 proxy, which strips the client's
 // hub headers and does not add the authoritative ones, so service2 saw no permissions and
@@ -1218,7 +1235,7 @@ app.post('/service2/api/files/:type/:filename/test', requireFilesAdminAccess, at
 // catch-all) so an admin hub session attaches the authoritative x-hub-* headers and
 // can delete/zip without the separate service2 admin password. Admin/superadmin only,
 // matching the trash routes and the delete policy (managers get view/download only).
-app.post('/service2/api/files/delete', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
+app.post('/service2/api/files/delete', requireFilesDeleteAccess, attachHubProxyHeaders, service2TrashProxy);
 app.post('/service2/api/files/zip', requireFilesAdminAccess, attachHubProxyHeaders, service2TrashProxy);
 
 // In-app feedback / diagnostics (issue #1). Intake is any authenticated service2 user
@@ -2306,6 +2323,21 @@ app.get('/admin/users', requireSuperadmin, (req, res) => {
         canUseChat: u.canUseChat !== false,
         canViewFeedback: normalizeFilesAccess(u.canViewFeedback, false),
         canPlanProjects: normalizeFilesAccess(u.canPlanProjects, false),
+        // The flags above are what's STORED. What the account actually gets is the stored
+        // flag OR the role's auto-grant (planner → files/chat/projects, admin → everything),
+        // resolved by normalizeSessionUser exactly as at login — so an admin list can show
+        // the truth instead of a planner "without" canPlanProjects who has the full planner.
+        effective: (() => {
+          const e = normalizeSessionUser({ ...u, isSuperadmin: false });
+          return e ? {
+            canViewFiles: e.canViewFiles,
+            canGenerateLinks: e.canGenerateLinks,
+            canDeleteFiles: e.canDeleteFiles,
+            canUseChat: e.canUseChat,
+            canViewFeedback: e.canViewFeedback,
+            canPlanProjects: e.canPlanProjects,
+          } : null;
+        })(),
         // Read-only status so the admin UI / app can show a 2FA badge and offer a reset
         // only where there is something to reset. The secret itself is never exposed.
         twoFactorEnabled: !!(u.twoFactor && u.twoFactor.enabled),
@@ -4224,7 +4256,7 @@ app.use('/service2/files', requireFilesAccess, createProxyMiddleware({
   pathRewrite: { '^/service2': '' },
   logLevel: 'warn'
 }));
-app.use('/service2/api/files/delete', requireFilesAdminAccess, attachHubProxyHeaders, createProxyMiddleware({
+app.use('/service2/api/files/delete', requireFilesDeleteAccess, attachHubProxyHeaders, createProxyMiddleware({
   target: 'http://service2:3001',
   changeOrigin: true,
   pathRewrite: { '^/service2': '' },

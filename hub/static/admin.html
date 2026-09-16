@@ -711,7 +711,7 @@
     ];
     function summarizeUser(roleValue, user) {
       if (roleValue === 'admin') return 'Full access to everything.';
-      if (roleValue === 'planner') return 'Plans/schedules the team. Full file access + chat; can delete files.';
+      if (roleValue === 'planner') return 'Plans/schedules the team. Full file access + chat; can delete files; plans projects (calendar).';
       if (roleValue === 'blocked') return 'Cannot use any service.';
       const extras = [];
       if (user.canViewFiles) extras.push('views files archive');
