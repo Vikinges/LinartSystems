@@ -5598,7 +5598,7 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
     [
 
-      { label: 'The whole agreed project', value: boolVal('acceptance_overall') },
+      { label: 'The project has been fully completed.', value: boolVal('acceptance_overall') },
 
       { label: 'Only a finished part of the project', value: boolVal('acceptance_partial') },
 
@@ -12265,7 +12265,7 @@ ${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true,
 
           <div class="grid two-col">
 
-            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The whole agreed project</span></label>
+            <label class="checkbox"><input type="checkbox" name="acceptance_overall" /> <span>The project has been fully completed.</span></label>
 
             <label class="checkbox"><input type="checkbox" name="acceptance_partial" /> <span>Only a finished part of the project</span></label>
 
@@ -12273,7 +12273,7 @@ ${renderTextInput('attendee_supplier', 'For the supplier', { allowUnknown: true,
 
 <script>
 (function () {
-  // These two are one choice. A certificate that says both "the whole agreed project" and
+  // These two are one choice. A certificate that says both "fully completed" and
   // "only a finished part" contradicts itself, and it is a document the customer signs -
   // it should be impossible to produce, not merely unlikely. Kept as checkboxes rather than
   // radios so the wire keys stay acceptance_overall / acceptance_partial, and so an engineer
