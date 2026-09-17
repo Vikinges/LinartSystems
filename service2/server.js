@@ -16399,7 +16399,6 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
           { name: 'date_of_service', label: 'Date of service' },
           { name: 'service_company_name', label: 'Service company name' },
           { name: 'led_display_model', label: 'LED display model / batch' },
-          { name: 'work_performed', label: 'Work performed' },
           // The two people the document is about. The app calls the first submitter_name;
           // on this form it is the engineer named beside their signature.
           { name: 'engineer_name', label: 'Engineer name' },
@@ -16407,7 +16406,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         ];
 
         const REQUIRED_FIELDS = {
-          service_report: REQUIRED_ON_EVERY_REPORT,
+          // "Work performed" only exists on the service-report card (data-form-types=
+          // "service_report") -- required on every type, it was unfillable and
+          // unreachable on maintenance/installation: the field is disabled+hidden there
+          // (applyFormTypeVisibility), so findRequiredInput() returns null, the value
+          // reads as permanently empty, and jumpTo() has no element to scroll to. Submit
+          // was stuck forever on those two types. Require it only where it is real.
+          service_report: [...REQUIRED_ON_EVERY_REPORT, { name: 'work_performed', label: 'Work performed' }],
           maintenance: REQUIRED_ON_EVERY_REPORT,
           installation_report: [
             ...REQUIRED_ON_EVERY_REPORT,
@@ -21984,7 +21989,13 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
             }
             clearRequiredMark(field.name);
             const input = findRequiredInput(field.name);
-            const value = input ? String(input.value || '').trim() : '';
+            // Nothing to require: the control does not exist (or is disabled/hidden for
+            // this report type). Treating a missing control as a missing VALUE is how
+            // "work performed" once deadlocked maintenance/installation submissions --
+            // required everywhere, rendered on service reports only, so the check could
+            // never pass and there was no visible field to jump to either.
+            if (!input) return;
+            const value = String(input.value || '').trim();
             let missing = !value;
             let reason = 'is empty';
             // A project number is only usable once it is complete: "44" or "26-21" would
