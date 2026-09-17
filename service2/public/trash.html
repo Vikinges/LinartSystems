@@ -129,8 +129,14 @@
         calendarLockBackdrop.querySelectorAll('[data-close-cal-lock]').forEach((btn) => {
           btn.addEventListener('click', () => { calendarLockBackdrop.hidden = true; });
         });
+        // Only close on a press-and-release that both landed on the backdrop -- see the
+        // same fix on the employee-name popup in the report form for why a plain 'click'
+        // check isn't enough.
+        let calLockPressed = false;
+        calendarLockBackdrop.addEventListener('mousedown', (e) => { calLockPressed = e.target === calendarLockBackdrop; });
         calendarLockBackdrop.addEventListener('click', (e) => {
-          if (e.target === calendarLockBackdrop) calendarLockBackdrop.hidden = true;
+          if (e.target === calendarLockBackdrop && calLockPressed) calendarLockBackdrop.hidden = true;
+          calLockPressed = false;
         });
       }
       fetch('/api/status', { credentials: 'same-origin' })

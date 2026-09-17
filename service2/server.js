@@ -19298,10 +19298,23 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
 
             const cancel = () => closeOverlay(null);
 
+            // Closing on a backdrop click, done right: a plain 'click' listener checking
+            // event.target === overlay also fires when someone starts a drag INSIDE the
+            // dialog (selecting text in the name/role box) and their mouse overshoots the
+            // dialog's edge before they let go -- mousedown on the input, mouseup on the
+            // backdrop, and the browser's synthesized click lands on their nearest common
+            // ancestor, which is the overlay. That read as "the popup flies away while I'm
+            // still filling it in". Only close when BOTH the press and the release were on
+            // the backdrop itself -- a real click outside, not a drag that drifted there.
+            let backdropPressed = false;
+            overlay.addEventListener('mousedown', (event) => {
+              backdropPressed = event.target === overlay;
+            });
             overlay.addEventListener('click', (event) => {
-              if (event.target === overlay) {
+              if (event.target === overlay && backdropPressed) {
                 cancel();
               }
+              backdropPressed = false;
             });
 
             if (addButton) {
@@ -22794,7 +22807,12 @@ ${renderChecklistSection('Sign off checklist', SIGN_OFF_CHECKLIST_ROWS, { dataFo
         };
         fab.addEventListener('click', open);
         closeBtn.addEventListener('click', close);
-        overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
+        // Same fix as the employee-name popup: only close on a press-and-release that both
+        // landed on the backdrop, not a text selection in the message box that drags past
+        // the dialog's edge before the mouse button comes up.
+        let fbBackdropPressed = false;
+        overlay.addEventListener('mousedown', (e) => { fbBackdropPressed = e.target === overlay; });
+        overlay.addEventListener('click', (e) => { if (e.target === overlay && fbBackdropPressed) close(); fbBackdropPressed = false; });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !overlay.hidden) close(); });
 
         typeBtns.forEach((b) => b.addEventListener('click', () => {

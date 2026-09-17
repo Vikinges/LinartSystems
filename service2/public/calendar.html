@@ -1658,7 +1658,12 @@
     }
     function closePreview() { pvBackdrop.hidden = true; pvBody.innerHTML = ''; }
     document.getElementById('pv-close').addEventListener('click', closePreview);
-    pvBackdrop.addEventListener('click', (e) => { if (e.target === pvBackdrop) closePreview(); });
+    // Only close on a press-and-release that both landed on the backdrop: a text preview is
+    // exactly the kind of content someone selects and copies from, and a plain 'click' check
+    // fires if that selection drags past the backdrop before the mouse button comes up.
+    let pvBackdropPressed = false;
+    pvBackdrop.addEventListener('mousedown', (e) => { pvBackdropPressed = e.target === pvBackdrop; });
+    pvBackdrop.addEventListener('click', (e) => { if (e.target === pvBackdrop && pvBackdropPressed) closePreview(); pvBackdropPressed = false; });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !pvBackdrop.hidden) closePreview(); });
 
     // ------------------------------------------------------------ upload --
@@ -1704,8 +1709,15 @@
         detailBackdrop.hidden = true;
       });
     });
+    // Close-on-backdrop-click, done right: a plain 'click' check also fires when someone
+    // starts a text selection inside the dialog (an address, a note) and their mouse drifts
+    // past the dialog's edge before they release -- mousedown on the field, mouseup on the
+    // backdrop, and the browser's click lands on their common ancestor (the backdrop). Only
+    // close when both the press and the release were on the backdrop itself.
     [npBackdrop, detailBackdrop].forEach((el) => {
-      el.addEventListener('click', (e) => { if (e.target === el) el.hidden = true; });
+      let pressedOnBackdrop = false;
+      el.addEventListener('mousedown', (e) => { pressedOnBackdrop = e.target === el; });
+      el.addEventListener('click', (e) => { if (e.target === el && pressedOnBackdrop) el.hidden = true; pressedOnBackdrop = false; });
     });
 
     (async () => {
