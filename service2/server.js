@@ -4832,7 +4832,51 @@ function layoutMultilineText(value, font, maxWidth, options = {}) {
 
 }
 
+// A single free-text field (Work performed, Additional notes, a service summary line...)
+// can be arbitrarily long -- an app, a copy-paste, or an engineer's own typing can hand it
+// several thousand characters. Every box that holds one of these is sized to what the text
+// actually needs, which is correct as far as it goes, but nothing stopped that need from
+// being taller than a page: a field long enough to want more room than a FRESH page can
+// ever offer still got drawn as one box, once, running the tail of the text past the
+// visible area (2026-09-17, GitLab lsc_led -- an installation report's "Work performed"
+// and "Additional notes" each held ~5,300 characters and both lost their second half).
+//
+// This finds the largest font size (stepping down from `fontSize` to `floorFontSize`) that
+// makes the WHOLE text fit within maxHeight. If even the floor size is not enough, it keeps
+// only as many whole lines as fit and hands back the rest as `overflowText`, so the caller
+// can route it to a continuation page (appendOverflowPages already does exactly this for
+// the daily report) instead of silently losing it off the bottom of the page.
+function fitLongTextToHeight(text, font, width, maxHeight, options = {}) {
+  const startFontSize = options.fontSize ?? DEFAULT_TEXT_FIELD_STYLE.fontSize;
+  const floorFontSize = options.floorFontSize ?? 7;
+  const step = options.step ?? 0.5;
+  const lineHeightMultiplier = options.lineHeightMultiplier ?? DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier;
+  const safeMaxHeight = Number.isFinite(maxHeight) && maxHeight > 0 ? maxHeight : Infinity;
 
+  let size = startFontSize;
+  let layout = layoutMultilineText(text, font, width, { fontSize: size, minFontSize: size, lineHeightMultiplier });
+  while (layout.totalHeight > safeMaxHeight && size > floorFontSize) {
+    size = Math.max(floorFontSize, size - step);
+    layout = layoutMultilineText(text, font, width, { fontSize: size, minFontSize: size, lineHeightMultiplier });
+  }
+
+  if (layout.totalHeight <= safeMaxHeight) {
+    return { fontSize: size, text, overflowText: '', totalHeight: layout.totalHeight };
+  }
+
+  // The floor size still does not fit one page: keep the whole lines that do (always at
+  // least one, even if that one line alone runs slightly over) and return the remainder.
+  let usedHeight = 0;
+  let cut = layout.entries.length;
+  for (let i = 0; i < layout.entries.length; i += 1) {
+    const next = usedHeight + layout.entries[i].lineHeight;
+    if (next > safeMaxHeight && i > 0) { cut = i; break; }
+    usedHeight = next;
+  }
+  const fitText = layout.entries.slice(0, cut).map((entry) => entry.text).join('\n');
+  const overflowText = layout.entries.slice(cut).map((entry) => entry.text).join('\n').trim();
+  return { fontSize: size, text: fitText, overflowText, totalHeight: usedHeight };
+}
 
 function appendOverflowPages(pdfDoc, font, overflowEntries, options = {}) {
 
@@ -5057,6 +5101,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
 
   const margin = 18;
+
+  // A field long enough to need a continuation page (see fitLongTextToHeight below) can't
+  // use options.overflowTextEntries for that: the submit handler already drained that
+  // array into its own "Extended Text" pages *before* this function ever runs, so anything
+  // pushed here would just sit unread. Collected separately and flushed with our own
+  // appendOverflowPages call at the end of this function instead.
+  const lateOverflowEntries = [];
 
   const headingColor = rgb(0.08, 0.2, 0.4);
 
@@ -5287,6 +5338,10 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
       });
     });
     if (!cells.length) return;
+    // The tallest a data box can ever be while still fitting entirely on one page (a fresh
+    // one, worst case) -- past this, no amount of "just make the box taller" helps, because
+    // there is no taller page to put it on. See fitLongTextToHeight.
+    const maxRowDataHeight = page.getHeight() - margin - PAGE_FOOTER_BAND - BLOCK_HEADER_HEIGHT - 100;
     const maxDataHeight = Math.max(
       BLOCK_VALUE_MIN_HEIGHT,
       ...cells.map(({ field, width }) => {
@@ -5305,6 +5360,35 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
           });
           const total = Number(layout && layout.totalHeight);
           if (Number.isFinite(total)) needed = Math.ceil(total + paddingY * 2);
+          // A field long enough to want more room than a fresh page can ever give: shrink
+          // its font until the whole thing fits one page, and if even the floor size can't,
+          // print only what fits and send the rest to a continuation page instead of
+          // running it off the bottom, unseen (2026-09-17, an installation report's "Work
+          // performed" and "Additional notes" each lost their second half this way).
+          if (needed > maxRowDataHeight) {
+            const fit = fitLongTextToHeight(text, font, width - 16, maxRowDataHeight - paddingY * 2, {
+              fontSize: BLOCK_VALUE_FONT_SIZE,
+              floorFontSize: 7,
+              lineHeightMultiplier: 1.15,
+            });
+            field.text = fit.text;
+            field.__fontSize = fit.fontSize;
+            needed = Math.ceil(fit.totalHeight + paddingY * 2);
+            if (fit.overflowText) {
+              const overflowEntry = {
+                acroName: field.name || field.label,
+                requestName: field.name || field.label,
+                label: `${field.label} (continued)`,
+                text: fit.overflowText,
+                fontSize: fit.fontSize,
+              };
+              lateOverflowEntries.push(overflowEntry);
+              // Also recorded on the shared array (unread by the time this runs, see the
+              // comment where lateOverflowEntries is declared) purely so overflowCount in
+              // the submit response stays honest for anyone debugging from that alone.
+              if (Array.isArray(options.overflowTextEntries)) options.overflowTextEntries.push(overflowEntry);
+            }
+          }
         }
         const explicit = Number(field.height);
         return Math.max(
@@ -5354,8 +5438,12 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
         paddingX: 8,
         paddingY: field.paddingY ?? 10,
         color: textColor,
-        fontSize: BLOCK_VALUE_FONT_SIZE,
-        minFontSize: 9,
+        // A field that had to be shrunk to fit one page (see maxRowDataHeight above) draws
+        // at the size that fit it, not the default -- otherwise the box is correctly sized
+        // for the shrunk text but the text itself gets measured all over again at the
+        // default size and overflows the very box just sized to prevent that.
+        fontSize: field.__fontSize ?? BLOCK_VALUE_FONT_SIZE,
+        minFontSize: field.__fontSize ?? 9,
         lineHeightMultiplier: 1.15,
       });
     });
@@ -6136,7 +6224,13 @@ async function drawInstallationReport(pdfDoc, font, body, signatureImages, parts
 
   await drawAnnex1Page();
 
-
+  // Flush anything a long field (Work performed, Additional notes, ...) couldn't fit even
+  // shrunk to the floor size -- see where lateOverflowEntries is declared. Same mechanism
+  // the daily report already uses, just run locally because the shared array was drained
+  // before this function started.
+  if (lateOverflowEntries.length) {
+    appendOverflowPages(pdfDoc, font, lateOverflowEntries);
+  }
 
   return signaturePlacements;
 
@@ -6525,6 +6619,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
   const baseSize = pagesList.length ? pagesList[0].getSize() : { width: 595.28, height: 841.89 };
 
   const margin = 18;
+
+  // A field long enough to need a continuation page (see fitLongTextToHeight, used by
+  // drawServiceSummary below) can't use options.overflowTextEntries for that: the submit
+  // handler already drained that array into its own "Extended Text" pages *before* this
+  // function ever runs, so anything pushed here would just sit unread. Collected
+  // separately and flushed with our own appendOverflowPages call at the end instead.
+  const lateOverflowEntries = [];
 
   const headingColor = rgb(0.08, 0.2, 0.4);
 
@@ -7611,11 +7712,16 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
     let sectionStarted = false;
 
+    // The tallest this box can ever be while still fitting entirely on one page (a fresh
+    // one, worst case) -- past this, no amount of "just make the box taller" helps, because
+    // there is no taller page to put it on. See fitLongTextToHeight.
+    const maxSummaryBlockHeight = page.getHeight() - margin - PAGE_FOOTER_BAND - 100;
+
     summaryFields.forEach((field, index) => {
 
       const content = String(field.value || '').trim();
 
-      const layout = layoutMultilineText(content, font, tableWidth - 12, {
+      let layout = layoutMultilineText(content, font, tableWidth - 12, {
 
         fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
 
@@ -7624,6 +7730,65 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
         lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
 
       });
+
+      let printedContent = content;
+
+      // A field long enough to want more room than a fresh page can ever give: shrink its
+      // font until the whole thing fits one page, and if even the floor size can't, print
+      // only what fits and send the rest to a continuation page instead of running it off
+      // the bottom, unseen (2026-09-17, GitLab lsc_led -- an installation report's "Work
+      // performed" and "Additional notes" each lost their second half this way; the same
+      // shape of field is drawn here for service and maintenance reports).
+      if (Math.ceil(layout.totalHeight + 30) > maxSummaryBlockHeight) {
+
+        const fit = fitLongTextToHeight(content, font, tableWidth - 12, maxSummaryBlockHeight - 30, {
+
+          fontSize: DEFAULT_TEXT_FIELD_STYLE.fontSize,
+
+          floorFontSize: 7,
+
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+
+        });
+
+        printedContent = fit.text;
+
+        layout = layoutMultilineText(fit.text, font, tableWidth - 12, {
+
+          fontSize: fit.fontSize,
+
+          minFontSize: fit.fontSize,
+
+          lineHeightMultiplier: DEFAULT_TEXT_FIELD_STYLE.lineHeightMultiplier,
+
+        });
+
+        if (fit.overflowText) {
+
+          const overflowEntry = {
+
+            acroName: field.label,
+
+            requestName: field.label,
+
+            label: `${field.label} (continued)`,
+
+            text: fit.overflowText,
+
+            fontSize: fit.fontSize,
+
+          };
+
+          lateOverflowEntries.push(overflowEntry);
+
+          // Also recorded on the shared array (unread by the time this runs, see the
+          // comment where lateOverflowEntries is declared) purely so overflowCount in the
+          // submit response stays honest for anyone debugging from that alone.
+          if (Array.isArray(options.overflowTextEntries)) options.overflowTextEntries.push(overflowEntry);
+
+        }
+
+      }
 
       // Box = label zone (20) + text height + breathing room; text is drawn top-down
       // below the label with the SAME precomputed layout, so it can never cross the frame.
@@ -7685,7 +7850,7 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
         page,
 
-        content,
+        printedContent,
 
         font,
 
@@ -8820,7 +8985,13 @@ async function drawSignOffPage(pdfDoc, font, body, signatureImages, partsRows, o
 
   cursorY -= signatureHeight + 16;
 
-
+  // Flush anything a long field (Work performed, Additional notes, ...) couldn't fit even
+  // shrunk to the floor size -- see where lateOverflowEntries is declared. Same mechanism
+  // the daily report already uses, just run locally because the shared array was drained
+  // before this function started.
+  if (lateOverflowEntries.length) {
+    appendOverflowPages(pdfDoc, font, lateOverflowEntries);
+  }
 
   return signaturePlacements;
 
